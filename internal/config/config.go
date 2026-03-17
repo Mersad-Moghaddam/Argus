@@ -5,6 +5,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 // Config contains all runtime settings for Argus services.
@@ -17,8 +19,10 @@ type Config struct {
 	SchedulerInterval time.Duration
 }
 
-// Load reads configuration from environment variables.
+// Load reads configuration from .env file and environment variables.
 func Load() (Config, error) {
+	_ = godotenv.Load()
+
 	cfg := Config{
 		HTTPAddr:          envOrDefault("HTTP_ADDR", ":8080"),
 		MySQLDSN:          envOrDefault("MYSQL_DSN", "argus:argus@tcp(localhost:3306)/argus?parseTime=true"),
@@ -27,8 +31,7 @@ func Load() (Config, error) {
 		SchedulerInterval: 30 * time.Second,
 	}
 
-	redisDB := envOrDefault("REDIS_DB", "0")
-	dbIndex, err := strconv.Atoi(redisDB)
+	dbIndex, err := strconv.Atoi(envOrDefault("REDIS_DB", "0"))
 	if err != nil {
 		return Config{}, fmt.Errorf("parse REDIS_DB: %w", err)
 	}

@@ -1,51 +1,21 @@
 # Argus - Distributed Website Uptime Checker
 
-Argus is a production-ready distributed website uptime checker built with **Go**, **Fiber**, **MySQL**, and **Asynq (Redis)**.  
-It provides a clean API and a lightweight web admin panel for managing monitored websites and viewing uptime status.
+Argus is a production-oriented uptime monitoring service built with Go, Fiber, MySQL, and Asynq.
+It provides a clean REST API and a lightweight admin panel for managing monitored websites.
 
-## Project Overview
+## Why this architecture is professional
 
-Argus tracks websites and periodically checks their availability.
+This project uses **clear layering** and **loose coupling**:
 
-- Add websites with custom check intervals.
-- List monitored websites and latest status.
-- Remove websites that are no longer needed.
-- Run checks asynchronously through Asynq workers.
-- Use a scheduler to regularly dispatch due website checks.
+- `cmd/api`: thin entrypoint only (no heavy wiring logic)
+- `internal/app`: dependency composition root (manual DI)
+- `internal/platform`: infrastructure adapters (MySQL, Fiber server, Asynq runtime)
+- `internal/api`: HTTP handlers
+- `internal/service`: business rules
+- `internal/repository`: persistence abstraction and MySQL implementation
+- `internal/worker`: task payloads + processors
 
-## Tech Stack
-
-- **Backend:** Go 1.21+
-- **Web Framework:** Fiber v2
-- **Database:** MySQL (`database/sql`)
-- **Queue + Scheduler:** Asynq + Redis
-- **Frontend:** HTML + Tailwind CSS (CDN) + Vanilla JS
-- **Linting:** Revive
-
-## System Architecture
-
-Argus follows a clean, layered architecture:
-
-1. **API Layer (`internal/api`)**
-   - Fiber handlers parse requests and return JSON responses.
-2. **Service Layer (`internal/service`)**
-   - Business rules/validation (URL format, interval constraints).
-3. **Repository Layer (`internal/repository`)**
-   - MySQL persistence using `database/sql`.
-4. **Worker Layer (`internal/worker`)**
-   - Asynq task types and processors.
-   - Scheduler enqueues dispatch tasks.
-   - Worker dispatches website checks and updates DB.
-5. **Models (`internal/models`)**
-   - Shared domain entities.
-
-### Runtime Flow
-
-1. User adds website via API or Admin Panel.
-2. Website row is stored with `next_check_at`.
-3. Asynq Scheduler periodically enqueues `website:enqueue_due_checks`.
-4. Worker picks dispatch task, queries due websites, and enqueues `website:check` tasks.
-5. Worker executes HTTP GET with a 5-second timeout and updates website status in MySQL.
+This separation keeps `main.go` simple and moves infrastructure concerns into dedicated packages.
 
 ## Project Structure
 
@@ -58,28 +28,25 @@ Argus follows a clean, layered architecture:
 │   └── schema.sql
 ├── internal/
 │   ├── api/
-│   │   └── website_handler.go
+│   ├── app/
 │   ├── config/
-│   │   └── config.go
 │   ├── models/
-│   │   └── website.go
+│   ├── platform/
+│   │   ├── httpserver/
+│   │   ├── storage/
+│   │   └── worker/
 │   ├── repository/
-│   │   └── website_repository.go
 │   ├── service/
-│   │   └── website_service.go
 │   └── worker/
-│       ├── processor.go
-│       └── tasks.go
 ├── web/
 │   └── index.html
+├── .env.example
 ├── docker-compose.yml
 ├── revive.toml
 └── README.md
 ```
 
 ## Database Schema
-
-See `db/schema.sql`.
 
 ```sql
 CREATE DATABASE IF NOT EXISTS argus;
@@ -99,37 +66,45 @@ CREATE TABLE IF NOT EXISTS websites (
 );
 ```
 
-## Setup Instructions
+## Runtime flow
 
-### 1) Start dependencies
+1. User adds website through API/UI.
+2. Scheduler enqueues `website:enqueue_due_checks` on interval.
+3. Worker queries due websites and enqueues `website:check` tasks.
+4. Worker runs HTTP GET with 5s timeout.
+5. MySQL row is updated with status (`up/down`), status code, and next check time.
+
+## Setup
+
+### 1) Start infrastructure
 
 ```bash
 docker compose up -d
 ```
 
-This starts:
+### 2) Configure environment
 
-- MySQL on `localhost:3306`
-- Redis on `localhost:6379`
+```bash
+cp .env.example .env
+```
 
-### 2) Install Go dependencies
+Update `.env` if needed.
+
+### 3) Install dependencies
 
 ```bash
 go mod tidy
 ```
 
-### 3) Run the application
+### 4) Run application
 
 ```bash
 go run ./cmd/api
 ```
 
-App defaults:
+Server and admin UI are available at `http://localhost:8080`.
 
-- API and Admin UI: `http://localhost:8080`
-- API base path: `/api`
-
-### 4) Optional environment variables
+## Environment variables (.env)
 
 | Variable | Default |
 |---|---|
@@ -142,11 +117,7 @@ App defaults:
 
 ## API Endpoints
 
-### `POST /api/websites`
-
-Create a website monitor.
-
-**Request body**
+### POST `/api/websites`
 
 ```json
 {
@@ -155,60 +126,14 @@ Create a website monitor.
 }
 ```
 
-**Response** `201 Created`
+### GET `/api/websites`
+Returns all websites.
 
-```json
-{
-  "id": 1,
-  "url": "https://example.com",
-  "checkInterval": 30,
-  "status": "pending"
-}
-```
-
----
-
-### `GET /api/websites`
-
-List all monitored websites.
-
-**Response** `200 OK`
-
-```json
-[
-  {
-    "id": 1,
-    "url": "https://example.com",
-    "checkInterval": 30,
-    "status": "up",
-    "lastCheckedAt": "2026-01-01T12:00:00Z",
-    "nextCheckAt": "2026-01-01T12:00:30Z",
-    "lastStatusCode": 200,
-    "createdAt": "2026-01-01T11:59:00Z",
-    "updatedAt": "2026-01-01T12:00:00Z"
-  }
-]
-```
-
----
-
-### `DELETE /api/websites/:id`
-
-Delete a website monitor.
-
-**Response** `204 No Content`
+### DELETE `/api/websites/:id`
+Deletes website by id.
 
 ## Linting
-
-Use Revive with strict rules:
 
 ```bash
 revive -config revive.toml ./...
 ```
-
-## Notes on Production Readiness
-
-- Manual dependency injection in `cmd/api/main.go`.
-- Graceful shutdown for Fiber, Asynq server, scheduler, and DB connection.
-- Context propagation from API handlers to repository and worker operations.
-- Early-return coding style and error wrapping for observability.
