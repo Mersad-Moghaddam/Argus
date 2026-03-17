@@ -56,10 +56,10 @@ func (p *Processor) HandleEnqueueDueChecks(ctx context.Context, _ *asynq.Task) e
 			ctx,
 			task,
 			asynq.Queue("critical"),
-			asynq.TaskID(fmt.Sprintf("website-check-%d-%d", website.ID, website.NextCheckAt.Unix())),
+			asynq.Unique(10*time.Second),
 		)
 		if enqueueErr != nil {
-			if enqueueErr == asynq.ErrTaskIDConflict {
+			if enqueueErr == asynq.ErrDuplicateTask {
 				continue
 			}
 			p.logger.Add("error", "worker", "enqueue_check_task_failed", "Failed to enqueue website check task", &website.ID, map[string]string{"error": enqueueErr.Error()})
