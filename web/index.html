@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Argus Admin Panel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+  <main class="max-w-5xl mx-auto px-4 py-8">
+    <header class="mb-6">
+      <h1 class="text-3xl font-semibold">Argus Uptime Checker</h1>
+      <p class="text-slate-300 mt-1">Monitor websites and uptime status in near real-time.</p>
+    </header>
+
+    <section class="bg-slate-800 rounded-xl p-5 mb-6 shadow-lg border border-slate-700">
+      <h2 class="text-xl font-semibold mb-4">Add Website</h2>
+      <form id="websiteForm" class="grid gap-4 md:grid-cols-3">
+        <input
+          id="url"
+          type="url"
+          required
+          placeholder="https://example.com"
+          class="md:col-span-2 rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+        <input
+          id="interval"
+          type="number"
+          min="10"
+          required
+          value="30"
+          class="rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder="Interval (sec)"
+        />
+        <button class="md:col-span-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 font-medium" type="submit">
+          Add Website
+        </button>
+      </form>
+      <p id="formMessage" class="mt-3 text-sm"></p>
+    </section>
+
+    <section class="bg-slate-800 rounded-xl p-5 shadow-lg border border-slate-700">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Tracked Websites</h2>
+        <button id="refreshBtn" class="rounded-lg border border-slate-500 px-3 py-1.5 text-sm hover:bg-slate-700">Refresh</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="text-slate-300 border-b border-slate-600">
+              <th class="py-2">URL</th>
+              <th class="py-2">Interval</th>
+              <th class="py-2">Status</th>
+              <th class="py-2">Last Check</th>
+              <th class="py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="websiteTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const API_BASE = '/api/websites';
+
+    const tableBody = document.getElementById('websiteTableBody');
+    const form = document.getElementById('websiteForm');
+    const formMessage = document.getElementById('formMessage');
+    const refreshBtn = document.getElementById('refreshBtn');
+
+    const statusPill = (status) => {
+      const colors = {
+        up: 'bg-emerald-500/20 text-emerald-300',
+        down: 'bg-rose-500/20 text-rose-300',
+        pending: 'bg-amber-500/20 text-amber-300'
+      };
+      const cls = colors[status] || colors.pending;
+      return `<span class="inline-flex px-2 py-1 rounded-full text-xs font-medium ${cls}">${status}</span>`;
+    };
+
+    const fmtDate = (value) => value ? new Date(value).toLocaleString() : '-';
+
+    async function fetchWebsites() {
+      const response = await fetch(API_BASE);
+      if (!response.ok) {
+        throw new Error('Failed to load websites');
+      }
+      return response.json();
+    }
+
+    async function renderWebsites() {
+      try {
+        const websites = await fetchWebsites();
+        if (websites.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="5" class="py-5 text-slate-400">No websites configured yet.</td></tr>';
+          return;
+        }
+
+        tableBody.innerHTML = websites.map((site) => `
+          <tr class="border-b border-slate-700">
+            <td class="py-3 pr-2"><a class="text-indigo-300 hover:text-indigo-200" href="${site.url}" target="_blank" rel="noreferrer">${site.url}</a></td>
+            <td class="py-3 pr-2">${site.checkInterval}s</td>
+            <td class="py-3 pr-2">${statusPill(site.status)}</td>
+            <td class="py-3 pr-2">${fmtDate(site.lastCheckedAt)}</td>
+            <td class="py-3 pr-2">
+              <button data-id="${site.id}" class="delete-btn text-sm rounded-md border border-rose-400 px-3 py-1 text-rose-300 hover:bg-rose-500/20">Delete</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        tableBody.innerHTML = `<tr><td colspan="5" class="py-5 text-rose-300">${error.message}</td></tr>`;
+      }
+    }
+
+    async function createWebsite(url, checkInterval) {
+      const response = await fetch(API_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, checkInterval })
+      });
+
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.error || 'Failed to create website');
+      }
+    }
+
+    async function deleteWebsite(id) {
+      const response = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error('Failed to delete website');
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      formMessage.textContent = '';
+
+      const url = document.getElementById('url').value.trim();
+      const checkInterval = Number(document.getElementById('interval').value);
+
+      try {
+        await createWebsite(url, checkInterval);
+        form.reset();
+        document.getElementById('interval').value = '30';
+        formMessage.textContent = 'Website added successfully.';
+        formMessage.className = 'mt-3 text-sm text-emerald-300';
+        await renderWebsites();
+      } catch (error) {
+        formMessage.textContent = error.message;
+        formMessage.className = 'mt-3 text-sm text-rose-300';
+      }
+    });
+
+    tableBody.addEventListener('click', async (event) => {
+      const button = event.target.closest('.delete-btn');
+      if (!button) {
+        return;
+      }
+
+      const id = button.dataset.id;
+      try {
+        await deleteWebsite(id);
+        await renderWebsites();
+      } catch (error) {
+        alert(error.message);
+      }
+    });
+
+    refreshBtn.addEventListener('click', renderWebsites);
+    renderWebsites();
+    setInterval(renderWebsites, 15000);
+  </script>
+</body>
+</html>
