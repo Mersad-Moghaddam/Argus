@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS websites (
 
 ## Main Page Preview
 
-![Argus main page](browser:/tmp/codex_browser_invocations/a9c54364a77af8c1/artifacts/artifacts/main-page.png)
+![Argus main page](docs/main-page-preview.svg)
 
 ## Runtime flow
 
