@@ -3,6 +3,8 @@
 Argus is a production-oriented uptime monitoring service built with Go, Fiber, MySQL, and Asynq.
 It provides a clean REST API and a lightweight admin panel for managing monitored websites.
 
+The admin panel now includes a **System & Worker Logs** section with live events for startup, scheduling, task enqueues, and website check results.
+
 ## Why this architecture is professional
 
 This project uses **clear layering** and **loose coupling**:
@@ -138,3 +140,13 @@ Deletes website by id.
 ```bash
 revive -config revive.toml ./...
 ```
+
+
+### GET `/api/logs`
+Returns recent in-memory operational logs (newest first).
+
+Query params:
+- `limit` (optional, default `200`)
+- `websiteId` (optional, filter logs for a single website)
+
+Each log includes timestamp, level (`info`/`warn`/`error`), source (`system` or `worker`), action, message, and detailed key-value metadata.
