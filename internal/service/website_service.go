@@ -37,6 +37,9 @@ func (s *WebsiteService) CreateWebsite(ctx context.Context, rawURL string, inter
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return models.Website{}, ErrInvalidURL
 	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return models.Website{}, ErrInvalidURL
+	}
 
 	now := time.Now().UTC()
 	website := models.Website{

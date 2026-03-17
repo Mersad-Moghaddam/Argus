@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
 	"time"
 
 	"argus/internal/config"
@@ -58,12 +59,19 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 }
 
 // Start starts HTTP server.
-func (a *Application) Start() {
+func (a *Application) Start() error {
+	listener, err := net.Listen("tcp", a.cfg.HTTPAddr)
+	if err != nil {
+		return fmt.Errorf("listen on %s: %w", a.cfg.HTTPAddr, err)
+	}
+
 	go func() {
-		if err := a.httpApp.Listen(a.cfg.HTTPAddr); err != nil {
-			log.Printf("fiber server stopped: %v", err)
+		if serveErr := a.httpApp.Listener(listener); serveErr != nil {
+			log.Printf("fiber server stopped: %v", serveErr)
 		}
 	}()
+
+	return nil
 }
 
 // Shutdown gracefully stops all components.

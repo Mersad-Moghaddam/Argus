@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS websites (
 2. Scheduler enqueues `website:enqueue_due_checks` on interval.
 3. Worker queries due websites and enqueues `website:check` tasks.
 4. Worker runs HTTP GET with 5s timeout.
-5. MySQL row is updated with status (`up/down`), status code, and next check time.
+5. Only `http` and `https` URLs are accepted at creation time.
+6. MySQL row is updated with status (`up/down`), status code, and next check time.
 
 ## Setup
 

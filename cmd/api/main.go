@@ -22,7 +22,9 @@ func main() {
 		log.Fatalf("initialize application: %v", err)
 	}
 
-	application.Start()
+	if err = application.Start(); err != nil {
+		log.Fatalf("start application: %v", err)
+	}
 
 	shutdownSignal := make(chan os.Signal, 1)
 	signal.Notify(shutdownSignal, syscall.SIGINT, syscall.SIGTERM)
