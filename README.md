@@ -7,6 +7,8 @@ The admin panel now includes a **System & Worker Logs** section with live events
 
 It also shows **Ping latency (ms)** per website and supports adding a **custom health-check URL** from a separate form.
 
+A custom project favicon is served from `web/assets/favicon.svg`.
+
 ## Why this architecture is professional
 
 This project uses **clear layering** and **loose coupling**:
@@ -71,6 +73,11 @@ CREATE TABLE IF NOT EXISTS websites (
     INDEX idx_websites_next_check_at (next_check_at)
 );
 ```
+
+
+## Main Page Preview
+
+![Argus main page](browser:/tmp/codex_browser_invocations/a9c54364a77af8c1/artifacts/artifacts/main-page.png)
 
 ## Runtime flow
 

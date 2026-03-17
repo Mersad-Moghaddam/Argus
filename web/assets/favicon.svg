@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Argus favicon">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#0f172a"/>
+  <path d="M32 11l16 7v11c0 12.5-7.8 19.8-16 24-8.2-4.2-16-11.5-16-24V18l16-7z" fill="url(#g)"/>
+  <circle cx="32" cy="30" r="6" fill="#e2e8f0"/>
+  <path d="M21 44c2.7-3.8 6.6-5.7 11-5.7S40.3 40.2 43 44" stroke="#e2e8f0" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>
