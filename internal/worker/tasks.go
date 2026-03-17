@@ -16,9 +16,10 @@ const (
 
 // CheckWebsitePayload is payload for TypeCheckWebsite.
 type CheckWebsitePayload struct {
-	WebsiteID int64  `json:"websiteId"`
-	URL       string `json:"url"`
-	Interval  int    `json:"interval"`
+	WebsiteID      int64   `json:"websiteId"`
+	URL            string  `json:"url"`
+	HealthCheckURL *string `json:"healthCheckUrl,omitempty"`
+	Interval       int     `json:"interval"`
 }
 
 // NewEnqueueDueChecksTask creates a dispatcher task.

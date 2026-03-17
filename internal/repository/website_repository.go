@@ -15,7 +15,7 @@ type WebsiteRepository interface {
 	List(ctx context.Context) ([]models.Website, error)
 	Delete(ctx context.Context, id int64) error
 	ListDue(ctx context.Context, now time.Time) ([]models.Website, error)
-	MarkChecked(ctx context.Context, id int64, status string, statusCode int, checkedAt, nextCheckAt time.Time) error
+	MarkChecked(ctx context.Context, id int64, status string, statusCode int, latencyMS int, checkedAt, nextCheckAt time.Time) error
 }
 
 // MySQLWebsiteRepository is a MySQL-backed website repository.
@@ -31,9 +31,9 @@ func NewMySQLWebsiteRepository(db *sql.DB) *MySQLWebsiteRepository {
 // Create inserts a website row.
 func (r *MySQLWebsiteRepository) Create(ctx context.Context, website models.Website) (int64, error) {
 	const query = `
-INSERT INTO websites (url, check_interval_seconds, status, next_check_at, last_status_code)
-VALUES (?, ?, ?, ?, ?)`
-	result, err := r.db.ExecContext(ctx, query, website.URL, website.CheckInterval, website.Status, website.NextCheckAt, website.LastStatusCode)
+INSERT INTO websites (url, health_check_url, check_interval_seconds, status, next_check_at, last_status_code, last_latency_ms)
+VALUES (?, ?, ?, ?, ?, ?, ?)`
+	result, err := r.db.ExecContext(ctx, query, website.URL, website.HealthCheckURL, website.CheckInterval, website.Status, website.NextCheckAt, website.LastStatusCode, website.LastLatencyMS)
 	if err != nil {
 		return 0, fmt.Errorf("insert website: %w", err)
 	}
@@ -48,7 +48,7 @@ VALUES (?, ?, ?, ?, ?)`
 // List returns all websites sorted by id desc.
 func (r *MySQLWebsiteRepository) List(ctx context.Context) ([]models.Website, error) {
 	const query = `
-SELECT id, url, check_interval_seconds, status, last_checked_at, next_check_at, last_status_code, created_at, updated_at
+SELECT id, url, health_check_url, check_interval_seconds, status, last_checked_at, next_check_at, last_status_code, last_latency_ms, created_at, updated_at
 FROM websites
 ORDER BY id DESC`
 
@@ -64,11 +64,13 @@ ORDER BY id DESC`
 		err = rows.Scan(
 			&w.ID,
 			&w.URL,
+			&w.HealthCheckURL,
 			&w.CheckInterval,
 			&w.Status,
 			&w.LastCheckedAt,
 			&w.NextCheckAt,
 			&w.LastStatusCode,
+			&w.LastLatencyMS,
 			&w.CreatedAt,
 			&w.UpdatedAt,
 		)
@@ -96,7 +98,7 @@ func (r *MySQLWebsiteRepository) Delete(ctx context.Context, id int64) error {
 // ListDue returns websites that should be checked now.
 func (r *MySQLWebsiteRepository) ListDue(ctx context.Context, now time.Time) ([]models.Website, error) {
 	const query = `
-SELECT id, url, check_interval_seconds, status, last_checked_at, next_check_at, last_status_code, created_at, updated_at
+SELECT id, url, health_check_url, check_interval_seconds, status, last_checked_at, next_check_at, last_status_code, last_latency_ms, created_at, updated_at
 FROM websites
 WHERE next_check_at <= ?
 ORDER BY next_check_at ASC`
@@ -113,11 +115,13 @@ ORDER BY next_check_at ASC`
 		err = rows.Scan(
 			&w.ID,
 			&w.URL,
+			&w.HealthCheckURL,
 			&w.CheckInterval,
 			&w.Status,
 			&w.LastCheckedAt,
 			&w.NextCheckAt,
 			&w.LastStatusCode,
+			&w.LastLatencyMS,
 			&w.CreatedAt,
 			&w.UpdatedAt,
 		)
@@ -132,13 +136,13 @@ ORDER BY next_check_at ASC`
 	return items, nil
 }
 
-// MarkChecked updates status, status code and next check time after execution.
-func (r *MySQLWebsiteRepository) MarkChecked(ctx context.Context, id int64, status string, statusCode int, checkedAt, nextCheckAt time.Time) error {
+// MarkChecked updates status, status code, latency and next check time after execution.
+func (r *MySQLWebsiteRepository) MarkChecked(ctx context.Context, id int64, status string, statusCode int, latencyMS int, checkedAt, nextCheckAt time.Time) error {
 	const query = `
 UPDATE websites
-SET status = ?, last_status_code = ?, last_checked_at = ?, next_check_at = ?, updated_at = NOW()
+SET status = ?, last_status_code = ?, last_latency_ms = ?, last_checked_at = ?, next_check_at = ?, updated_at = NOW()
 WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, status, statusCode, checkedAt, nextCheckAt, id)
+	_, err := r.db.ExecContext(ctx, query, status, statusCode, latencyMS, checkedAt, nextCheckAt, id)
 	if err != nil {
 		return fmt.Errorf("update checked website: %w", err)
 	}

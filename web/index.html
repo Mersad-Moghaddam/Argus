@@ -8,20 +8,33 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
   <main class="max-w-6xl mx-auto px-4 py-8 space-y-6">
-    <header class="mb-2">
+    <header>
       <h1 class="text-3xl font-semibold">Argus Uptime Checker</h1>
-      <p class="text-slate-300 mt-1">Monitor websites, inspect checks, and track detailed system + worker logs.</p>
+      <p class="text-slate-300 mt-1">Simple monitoring with optional custom health-check endpoint and live ping latency.</p>
     </header>
 
-    <section class="bg-slate-900 rounded-xl p-5 shadow-lg border border-slate-800">
-      <h2 class="text-xl font-semibold mb-4">Add Website</h2>
-      <form id="websiteForm" class="grid gap-4 md:grid-cols-3">
-        <input id="url" type="url" required placeholder="https://example.com" class="md:col-span-2 rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500" />
-        <input id="interval" type="number" min="10" required value="30" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Interval (sec)" />
-        <button class="md:col-span-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 font-medium" type="submit">Add Website</button>
-      </form>
-      <p id="formMessage" class="mt-3 text-sm"></p>
+    <section class="grid md:grid-cols-2 gap-4">
+      <div class="bg-slate-900 rounded-xl p-5 shadow-lg border border-slate-800">
+        <h2 class="text-lg font-semibold mb-3">Add Website (Main URL)</h2>
+        <form id="websiteForm" class="space-y-3">
+          <input id="url" type="url" required placeholder="https://example.com" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500" />
+          <input id="interval" type="number" min="10" required value="30" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Interval (sec)" />
+          <button class="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 font-medium" type="submit">Add Main URL</button>
+        </form>
+      </div>
+
+      <div class="bg-slate-900 rounded-xl p-5 shadow-lg border border-slate-800">
+        <h2 class="text-lg font-semibold mb-3">Add Website + Custom Health Check</h2>
+        <form id="healthForm" class="space-y-3">
+          <input id="healthMainUrl" type="url" required placeholder="https://example.com" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500" />
+          <input id="healthUrl" type="url" required placeholder="https://example.com/health" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500" />
+          <input id="healthInterval" type="number" min="10" required value="30" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Interval (sec)" />
+          <button class="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 font-medium" type="submit">Add Health Check URL</button>
+        </form>
+      </div>
     </section>
+
+    <p id="formMessage" class="text-sm"></p>
 
     <section class="bg-slate-900 rounded-xl p-5 shadow-lg border border-slate-800">
       <div class="flex items-center justify-between mb-4">
@@ -32,7 +45,9 @@
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="text-slate-300 border-b border-slate-700">
-              <th class="py-2">URL</th>
+              <th class="py-2">Website</th>
+              <th class="py-2">Check Target</th>
+              <th class="py-2">Ping</th>
               <th class="py-2">Interval</th>
               <th class="py-2">Status</th>
               <th class="py-2">Last Check</th>
@@ -48,7 +63,7 @@
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
         <div>
           <h2 class="text-xl font-semibold">System & Worker Logs</h2>
-          <p class="text-xs text-slate-400">Detailed runtime events showing how each website is monitored by Asynq workers.</p>
+          <p class="text-xs text-slate-400">Detailed runtime events showing queueing, checks, status updates, and ping latency.</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <select id="logFilterWebsite" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm"></select>
@@ -70,7 +85,8 @@
     const LOGS_BASE = '/api/logs';
 
     const tableBody = document.getElementById('websiteTableBody');
-    const form = document.getElementById('websiteForm');
+    const websiteForm = document.getElementById('websiteForm');
+    const healthForm = document.getElementById('healthForm');
     const formMessage = document.getElementById('formMessage');
     const refreshBtn = document.getElementById('refreshBtn');
 
@@ -87,6 +103,12 @@
       return `<span class="inline-flex px-2 py-1 rounded-full text-xs font-medium ${cls}">${status}</span>`;
     };
 
+    const pingPill = (ms) => {
+      if (!ms || ms <= 0) return '<span class="text-slate-400 text-xs">-</span>';
+      const cls = ms < 200 ? 'text-emerald-300' : ms < 800 ? 'text-amber-300' : 'text-rose-300';
+      return `<span class="text-sm font-medium ${cls}">${ms} ms</span>`;
+    };
+
     const levelPill = (level) => {
       const colors = { info: 'bg-sky-500/20 text-sky-300', warn: 'bg-amber-500/20 text-amber-300', error: 'bg-rose-500/20 text-rose-300' };
       const cls = colors[level] || colors.info;
@@ -101,10 +123,26 @@
       return response.json();
     }
 
+    async function createWebsite(payload) {
+      const response = await fetch(API_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to create website');
+      }
+    }
+
+    async function deleteWebsite(id) {
+      const response = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Failed to delete website');
+    }
+
     async function fetchLogs() {
       const params = new URLSearchParams({ limit: '250' });
       if (logFilterWebsite.value !== 'all') params.set('websiteId', logFilterWebsite.value);
-
       const response = await fetch(`${LOGS_BASE}?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to load logs');
       return response.json();
@@ -115,7 +153,7 @@
       const options = ['<option value="all">All websites</option>'];
       websitesCache.forEach((site) => options.push(`<option value="${site.id}">#${site.id} ${site.url}</option>`));
       logFilterWebsite.innerHTML = options.join('');
-      logFilterWebsite.value = options.some((o) => o.includes(`value="${current}"`)) ? current : 'all';
+      logFilterWebsite.value = options.some((option) => option.includes(`value="${current}"`)) ? current : 'all';
     }
 
     function renderLogDetails(details = {}) {
@@ -159,57 +197,67 @@
         buildLogFilters();
 
         if (websitesCache.length === 0) {
-          tableBody.innerHTML = '<tr><td colspan="5" class="py-5 text-slate-400">No websites configured yet.</td></tr>';
+          tableBody.innerHTML = '<tr><td colspan="7" class="py-5 text-slate-400">No websites configured yet.</td></tr>';
           return;
         }
 
-        tableBody.innerHTML = websitesCache.map((site) => `
-          <tr class="border-b border-slate-800">
-            <td class="py-3 pr-2"><a class="text-indigo-300 hover:text-indigo-200" href="${site.url}" target="_blank" rel="noreferrer">${site.url}</a></td>
-            <td class="py-3 pr-2">${site.checkInterval}s</td>
-            <td class="py-3 pr-2">${statusPill(site.status)}</td>
-            <td class="py-3 pr-2">${fmtDate(site.lastCheckedAt)}</td>
-            <td class="py-3 pr-2"><button data-id="${site.id}" class="delete-btn text-sm rounded-md border border-rose-400 px-3 py-1 text-rose-300 hover:bg-rose-500/20">Delete</button></td>
-          </tr>
-        `).join('');
+        tableBody.innerHTML = websitesCache.map((site) => {
+          const checkTarget = site.healthCheckUrl || site.url;
+          return `
+            <tr class="border-b border-slate-800">
+              <td class="py-3 pr-2"><a class="text-indigo-300 hover:text-indigo-200" href="${site.url}" target="_blank" rel="noreferrer">${site.url}</a></td>
+              <td class="py-3 pr-2"><span class="text-slate-200">${checkTarget}</span>${site.healthCheckUrl ? '<div class="text-[11px] text-emerald-300">custom health URL</div>' : ''}</td>
+              <td class="py-3 pr-2">${pingPill(site.lastLatencyMs)}</td>
+              <td class="py-3 pr-2">${site.checkInterval}s</td>
+              <td class="py-3 pr-2">${statusPill(site.status)}</td>
+              <td class="py-3 pr-2">${fmtDate(site.lastCheckedAt)}</td>
+              <td class="py-3 pr-2"><button data-id="${site.id}" class="delete-btn text-sm rounded-md border border-rose-400 px-3 py-1 text-rose-300 hover:bg-rose-500/20">Delete</button></td>
+            </tr>
+          `;
+        }).join('');
       } catch (error) {
-        tableBody.innerHTML = `<tr><td colspan="5" class="py-5 text-rose-300">${error.message}</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="7" class="py-5 text-rose-300">${error.message}</td></tr>`;
       }
     }
 
-    async function createWebsite(url, checkInterval) {
-      const response = await fetch(API_BASE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, checkInterval })
-      });
-      if (!response.ok) {
-        const payload = await response.json();
-        throw new Error(payload.error || 'Failed to create website');
-      }
-    }
-
-    async function deleteWebsite(id) {
-      const response = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('Failed to delete website');
-    }
-
-    form.addEventListener('submit', async (event) => {
+    websiteForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       formMessage.textContent = '';
-      const url = document.getElementById('url').value.trim();
-      const checkInterval = Number(document.getElementById('interval').value);
       try {
-        await createWebsite(url, checkInterval);
-        form.reset();
+        await createWebsite({
+          url: document.getElementById('url').value.trim(),
+          checkInterval: Number(document.getElementById('interval').value)
+        });
+        websiteForm.reset();
         document.getElementById('interval').value = '30';
         formMessage.textContent = 'Website added successfully.';
-        formMessage.className = 'mt-3 text-sm text-emerald-300';
+        formMessage.className = 'text-sm text-emerald-300';
         await renderWebsites();
         await renderLogs();
       } catch (error) {
         formMessage.textContent = error.message;
-        formMessage.className = 'mt-3 text-sm text-rose-300';
+        formMessage.className = 'text-sm text-rose-300';
+      }
+    });
+
+    healthForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      formMessage.textContent = '';
+      try {
+        await createWebsite({
+          url: document.getElementById('healthMainUrl').value.trim(),
+          healthCheckUrl: document.getElementById('healthUrl').value.trim(),
+          checkInterval: Number(document.getElementById('healthInterval').value)
+        });
+        healthForm.reset();
+        document.getElementById('healthInterval').value = '30';
+        formMessage.textContent = 'Website + custom health check added successfully.';
+        formMessage.className = 'text-sm text-emerald-300';
+        await renderWebsites();
+        await renderLogs();
+      } catch (error) {
+        formMessage.textContent = error.message;
+        formMessage.className = 'text-sm text-rose-300';
       }
     });
 

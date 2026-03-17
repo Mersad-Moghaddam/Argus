@@ -5,6 +5,8 @@ It provides a clean REST API and a lightweight admin panel for managing monitore
 
 The admin panel now includes a **System & Worker Logs** section with live events for startup, scheduling, task enqueues, and website check results.
 
+It also shows **Ping latency (ms)** per website and supports adding a **custom health-check URL** from a separate form.
+
 ## Why this architecture is professional
 
 This project uses **clear layering** and **loose coupling**:
@@ -57,11 +59,13 @@ USE argus;
 CREATE TABLE IF NOT EXISTS websites (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     url VARCHAR(2083) NOT NULL UNIQUE,
+    health_check_url VARCHAR(2083) NULL,
     check_interval_seconds INT NOT NULL,
     status ENUM('pending', 'up', 'down') NOT NULL DEFAULT 'pending',
     last_checked_at DATETIME NULL,
     next_check_at DATETIME NOT NULL,
     last_status_code INT NOT NULL DEFAULT 0,
+    last_latency_ms INT NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_websites_next_check_at (next_check_at)
@@ -75,7 +79,8 @@ CREATE TABLE IF NOT EXISTS websites (
 3. Worker queries due websites and enqueues `website:check` tasks.
 4. Worker runs HTTP GET with 5s timeout.
 5. Only `http` and `https` URLs are accepted at creation time.
-6. MySQL row is updated with status (`up/down`), status code, and next check time.
+6. Worker checks `health_check_url` when provided; otherwise it checks the main URL.
+7. MySQL row is updated with status (`up/down`), status code, ping latency (ms), and next check time.
 
 ## Setup
 
@@ -125,6 +130,7 @@ Server and admin UI are available at `http://localhost:8080`.
 ```json
 {
   "url": "https://example.com",
+  "healthCheckUrl": "https://example.com/health",
   "checkInterval": 30
 }
 ```

@@ -19,8 +19,9 @@ func NewWebsiteHandler(service *service.WebsiteService) *WebsiteHandler {
 }
 
 type createWebsiteRequest struct {
-	URL           string `json:"url"`
-	CheckInterval int    `json:"checkInterval"`
+	URL            string  `json:"url"`
+	HealthCheckURL *string `json:"healthCheckUrl"`
+	CheckInterval  int     `json:"checkInterval"`
 }
 
 // RegisterWebsiteRoutes sets up website routes.
@@ -37,7 +38,7 @@ func (h *WebsiteHandler) CreateWebsite(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
 	}
 
-	website, err := h.service.CreateWebsite(c.UserContext(), request.URL, request.CheckInterval)
+	website, err := h.service.CreateWebsite(c.UserContext(), request.URL, request.CheckInterval, request.HealthCheckURL)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidURL) || errors.Is(err, service.ErrInvalidInterval) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})

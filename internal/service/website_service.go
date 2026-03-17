@@ -32,25 +32,34 @@ func NewWebsiteService(repo repository.WebsiteRepository, logger *observability.
 }
 
 // CreateWebsite validates and stores a monitored website.
-func (s *WebsiteService) CreateWebsite(ctx context.Context, rawURL string, interval int) (models.Website, error) {
+func (s *WebsiteService) CreateWebsite(ctx context.Context, rawURL string, interval int, healthCheckURL *string) (models.Website, error) {
 	if interval < 10 {
 		return models.Website{}, ErrInvalidInterval
 	}
-	parsed, err := url.ParseRequestURI(rawURL)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return models.Website{}, ErrInvalidURL
+
+	baseURL, err := parseHTTPURL(rawURL)
+	if err != nil {
+		return models.Website{}, err
 	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return models.Website{}, ErrInvalidURL
+
+	var normalizedHealthURL *string
+	if healthCheckURL != nil && *healthCheckURL != "" {
+		normalized, healthErr := parseHTTPURL(*healthCheckURL)
+		if healthErr != nil {
+			return models.Website{}, healthErr
+		}
+		normalizedHealthURL = &normalized
 	}
 
 	now := time.Now().UTC()
 	website := models.Website{
-		URL:            parsed.String(),
+		URL:            baseURL,
+		HealthCheckURL: normalizedHealthURL,
 		CheckInterval:  interval,
 		Status:         "pending",
 		NextCheckAt:    now,
 		LastStatusCode: 0,
+		LastLatencyMS:  0,
 	}
 
 	id, err := s.repo.Create(ctx, website)
@@ -61,12 +70,16 @@ func (s *WebsiteService) CreateWebsite(ctx context.Context, rawURL string, inter
 	website.CreatedAt = now
 	website.UpdatedAt = now
 
-	s.logger.Add("info", "api", "website_created", "Website was added for monitoring", &website.ID, map[string]string{
+	details := map[string]string{
 		"url":             website.URL,
 		"checkInterval":   strconv.Itoa(website.CheckInterval),
 		"initialStatus":   website.Status,
 		"nextScheduledAt": website.NextCheckAt.Format(time.RFC3339),
-	})
+	}
+	if website.HealthCheckURL != nil {
+		details["healthCheckUrl"] = *website.HealthCheckURL
+	}
+	s.logger.Add("info", "api", "website_created", "Website was added for monitoring", &website.ID, details)
 
 	return website, nil
 }
@@ -89,4 +102,15 @@ func (s *WebsiteService) DeleteWebsite(ctx context.Context, id int64) error {
 
 	s.logger.Add("warn", "api", "website_deleted", "Website was removed from monitoring", &id, nil)
 	return nil
+}
+
+func parseHTTPURL(raw string) (string, error) {
+	parsed, err := url.ParseRequestURI(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", ErrInvalidURL
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", ErrInvalidURL
+	}
+	return parsed.String(), nil
 }

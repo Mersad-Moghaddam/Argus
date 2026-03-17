@@ -42,9 +42,10 @@ func (p *Processor) HandleEnqueueDueChecks(ctx context.Context, _ *asynq.Task) e
 
 	for _, website := range dueWebsites {
 		task, taskErr := NewCheckWebsiteTask(CheckWebsitePayload{
-			WebsiteID: website.ID,
-			URL:       website.URL,
-			Interval:  website.CheckInterval,
+			WebsiteID:      website.ID,
+			URL:            website.URL,
+			HealthCheckURL: website.HealthCheckURL,
+			Interval:       website.CheckInterval,
 		})
 		if taskErr != nil {
 			p.logger.Add("error", "worker", "build_check_task_failed", "Failed to build check task payload", &website.ID, map[string]string{"error": taskErr.Error()})
@@ -65,8 +66,13 @@ func (p *Processor) HandleEnqueueDueChecks(ctx context.Context, _ *asynq.Task) e
 			return fmt.Errorf("enqueue website check task: %w", enqueueErr)
 		}
 
+		checkTarget := website.URL
+		if website.HealthCheckURL != nil {
+			checkTarget = *website.HealthCheckURL
+		}
 		p.logger.Add("info", "worker", "check_task_enqueued", "Website check task enqueued", &website.ID, map[string]string{
 			"url":           website.URL,
+			"checkTarget":   checkTarget,
 			"checkInterval": strconv.Itoa(website.CheckInterval),
 			"scheduledFor":  website.NextCheckAt.Format(time.RFC3339),
 		})
@@ -82,20 +88,28 @@ func (p *Processor) HandleCheckWebsite(ctx context.Context, task *asynq.Task) er
 		return fmt.Errorf("unmarshal check website task payload: %w", err)
 	}
 
+	checkURL := payload.URL
+	if payload.HealthCheckURL != nil {
+		checkURL = *payload.HealthCheckURL
+	}
+
 	status := "down"
 	statusCode := 0
+	latencyMS := 0
 	failureReason := ""
 
 	reqCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, payload.URL, nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, checkURL, nil)
 	if err != nil {
-		p.logger.Add("error", "worker", "build_http_request_failed", "Failed to build HTTP request for website check", &payload.WebsiteID, map[string]string{"url": payload.URL, "error": err.Error()})
+		p.logger.Add("error", "worker", "build_http_request_failed", "Failed to build HTTP request for website check", &payload.WebsiteID, map[string]string{"url": checkURL, "error": err.Error()})
 		return fmt.Errorf("build check request: %w", err)
 	}
 
+	start := time.Now()
 	response, err := http.DefaultClient.Do(req)
+	latencyMS = int(time.Since(start).Milliseconds())
 	if err == nil {
 		defer response.Body.Close()
 		_, _ = io.Copy(io.Discard, response.Body)
@@ -111,7 +125,7 @@ func (p *Processor) HandleCheckWebsite(ctx context.Context, task *asynq.Task) er
 
 	checkedAt := time.Now().UTC()
 	nextCheckAt := checkedAt.Add(time.Duration(payload.Interval) * time.Second)
-	err = p.repo.MarkChecked(ctx, payload.WebsiteID, status, statusCode, checkedAt, nextCheckAt)
+	err = p.repo.MarkChecked(ctx, payload.WebsiteID, status, statusCode, latencyMS, checkedAt, nextCheckAt)
 	if err != nil {
 		p.logger.Add("error", "worker", "mark_checked_failed", "Failed to persist website check result", &payload.WebsiteID, map[string]string{"error": err.Error()})
 		return fmt.Errorf("mark website checked: %w", err)
@@ -119,8 +133,10 @@ func (p *Processor) HandleCheckWebsite(ctx context.Context, task *asynq.Task) er
 
 	details := map[string]string{
 		"url":           payload.URL,
+		"checkTarget":   checkURL,
 		"status":        status,
 		"statusCode":    strconv.Itoa(statusCode),
+		"latencyMs":     strconv.Itoa(latencyMS),
 		"checkedAt":     checkedAt.Format(time.RFC3339),
 		"nextCheckAt":   nextCheckAt.Format(time.RFC3339),
 		"checkInterval": strconv.Itoa(payload.Interval),
