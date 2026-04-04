@@ -37,6 +37,10 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err = storage.ApplyMigrations(ctx, db, "db/migrations"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("apply migrations: %w", err)
+	}
 	store := mysql.NewStore(db)
 	appService := application.NewService(store, store, store, store, store, store, logger)
 	httpApp := httpserver.NewFiberApp(appService, logger, cfg.APIKey)

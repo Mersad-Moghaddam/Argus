@@ -12,12 +12,19 @@ async function api(path, options={}) {
 }
 
 async function refresh() {
-  try {
-    const [websites, incidentItems] = await Promise.all([api('/websites?limit=50&offset=0'), api('/incidents?limit=20&offset=0')]);
-    table.innerHTML = websites.map(w => `<tr><td>${w.id}</td><td>${w.url}</td><td>${w.monitorType}</td><td class="status-${w.status}">${w.status}</td><td>${w.lastStatusCode ?? '-'}</td></tr>`).join('');
-    incidents.innerHTML = incidentItems.map(i => `<li>#${i.id} website:${i.websiteId} • ${i.state}</li>`).join('');
-  } catch (e) {
-    incidents.innerHTML = `<li>Failed to load data: ${e.message}</li>`;
+  const websiteResult = await api('/websites?limit=50&offset=0').catch((e) => ({ __error: e.message }));
+  const incidentResult = await api('/incidents?limit=20&offset=0').catch((e) => ({ __error: e.message }));
+
+  if (websiteResult.__error) {
+    table.innerHTML = `<tr><td colspan="5">Failed to load monitors: ${websiteResult.__error}</td></tr>`;
+  } else {
+    table.innerHTML = websiteResult.map(w => `<tr><td>${w.id}</td><td>${w.url}</td><td>${w.monitorType}</td><td class="status-${w.status}">${w.status}</td><td>${w.lastStatusCode ?? '-'}</td></tr>`).join('');
+  }
+
+  if (incidentResult.__error) {
+    incidents.innerHTML = `<li>Incident feed unavailable: ${incidentResult.__error}</li>`;
+  } else {
+    incidents.innerHTML = incidentResult.map(i => `<li>#${i.id} website:${i.websiteId} • ${i.state}</li>`).join('');
   }
 }
 
