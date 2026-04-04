@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS websites (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_websites_next_check_at (next_check_at),
     INDEX idx_websites_status_page_id (status_page_id),
-    CONSTRAINT fk_websites_status_page FOREIGN KEY (status_page_id) REFERENCES status_pages(id) ON DELETE SET NULL
+    FOREIGN KEY (status_page_id) REFERENCES status_pages(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS website_checks (
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS website_checks (
     checked_at DATETIME NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_website_checks_website_id_checked_at (website_id, checked_at DESC),
-    CONSTRAINT fk_website_checks_website FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
+    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS incidents (
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS incidents (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_incidents_website_state (website_id, state),
-    CONSTRAINT fk_incidents_website FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
+    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS alert_channels (
@@ -77,5 +77,5 @@ CREATE TABLE IF NOT EXISTS maintenance_windows (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_maintenance_active (starts_at, ends_at),
-    CONSTRAINT fk_maintenance_website FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
+    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
 );

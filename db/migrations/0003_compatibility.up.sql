@@ -23,6 +23,19 @@ CREATE TABLE IF NOT EXISTS incidents (
     INDEX idx_incidents_website_state (website_id, state)
 );
 
+CREATE TABLE IF NOT EXISTS website_checks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    website_id BIGINT NOT NULL,
+    status ENUM('up', 'down') NOT NULL,
+    status_code INT NOT NULL DEFAULT 0,
+    latency_ms INT NOT NULL DEFAULT 0,
+    failure_reason VARCHAR(1024) NULL,
+    checked_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_website_checks_website_id_checked_at (website_id, checked_at DESC),
+    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS alert_channels (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(128) NOT NULL,

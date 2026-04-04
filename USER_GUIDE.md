@@ -158,3 +158,21 @@ GET /api/public/status/public-status
   - worker concurrency/queue settings
   - Redis/MySQL credentials
 
+---
+
+## 9. MariaDB migration troubleshooting
+
+If you see `ERROR 1005 ... errno: 121 "Duplicate key on write or update"` during manual table creation,
+it usually means old FK metadata/constraint names conflict with previous schema attempts.
+
+Recommended path:
+
+1. Use Argus startup migrations instead of manual copy/paste SQL.
+2. Apply latest migrations including compatibility migration `0003_compatibility.up.sql`.
+3. If the DB was partially initialized, drop incomplete tables and retry migrations:
+
+```sql
+DROP TABLE IF EXISTS website_checks, incidents, maintenance_windows;
+```
+
+Then restart the app so migrations re-apply cleanly.
