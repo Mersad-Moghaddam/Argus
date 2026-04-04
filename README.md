@@ -31,3 +31,8 @@ go run ./cmd/api
 ```
 
 Open UI at: `http://localhost:8080`
+
+## UI Preview
+
+![Argus dashboard preview](docs/main-page-preview.svg)
+
