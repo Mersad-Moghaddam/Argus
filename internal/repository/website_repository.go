@@ -420,9 +420,16 @@ func (r *MySQLWebsiteRepository) ListWebsitesByStatusPage(ctx context.Context, p
 
 func (r *MySQLWebsiteRepository) MarkHeartbeat(ctx context.Context, websiteID int64, checkedAt, nextCheckAt time.Time) error {
 	const query = `UPDATE websites SET status='up', last_status_code=200, last_latency_ms=0, last_checked_at=?, last_heartbeat_received_at=?, next_check_at=?, updated_at=NOW() WHERE id=? AND monitor_type='heartbeat'`
-	_, err := r.db.ExecContext(ctx, query, checkedAt, checkedAt, nextCheckAt, websiteID)
+	result, err := r.db.ExecContext(ctx, query, checkedAt, checkedAt, nextCheckAt, websiteID)
 	if err != nil {
 		return fmt.Errorf("mark heartbeat: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("mark heartbeat rows affected: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("mark heartbeat: %w", sql.ErrNoRows)
 	}
 	return nil
 }

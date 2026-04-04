@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/url"
@@ -18,6 +19,8 @@ var (
 	ErrInvalidURL         = errors.New("invalid URL")
 	ErrInvalidInterval    = errors.New("checkInterval must be at least 10 seconds")
 	ErrInvalidMonitorType = errors.New("invalid monitorType")
+	ErrInvalidInput       = errors.New("invalid input")
+	ErrHeartbeatNotFound  = errors.New("heartbeat monitor not found")
 )
 
 // WebsiteService orchestrates website business logic.
@@ -70,7 +73,7 @@ func (s *WebsiteService) CreateWebsite(ctx context.Context, input CreateWebsiteI
 	}
 
 	if monitorType == models.MonitorTypeKeyword && (input.ExpectedKeyword == nil || strings.TrimSpace(*input.ExpectedKeyword) == "") {
-		return models.Website{}, errors.New("expectedKeyword is required for keyword monitor")
+		return models.Website{}, fmt.Errorf("%w: expectedKeyword is required for keyword monitor", ErrInvalidInput)
 	}
 
 	if monitorType == models.MonitorTypeTLSExpiry && input.TLSExpiryThresholdDays <= 0 {
@@ -185,7 +188,14 @@ func (s *WebsiteService) GetStatusPage(ctx context.Context, slug string) (*model
 func (s *WebsiteService) MarkHeartbeat(ctx context.Context, websiteID int64) error {
 	now := time.Now().UTC()
 	next := now.Add(30 * time.Second)
-	return s.repo.MarkHeartbeat(ctx, websiteID, now, next)
+	err := s.repo.MarkHeartbeat(ctx, websiteID, now, next)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrHeartbeatNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 func parseHTTPURL(raw string) (string, error) {

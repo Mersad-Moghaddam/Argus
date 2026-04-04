@@ -209,6 +209,7 @@ func (p *Processor) checkTLSExpiry(target string, thresholdDays int) (string, in
 }
 
 var netDialer = net.Dialer{Timeout: 5 * time.Second}
+var alertHTTPClient = &http.Client{Timeout: 4 * time.Second}
 
 func (p *Processor) handleIncidentsAndAlerts(ctx context.Context, websiteID int64, url string, status string, reason string, now time.Time) error {
 	openIncident, err := p.repo.GetOpenIncident(ctx, websiteID)
@@ -270,7 +271,7 @@ func (p *Processor) dispatchAlerts(ctx context.Context, event string, websiteID 
 				continue
 			}
 			req.Header.Set("Content-Type", "application/json")
-			resp, sendErr := http.DefaultClient.Do(req)
+			resp, sendErr := alertHTTPClient.Do(req)
 			if sendErr == nil && resp != nil {
 				resp.Body.Close()
 			}

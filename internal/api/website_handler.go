@@ -53,7 +53,7 @@ func (h *WebsiteHandler) CreateWebsite(c *fiber.Ctx) error {
 		StatusPageID:           request.StatusPageID,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidURL) || errors.Is(err, service.ErrInvalidInterval) || errors.Is(err, service.ErrInvalidMonitorType) {
+		if errors.Is(err, service.ErrInvalidURL) || errors.Is(err, service.ErrInvalidInterval) || errors.Is(err, service.ErrInvalidMonitorType) || errors.Is(err, service.ErrInvalidInput) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create website"})
@@ -87,6 +87,9 @@ func (h *WebsiteHandler) MarkHeartbeat(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid website id"})
 	}
 	if err = h.service.MarkHeartbeat(c.UserContext(), id); err != nil {
+		if errors.Is(err, service.ErrHeartbeatNotFound) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to mark heartbeat"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
