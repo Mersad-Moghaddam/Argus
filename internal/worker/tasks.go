@@ -8,13 +8,11 @@ import (
 )
 
 const (
-	// TypeEnqueueDueChecks fetches due websites and schedules check tasks.
 	TypeEnqueueDueChecks = "website:enqueue_due_checks"
-	// TypeCheckWebsite performs a single website uptime check.
-	TypeCheckWebsite = "website:check"
+	TypeCheckWebsite     = "website:check"
+	TypeDispatchOutbox   = "outbox:dispatch"
 )
 
-// CheckWebsitePayload is payload for TypeCheckWebsite.
 type CheckWebsitePayload struct {
 	WebsiteID      int64   `json:"websiteId"`
 	URL            string  `json:"url"`
@@ -22,12 +20,9 @@ type CheckWebsitePayload struct {
 	Interval       int     `json:"interval"`
 }
 
-// NewEnqueueDueChecksTask creates a dispatcher task.
-func NewEnqueueDueChecksTask() *asynq.Task {
-	return asynq.NewTask(TypeEnqueueDueChecks, nil)
-}
+func NewEnqueueDueChecksTask() *asynq.Task { return asynq.NewTask(TypeEnqueueDueChecks, nil) }
+func NewDispatchOutboxTask() *asynq.Task   { return asynq.NewTask(TypeDispatchOutbox, nil) }
 
-// NewCheckWebsiteTask creates a website check task.
 func NewCheckWebsiteTask(payload CheckWebsitePayload) (*asynq.Task, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
