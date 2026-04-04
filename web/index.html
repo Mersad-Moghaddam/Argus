@@ -3,185 +3,464 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Argus Admin Panel</title>
+  <title>Argus Console</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen">
-  <main class="max-w-7xl mx-auto px-4 py-8 space-y-6">
-    <header>
-      <h1 class="text-3xl font-semibold">Argus Uptime Checker</h1>
-      <p class="text-slate-300 mt-1">Production-grade monitoring with incidents, alerts, status pages, maintenance windows, and advanced monitor types.</p>
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased">
+  <div class="max-w-7xl mx-auto px-4 py-6 lg:py-8">
+    <header class="mb-6">
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <p class="text-xs uppercase tracking-[0.18em] text-indigo-300">Argus Monitoring</p>
+            <h1 class="text-2xl lg:text-3xl font-semibold mt-1">Operations Console</h1>
+            <p class="text-slate-400 mt-2 text-sm">Production-grade uptime monitoring with incidents, alerts, maintenance windows, and public status pages.</p>
+          </div>
+          <div class="flex gap-2">
+            <button id="refreshAllBtn" class="rounded-lg px-4 py-2 bg-indigo-600 hover:bg-indigo-500 transition font-medium">Refresh</button>
+            <button id="autoRefreshBtn" class="rounded-lg px-4 py-2 border border-slate-700 bg-slate-800 hover:bg-slate-700 transition text-sm">Auto refresh: ON</button>
+          </div>
+        </div>
+      </div>
     </header>
 
-    <section class="grid lg:grid-cols-3 gap-4">
-      <div class="bg-slate-900 rounded-xl p-5 border border-slate-800 lg:col-span-2">
-        <h2 class="text-lg font-semibold mb-3">Add Monitor</h2>
-        <form id="websiteForm" class="grid md:grid-cols-2 gap-3">
-          <input id="url" type="url" required placeholder="https://example.com" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <input id="healthUrl" type="url" placeholder="Optional health URL" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <input id="interval" type="number" min="10" required value="30" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" placeholder="Interval (sec)" />
-          <select id="monitorType" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2">
-            <option value="http_status">HTTP Status</option>
-            <option value="keyword">Keyword</option>
-            <option value="heartbeat">Heartbeat</option>
-            <option value="tls_expiry">TLS Expiry</option>
-          </select>
-          <input id="expectedKeyword" placeholder="Keyword (keyword monitors)" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <input id="tlsDays" type="number" min="1" value="14" placeholder="TLS threshold days" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <input id="heartbeatGrace" type="number" min="10" value="60" placeholder="Heartbeat grace sec" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <input id="statusPageId" type="number" min="1" placeholder="Status Page ID (optional)" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <button class="md:col-span-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 font-medium" type="submit">Create Monitor</button>
-        </form>
-        <p id="formMessage" class="text-sm mt-2"></p>
-      </div>
-
-      <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
-        <h2 class="text-lg font-semibold mb-3">Alert Channel</h2>
-        <form id="alertForm" class="space-y-3">
-          <input id="alertName" required placeholder="Primary webhook" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <select id="alertType" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2">
-            <option value="webhook">Webhook</option><option value="slack">Slack Webhook</option><option value="email">Email (placeholder)</option>
-          </select>
-          <input id="alertTarget" required placeholder="https://hooks..." class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <button class="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2">Add Channel</button>
-        </form>
-      </div>
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="statsGrid">
+      <article class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-slate-400 text-xs">Total Monitors</p><p id="statTotal" class="text-2xl font-semibold mt-1">0</p></article>
+      <article class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-slate-400 text-xs">Healthy</p><p id="statUp" class="text-2xl font-semibold mt-1 text-emerald-300">0</p></article>
+      <article class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-slate-400 text-xs">Degraded</p><p id="statDown" class="text-2xl font-semibold mt-1 text-rose-300">0</p></article>
+      <article class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-slate-400 text-xs">Open Incidents</p><p id="statIncidents" class="text-2xl font-semibold mt-1 text-amber-300">0</p></article>
     </section>
 
-    <section class="grid lg:grid-cols-2 gap-4">
-      <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
-        <h2 class="text-lg font-semibold mb-3">Maintenance Window</h2>
-        <form id="maintenanceForm" class="space-y-3">
-          <input id="mwWebsiteId" type="number" min="1" placeholder="Website ID (empty = global)" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <input id="mwStartsAt" type="datetime-local" required class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <input id="mwEndsAt" type="datetime-local" required class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <input id="mwReason" placeholder="Reason" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <button class="w-full rounded-lg bg-amber-600 hover:bg-amber-500 px-4 py-2">Create Window</button>
-        </form>
+    <section class="grid xl:grid-cols-12 gap-6">
+      <div class="xl:col-span-8 space-y-6">
+        <article class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+            <div>
+              <h2 class="text-lg font-semibold">Monitors</h2>
+              <p class="text-xs text-slate-400">Search, filter, inspect status and trigger heartbeat checks.</p>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <input id="searchInput" placeholder="Search URL..." class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+              <select id="statusFilter" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm">
+                <option value="all">All statuses</option>
+                <option value="up">Up</option>
+                <option value="down">Down</option>
+                <option value="pending">Pending</option>
+              </select>
+              <select id="typeFilter" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm">
+                <option value="all">All types</option>
+                <option value="http_status">HTTP Status</option>
+                <option value="keyword">Keyword</option>
+                <option value="heartbeat">Heartbeat</option>
+                <option value="tls_expiry">TLS Expiry</option>
+              </select>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[820px] text-sm">
+              <thead class="text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th class="py-2 text-left">ID</th>
+                  <th class="py-2 text-left">URL</th>
+                  <th class="py-2 text-left">Type</th>
+                  <th class="py-2 text-left">Status</th>
+                  <th class="py-2 text-left">Latency</th>
+                  <th class="py-2 text-left">Last Check</th>
+                  <th class="py-2 text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="monitorTable"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">Incidents</h2>
+            <button id="refreshIncidentsBtn" class="text-xs border border-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-800">Refresh</button>
+          </div>
+          <div id="incidentList" class="space-y-2"></div>
+        </article>
       </div>
 
-      <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
-        <h2 class="text-lg font-semibold mb-3">Status Pages</h2>
-        <form id="statusPageForm" class="space-y-3 mb-3">
-          <input id="statusSlug" required placeholder="public-slug" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <input id="statusTitle" required placeholder="Acme Platform Status" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" />
-          <button class="w-full rounded-lg bg-sky-600 hover:bg-sky-500 px-4 py-2">Create Status Page</button>
-        </form>
-        <div id="statusPagesList" class="text-sm text-slate-300 space-y-1"></div>
-      </div>
-    </section>
+      <div class="xl:col-span-4 space-y-6">
+        <article class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <div class="flex gap-2 mb-4 overflow-x-auto pb-1">
+            <button class="tab-btn px-3 py-1.5 text-xs rounded-lg bg-indigo-600" data-tab="tab-monitor">New Monitor</button>
+            <button class="tab-btn px-3 py-1.5 text-xs rounded-lg bg-slate-800 border border-slate-700" data-tab="tab-alert">Alert</button>
+            <button class="tab-btn px-3 py-1.5 text-xs rounded-lg bg-slate-800 border border-slate-700" data-tab="tab-maint">Maintenance</button>
+            <button class="tab-btn px-3 py-1.5 text-xs rounded-lg bg-slate-800 border border-slate-700" data-tab="tab-status">Status Page</button>
+          </div>
 
-    <section class="bg-slate-900 rounded-xl p-5 border border-slate-800">
-      <h2 class="text-xl font-semibold mb-3">Tracked Websites</h2>
-      <div class="overflow-x-auto"><table class="w-full text-left border-collapse"><thead><tr class="text-slate-300 border-b border-slate-700"><th class="py-2">ID</th><th class="py-2">URL</th><th class="py-2">Type</th><th class="py-2">Status</th><th class="py-2">Last Check</th><th class="py-2">Actions</th></tr></thead><tbody id="websiteTableBody"></tbody></table></div>
-    </section>
+          <div id="tab-monitor" class="tab-panel space-y-3">
+            <input id="url" type="url" required placeholder="https://example.com" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            <input id="healthUrl" type="url" placeholder="Optional health URL" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            <div class="grid grid-cols-2 gap-2">
+              <input id="interval" type="number" min="10" value="30" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+              <select id="monitorType" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm">
+                <option value="http_status">HTTP Status</option>
+                <option value="keyword">Keyword</option>
+                <option value="heartbeat">Heartbeat</option>
+                <option value="tls_expiry">TLS Expiry</option>
+              </select>
+            </div>
+            <input id="expectedKeyword" placeholder="Expected keyword" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            <div class="grid grid-cols-2 gap-2">
+              <input id="tlsDays" type="number" min="1" value="14" placeholder="TLS days" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+              <input id="heartbeatGrace" type="number" min="10" value="60" placeholder="Grace sec" class="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            </div>
+            <input id="statusPageId" type="number" min="1" placeholder="Status page ID (optional)" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            <button id="createMonitorBtn" class="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 py-2 font-medium">Create Monitor</button>
+          </div>
 
-    <section class="grid lg:grid-cols-2 gap-4">
-      <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
-        <h2 class="text-xl font-semibold mb-3">Incidents</h2>
-        <div id="incidentList" class="space-y-2 text-sm"></div>
-      </div>
-      <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
-        <h2 class="text-xl font-semibold mb-3">Public Status Preview</h2>
-        <div class="flex gap-2 mb-3"><input id="statusPreviewSlug" placeholder="slug" class="flex-1 rounded-lg bg-slate-950 border border-slate-700 px-3 py-2" /><button id="statusPreviewBtn" class="rounded-lg bg-indigo-600 px-3">Load</button></div>
-        <pre id="statusPreview" class="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs whitespace-pre-wrap"></pre>
+          <div id="tab-alert" class="tab-panel hidden space-y-3">
+            <input id="alertName" placeholder="Channel name" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            <select id="alertType" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm">
+              <option value="webhook">Webhook</option>
+              <option value="slack">Slack Webhook</option>
+              <option value="email">Email</option>
+            </select>
+            <input id="alertTarget" placeholder="Target URL / address" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            <button id="createAlertBtn" class="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 py-2 font-medium">Create Alert Channel</button>
+          </div>
+
+          <div id="tab-maint" class="tab-panel hidden space-y-3">
+            <input id="mwWebsiteId" type="number" min="1" placeholder="Website ID (optional)" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            <input id="mwStartsAt" type="datetime-local" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            <input id="mwEndsAt" type="datetime-local" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            <input id="mwReason" placeholder="Reason" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            <button id="createMaintBtn" class="w-full rounded-lg bg-amber-600 hover:bg-amber-500 py-2 font-medium">Schedule Maintenance</button>
+          </div>
+
+          <div id="tab-status" class="tab-panel hidden space-y-3">
+            <input id="statusSlug" placeholder="status-page-slug" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            <input id="statusTitle" placeholder="Public page title" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+            <button id="createStatusBtn" class="w-full rounded-lg bg-sky-600 hover:bg-sky-500 py-2 font-medium">Create Status Page</button>
+            <hr class="border-slate-800" />
+            <div class="flex gap-2">
+              <input id="statusPreviewSlug" placeholder="Preview by slug" class="flex-1 rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+              <button id="statusPreviewBtn" class="rounded-lg px-3 py-2 border border-slate-700 hover:bg-slate-800 text-sm">Load</button>
+            </div>
+            <pre id="statusPreview" class="bg-slate-950 rounded-lg border border-slate-800 p-3 text-xs whitespace-pre-wrap max-h-56 overflow-auto"></pre>
+          </div>
+        </article>
+
+        <article class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <h2 class="text-lg font-semibold mb-3">Status Pages</h2>
+          <div id="statusPagesList" class="space-y-2 text-sm"></div>
+        </article>
       </div>
     </section>
-  </main>
+  </div>
+
+  <div id="toast" class="fixed bottom-4 right-4 hidden"></div>
 
   <script>
     const API = {
-      websites: '/api/websites', incidents: '/api/incidents', alertChannels: '/api/alert-channels', maintenance: '/api/maintenance-windows', statusPages: '/api/status-pages', publicStatus: (slug) => `/api/public/status/${slug}`
+      websites: '/api/websites',
+      incidents: '/api/incidents',
+      alertChannels: '/api/alert-channels',
+      maintenance: '/api/maintenance-windows',
+      statusPages: '/api/status-pages',
+      publicStatus: (slug) => `/api/public/status/${slug}`
     };
 
-    const tableBody = document.getElementById('websiteTableBody');
-    const formMessage = document.getElementById('formMessage');
+    const state = { websites: [], incidents: [], statusPages: [], autoRefresh: true, timer: null };
 
-    const jsonHeaders = { 'Content-Type': 'application/json' };
+    const monitorTable = document.getElementById('monitorTable');
+    const incidentList = document.getElementById('incidentList');
+    const statusPagesList = document.getElementById('statusPagesList');
 
-    async function fetchJSON(url) { const r = await fetch(url); if (!r.ok) throw new Error(await r.text()); return r.json(); }
-    async function postJSON(url, payload) { const r = await fetch(url, { method: 'POST', headers: jsonHeaders, body: JSON.stringify(payload) }); if (!r.ok) { const t = await r.text(); throw new Error(t); } return r.status === 204 ? null : r.json(); }
-
-    const statusPill = (status) => `<span class="px-2 py-1 rounded text-xs ${status === 'up' ? 'bg-emerald-500/20 text-emerald-300' : status === 'down' ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300'}">${status}</span>`;
-
-    async function renderWebsites() {
-      const sites = await fetchJSON(API.websites);
-      if (!sites.length) { tableBody.innerHTML = '<tr><td colspan="6" class="py-3 text-slate-400">No monitors yet.</td></tr>'; return; }
-      tableBody.innerHTML = sites.map((site) => `<tr class="border-b border-slate-800"><td class="py-2">${site.id}</td><td class="py-2">${site.url}</td><td class="py-2">${site.monitorType}</td><td class="py-2">${statusPill(site.status)}</td><td class="py-2">${site.lastCheckedAt ? new Date(site.lastCheckedAt).toLocaleString() : '-'}</td><td class="py-2"><button data-id="${site.id}" class="heartbeat-btn mr-2 text-xs border border-sky-500 text-sky-300 px-2 py-1 rounded">Heartbeat</button><button data-id="${site.id}" class="delete-btn text-xs border border-rose-500 text-rose-300 px-2 py-1 rounded">Delete</button></td></tr>`).join('');
+    function showToast(message, level = 'info') {
+      const toast = document.getElementById('toast');
+      const cls = level === 'error' ? 'bg-rose-600' : level === 'warn' ? 'bg-amber-600' : 'bg-emerald-600';
+      toast.innerHTML = `<div class="${cls} text-white px-4 py-2 rounded-lg shadow-lg text-sm">${message}</div>`;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2600);
     }
 
-    async function renderIncidents() {
-      const list = document.getElementById('incidentList');
-      const incidents = await fetchJSON(`${API.incidents}?limit=30`);
-      list.innerHTML = incidents.length ? incidents.map((i) => `<div class="p-2 rounded border border-slate-800 bg-slate-950"><div class="text-slate-200">Incident #${i.id} / Website #${i.websiteId}</div><div class="text-slate-400">${i.state} • started ${new Date(i.startedAt).toLocaleString()}</div><div class="text-rose-300">${i.lastFailureReason || ''}</div></div>`).join('') : '<div class="text-slate-400">No incidents.</div>';
+    async function fetchJSON(url) {
+      const res = await fetch(url);
+      if (!res.ok) {
+        let msg = await res.text();
+        try { msg = JSON.parse(msg).error || msg; } catch (_) {}
+        throw new Error(msg || 'Request failed');
+      }
+      return res.status === 204 ? null : res.json();
     }
 
-    async function renderStatusPages() {
-      const box = document.getElementById('statusPagesList');
-      const pages = await fetchJSON(API.statusPages);
-      box.innerHTML = pages.length ? pages.map((p) => `<div>#${p.id} <span class="text-sky-300">${p.slug}</span> — ${p.title}</div>`).join('') : '<div class="text-slate-400">No status pages.</div>';
+    async function postJSON(url, payload) {
+      return fetchJSON(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     }
 
-    document.getElementById('websiteForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      try {
-        await postJSON(API.websites, {
-          url: document.getElementById('url').value.trim(),
-          healthCheckUrl: document.getElementById('healthUrl').value.trim() || null,
-          checkInterval: Number(document.getElementById('interval').value),
-          monitorType: document.getElementById('monitorType').value,
-          expectedKeyword: document.getElementById('expectedKeyword').value.trim() || null,
-          tlsExpiryThresholdDays: Number(document.getElementById('tlsDays').value),
-          heartbeatGraceSeconds: Number(document.getElementById('heartbeatGrace').value),
-          statusPageId: document.getElementById('statusPageId').value ? Number(document.getElementById('statusPageId').value) : null
-        });
-        formMessage.className = 'text-sm text-emerald-300 mt-2'; formMessage.textContent = 'Monitor created';
-        await refreshAll();
-      } catch (err) { formMessage.className = 'text-sm text-rose-300 mt-2'; formMessage.textContent = err.message; }
-    });
+    async function request(url, options = {}) {
+      const res = await fetch(url, options);
+      if (!res.ok) {
+        let msg = await res.text();
+        try { msg = JSON.parse(msg).error || msg; } catch (_) {}
+        throw new Error(msg || 'Request failed');
+      }
+      return res.status === 204 ? null : res.json();
+    }
 
-    document.getElementById('alertForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      await postJSON(API.alertChannels, { name: alertName.value.trim(), channelType: alertType.value, target: alertTarget.value.trim() });
-      alertName.value = ''; alertTarget.value = '';
-    });
+    function statusPill(status) {
+      const map = { up: 'bg-emerald-500/20 text-emerald-300', down: 'bg-rose-500/20 text-rose-300', pending: 'bg-amber-500/20 text-amber-300' };
+      return `<span class="px-2 py-1 rounded-full text-xs ${map[status] || map.pending}">${status}</span>`;
+    }
 
-    document.getElementById('maintenanceForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      await postJSON(API.maintenance, {
-        websiteId: mwWebsiteId.value ? Number(mwWebsiteId.value) : null,
-        startsAt: new Date(mwStartsAt.value).toISOString(),
-        endsAt: new Date(mwEndsAt.value).toISOString(),
-        reason: mwReason.value.trim() || null
+    function latencyValue(ms) {
+      if (!ms) return '<span class="text-slate-500">-</span>';
+      const cls = ms < 200 ? 'text-emerald-300' : ms < 800 ? 'text-amber-300' : 'text-rose-300';
+      return `<span class="${cls}">${ms}ms</span>`;
+    }
+
+    function applyMonitorFilters(items) {
+      const search = document.getElementById('searchInput').value.trim().toLowerCase();
+      const status = document.getElementById('statusFilter').value;
+      const type = document.getElementById('typeFilter').value;
+
+      return items.filter((item) => {
+        const bySearch = !search || item.url.toLowerCase().includes(search);
+        const byStatus = status === 'all' || item.status === status;
+        const byType = type === 'all' || item.monitorType === type;
+        return bySearch && byStatus && byType;
       });
-    });
-
-    document.getElementById('statusPageForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      await postJSON(API.statusPages, { slug: statusSlug.value.trim(), title: statusTitle.value.trim() });
-      await renderStatusPages();
-    });
-
-    tableBody.addEventListener('click', async (event) => {
-      const hb = event.target.closest('.heartbeat-btn');
-      if (hb) { await fetch(`${API.websites}/${hb.dataset.id}/heartbeat`, { method: 'POST' }); await refreshAll(); return; }
-      const del = event.target.closest('.delete-btn');
-      if (del) { await fetch(`${API.websites}/${del.dataset.id}`, { method: 'DELETE' }); await refreshAll(); }
-    });
-
-    document.getElementById('statusPreviewBtn').addEventListener('click', async () => {
-      const slug = document.getElementById('statusPreviewSlug').value.trim();
-      const data = await fetchJSON(API.publicStatus(slug));
-      document.getElementById('statusPreview').textContent = JSON.stringify(data, null, 2);
-    });
-
-    async function refreshAll() {
-      await Promise.all([renderWebsites(), renderIncidents(), renderStatusPages()]);
     }
 
-    refreshAll();
-    setInterval(refreshAll, 15000);
+    function renderStats() {
+      const total = state.websites.length;
+      const up = state.websites.filter((w) => w.status === 'up').length;
+      const down = state.websites.filter((w) => w.status === 'down').length;
+      const openIncidents = state.incidents.filter((i) => i.state !== 'resolved').length;
+      document.getElementById('statTotal').textContent = total;
+      document.getElementById('statUp').textContent = up;
+      document.getElementById('statDown').textContent = down;
+      document.getElementById('statIncidents').textContent = openIncidents;
+    }
+
+    function renderMonitors() {
+      const filtered = applyMonitorFilters(state.websites);
+      if (!filtered.length) {
+        monitorTable.innerHTML = `<tr><td colspan="7" class="py-5 text-slate-400">No monitors match the current filters.</td></tr>`;
+        return;
+      }
+      monitorTable.innerHTML = filtered.map((site) => `
+        <tr class="border-b border-slate-800/70 hover:bg-slate-800/30 transition">
+          <td class="py-3">#${site.id}</td>
+          <td class="py-3 max-w-[250px] truncate" title="${site.url}">${site.url}</td>
+          <td class="py-3"><span class="text-xs px-2 py-1 rounded-md bg-slate-800 border border-slate-700">${site.monitorType}</span></td>
+          <td class="py-3">${statusPill(site.status)}</td>
+          <td class="py-3">${latencyValue(site.lastLatencyMs)}</td>
+          <td class="py-3 text-slate-300">${site.lastCheckedAt ? new Date(site.lastCheckedAt).toLocaleString() : '-'}</td>
+          <td class="py-3">
+            <div class="flex gap-2">
+              <button data-heartbeat="${site.id}" class="text-xs border border-sky-600 text-sky-300 rounded px-2 py-1 hover:bg-sky-700/20">Heartbeat</button>
+              <button data-delete="${site.id}" class="text-xs border border-rose-600 text-rose-300 rounded px-2 py-1 hover:bg-rose-700/20">Delete</button>
+            </div>
+          </td>
+        </tr>`).join('');
+    }
+
+    function renderIncidents() {
+      if (!state.incidents.length) {
+        incidentList.innerHTML = '<div class="text-slate-400 text-sm">No incidents reported.</div>';
+        return;
+      }
+      incidentList.innerHTML = state.incidents.map((incident) => {
+        const badge = incident.state === 'resolved' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300';
+        return `<article class="rounded-xl border border-slate-800 bg-slate-950 p-3">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-sm font-medium">Incident #${incident.id} · Website #${incident.websiteId}</p>
+            <span class="text-xs px-2 py-1 rounded-full ${badge}">${incident.state}</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">Started ${new Date(incident.startedAt).toLocaleString()}</p>
+          ${incident.lastFailureReason ? `<p class="text-xs text-rose-300 mt-2">${incident.lastFailureReason}</p>` : ''}
+        </article>`;
+      }).join('');
+    }
+
+    function renderStatusPages() {
+      if (!state.statusPages.length) {
+        statusPagesList.innerHTML = '<p class="text-slate-400 text-sm">No status pages yet.</p>';
+        return;
+      }
+      statusPagesList.innerHTML = state.statusPages.map((page) => `
+        <div class="rounded-lg border border-slate-800 bg-slate-950 p-3">
+          <p class="font-medium">${page.title}</p>
+          <p class="text-xs text-sky-300 mt-1">/${page.slug}</p>
+          <p class="text-xs text-slate-400 mt-1">ID #${page.id}</p>
+        </div>`).join('');
+    }
+
+    async function loadData() {
+      const [websites, incidents, statusPages] = await Promise.all([
+        request(API.websites),
+        request(`${API.incidents}?limit=30`),
+        request(API.statusPages)
+      ]);
+      state.websites = websites || [];
+      state.incidents = incidents || [];
+      state.statusPages = statusPages || [];
+
+      renderStats();
+      renderMonitors();
+      renderIncidents();
+      renderStatusPages();
+    }
+
+    function wireTabs() {
+      const buttons = document.querySelectorAll('.tab-btn');
+      const panels = document.querySelectorAll('.tab-panel');
+      buttons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          buttons.forEach((b) => b.className = 'tab-btn px-3 py-1.5 text-xs rounded-lg bg-slate-800 border border-slate-700');
+          btn.className = 'tab-btn px-3 py-1.5 text-xs rounded-lg bg-indigo-600';
+          panels.forEach((panel) => panel.classList.add('hidden'));
+          document.getElementById(btn.dataset.tab).classList.remove('hidden');
+        });
+      });
+    }
+
+    function wireEvents() {
+      document.getElementById('refreshAllBtn').addEventListener('click', async () => {
+        await loadData();
+        showToast('Data refreshed');
+      });
+
+      document.getElementById('refreshIncidentsBtn').addEventListener('click', async () => {
+        state.incidents = await request(`${API.incidents}?limit=30`) || [];
+        renderStats();
+        renderIncidents();
+      });
+
+      document.getElementById('autoRefreshBtn').addEventListener('click', () => {
+        state.autoRefresh = !state.autoRefresh;
+        document.getElementById('autoRefreshBtn').textContent = `Auto refresh: ${state.autoRefresh ? 'ON' : 'OFF'}`;
+      });
+
+      ['searchInput', 'statusFilter', 'typeFilter'].forEach((id) => {
+        document.getElementById(id).addEventListener('input', renderMonitors);
+      });
+
+      monitorTable.addEventListener('click', async (event) => {
+        const hb = event.target.closest('[data-heartbeat]');
+        if (hb) {
+          try {
+            await request(`${API.websites}/${hb.dataset.heartbeat}/heartbeat`, { method: 'POST' });
+            showToast(`Heartbeat sent for #${hb.dataset.heartbeat}`);
+            await loadData();
+          } catch (error) {
+            showToast(error.message, 'error');
+          }
+        }
+
+        const del = event.target.closest('[data-delete]');
+        if (del) {
+          if (!confirm(`Delete monitor #${del.dataset.delete}?`)) return;
+          try {
+            await request(`${API.websites}/${del.dataset.delete}`, { method: 'DELETE' });
+            showToast(`Deleted monitor #${del.dataset.delete}`, 'warn');
+            await loadData();
+          } catch (error) {
+            showToast(error.message, 'error');
+          }
+        }
+      });
+
+      document.getElementById('createMonitorBtn').addEventListener('click', async () => {
+        try {
+          await request(API.websites, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: document.getElementById('url').value.trim(),
+              healthCheckUrl: document.getElementById('healthUrl').value.trim() || null,
+              checkInterval: Number(document.getElementById('interval').value),
+              monitorType: document.getElementById('monitorType').value,
+              expectedKeyword: document.getElementById('expectedKeyword').value.trim() || null,
+              tlsExpiryThresholdDays: Number(document.getElementById('tlsDays').value),
+              heartbeatGraceSeconds: Number(document.getElementById('heartbeatGrace').value),
+              statusPageId: document.getElementById('statusPageId').value ? Number(document.getElementById('statusPageId').value) : null
+            })
+          });
+          showToast('Monitor created');
+          await loadData();
+        } catch (error) {
+          showToast(error.message, 'error');
+        }
+      });
+
+      document.getElementById('createAlertBtn').addEventListener('click', async () => {
+        try {
+          await request(API.alertChannels, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: alertName.value.trim(), channelType: alertType.value, target: alertTarget.value.trim() })
+          });
+          showToast('Alert channel created');
+          alertName.value = '';
+          alertTarget.value = '';
+        } catch (error) {
+          showToast(error.message, 'error');
+        }
+      });
+
+      document.getElementById('createMaintBtn').addEventListener('click', async () => {
+        try {
+          await request(API.maintenance, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              websiteId: mwWebsiteId.value ? Number(mwWebsiteId.value) : null,
+              startsAt: new Date(mwStartsAt.value).toISOString(),
+              endsAt: new Date(mwEndsAt.value).toISOString(),
+              reason: mwReason.value.trim() || null
+            })
+          });
+          showToast('Maintenance window created');
+        } catch (error) {
+          showToast(error.message, 'error');
+        }
+      });
+
+      document.getElementById('createStatusBtn').addEventListener('click', async () => {
+        try {
+          await request(API.statusPages, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug: statusSlug.value.trim(), title: statusTitle.value.trim() })
+          });
+          showToast('Status page created');
+          await loadData();
+        } catch (error) {
+          showToast(error.message, 'error');
+        }
+      });
+
+      document.getElementById('statusPreviewBtn').addEventListener('click', async () => {
+        try {
+          const slug = document.getElementById('statusPreviewSlug').value.trim();
+          const data = await request(API.publicStatus(slug));
+          document.getElementById('statusPreview').textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+          showToast(error.message, 'error');
+        }
+      });
+    }
+
+    async function bootstrap() {
+      wireTabs();
+      wireEvents();
+      await loadData();
+      state.timer = setInterval(async () => {
+        if (!state.autoRefresh) return;
+        try {
+          await loadData();
+        } catch (error) {
+          showToast(error.message, 'error');
+        }
+      }, 15000);
+    }
+
+    bootstrap();
   </script>
 </body>
 </html>
