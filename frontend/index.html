@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Argus • Uptime Control Center</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Argus</h1>
+        <p>Production uptime monitoring control center</p>
+      </div>
+      <button id="refreshBtn">Refresh</button>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <h2>Monitors</h2>
+        <form id="monitorForm" class="stack">
+          <input id="url" placeholder="https://example.com" required />
+          <input id="interval" type="number" min="10" value="30" required />
+          <select id="monitorType">
+            <option value="http_status">HTTP Status</option>
+            <option value="keyword">Keyword</option>
+            <option value="heartbeat">Heartbeat</option>
+            <option value="tls_expiry">TLS Expiry</option>
+          </select>
+          <input id="keyword" placeholder="Expected keyword (optional)" />
+          <button type="submit">Add monitor</button>
+        </form>
+      </section>
+
+      <section class="card span2">
+        <h2>Current status</h2>
+        <table>
+          <thead><tr><th>ID</th><th>URL</th><th>Type</th><th>Status</th><th>Last code</th></tr></thead>
+          <tbody id="monitorTable"></tbody>
+        </table>
+      </section>
+
+      <section class="card span2">
+        <h2>Recent incidents</h2>
+        <ul id="incidentList" class="list"></ul>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
