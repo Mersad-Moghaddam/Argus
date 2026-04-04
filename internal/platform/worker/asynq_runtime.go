@@ -12,89 +12,39 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Runtime contains Asynq server and scheduler.
 type Runtime struct {
 	Server    *asynq.Server
 	Scheduler *asynq.Scheduler
 }
 
-// NewRuntime configures Asynq server and scheduler.
 func NewRuntime(cfg config.Config, processor *appworker.Processor, logger *observability.LogStore) (*Runtime, error) {
-	redisOptions := asynq.RedisClientOpt{
-		Addr:     cfg.RedisAddr,
-		Password: cfg.RedisPassword,
-		DB:       cfg.RedisDB,
-	}
-
+	redisOptions := RedisClientOptions(cfg)
 	if err := verifyRedisConnection(redisOptions); err != nil {
-		logger.Add("error", "system", "redis_connectivity_check_failed", "Unable to connect to Redis during startup", nil, map[string]string{"error": err.Error()})
-		return nil, fmt.Errorf("verify redis connection: %w", err)
+		return nil, err
 	}
-	logger.Add("info", "system", "redis_connectivity_check_passed", "Redis connectivity validated", nil, map[string]string{"redisAddress": cfg.RedisAddr})
-
-	server := asynq.NewServer(redisOptions, asynq.Config{
-		Concurrency: 10,
-		Queues: map[string]int{
-			"critical": 6,
-			"default":  4,
-		},
-	})
-
+	server := asynq.NewServer(redisOptions, asynq.Config{Concurrency: cfg.WorkerConcurrency, Queues: map[string]int{"critical": cfg.QueueCriticalWeight, "default": cfg.QueueDefaultWeight}})
 	scheduler := asynq.NewScheduler(redisOptions, &asynq.SchedulerOpts{})
-	spec := fmt.Sprintf("@every %s", cfg.SchedulerInterval)
-	if _, err := scheduler.Register(spec, appworker.NewEnqueueDueChecksTask(), asynq.Queue("default")); err != nil {
-		logger.Add("error", "system", "scheduler_registration_failed", "Unable to register scheduler task", nil, map[string]string{"error": err.Error(), "spec": spec})
-		return nil, fmt.Errorf("register scheduler task: %w", err)
+	if _, err := scheduler.Register(fmt.Sprintf("@every %s", cfg.SchedulerInterval), appworker.NewEnqueueDueChecksTask(), asynq.Queue("default")); err != nil {
+		return nil, err
 	}
-
+	if _, err := scheduler.Register("@every 10s", appworker.NewDispatchOutboxTask(), asynq.Queue("default")); err != nil {
+		return nil, err
+	}
 	mux := asynq.NewServeMux()
 	processor.Register(mux)
-
-	go func() {
-		logger.Add("info", "system", "worker_server_started", "Asynq worker server started", nil, nil)
-		if runErr := server.Run(mux); runErr != nil {
-			logger.Add("error", "system", "worker_server_stopped", "Asynq worker server stopped unexpectedly", nil, map[string]string{"error": runErr.Error()})
-		}
-	}()
-
-	go func() {
-		logger.Add("info", "system", "scheduler_started", "Asynq scheduler started", nil, map[string]string{"spec": spec})
-		if runErr := scheduler.Run(); runErr != nil {
-			logger.Add("error", "system", "scheduler_stopped", "Asynq scheduler stopped unexpectedly", nil, map[string]string{"error": runErr.Error()})
-		}
-	}()
-
+	go func() { _ = server.Run(mux) }()
+	go func() { _ = scheduler.Run() }()
+	logger.Add("info", "system", "worker_runtime_started", "Worker runtime started", nil, nil)
 	return &Runtime{Server: server, Scheduler: scheduler}, nil
 }
-
-// Shutdown gracefully shuts down worker resources.
-func (r *Runtime) Shutdown() {
-	r.Scheduler.Shutdown()
-	r.Server.Shutdown()
-}
-
-// RedisClientOptions builds options for creating Asynq clients.
+func (r *Runtime) Shutdown() { r.Scheduler.Shutdown(); r.Server.Shutdown() }
 func RedisClientOptions(cfg config.Config) asynq.RedisClientOpt {
-	return asynq.RedisClientOpt{
-		Addr:     cfg.RedisAddr,
-		Password: cfg.RedisPassword,
-		DB:       cfg.RedisDB,
-	}
+	return asynq.RedisClientOpt{Addr: cfg.RedisAddr, Password: cfg.RedisPassword, DB: cfg.RedisDB}
 }
-
 func verifyRedisConnection(options asynq.RedisClientOpt) error {
-	client := redis.NewClient(&redis.Options{
-		Addr:     options.Addr,
-		Password: options.Password,
-		DB:       options.DB,
-	})
-	defer client.Close()
-
+	c := redis.NewClient(&redis.Options{Addr: options.Addr, Password: options.Password, DB: options.DB})
+	defer c.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	if err := client.Ping(ctx).Err(); err != nil {
-		return err
-	}
-	return nil
+	return c.Ping(ctx).Err()
 }
