@@ -66,16 +66,9 @@ func (p *Processor) HandleCheckWebsite(ctx context.Context, task *asynq.Task) er
 		return fmt.Errorf("unmarshal check website task payload: %w", err)
 	}
 
-	websites, err := p.repo.List(ctx)
+	website, err := p.repo.GetByID(ctx, payload.WebsiteID)
 	if err != nil {
 		return err
-	}
-	var website *models.Website
-	for i := range websites {
-		if websites[i].ID == payload.WebsiteID {
-			website = &websites[i]
-			break
-		}
 	}
 	if website == nil {
 		return nil
@@ -175,14 +168,14 @@ func (p *Processor) checkKeyword(ctx context.Context, target string, keyword *st
 }
 
 func (p *Processor) checkHeartbeat(website *models.Website) (string, int, int, string) {
-	if website.LastCheckedAt == nil {
+	if website.LastHeartbeatAt == nil {
 		return "down", 0, 0, "heartbeat never received"
 	}
 	grace := time.Duration(website.HeartbeatGraceSeconds) * time.Second
 	if grace <= 0 {
 		grace = 60 * time.Second
 	}
-	if time.Since(*website.LastCheckedAt) > grace {
+	if time.Since(*website.LastHeartbeatAt) > grace {
 		return "down", 0, 0, "heartbeat stale"
 	}
 	return "up", 200, 0, ""

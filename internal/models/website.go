@@ -21,6 +21,7 @@ type Website struct {
 	HeartbeatGraceSeconds  int        `json:"heartbeatGraceSeconds"`
 	Status                 string     `json:"status"`
 	LastCheckedAt          *time.Time `json:"lastCheckedAt,omitempty"`
+	LastHeartbeatAt        *time.Time `json:"lastHeartbeatAt,omitempty"`
 	NextCheckAt            time.Time  `json:"nextCheckAt"`
 	LastStatusCode         int        `json:"lastStatusCode"`
 	LastLatencyMS          int        `json:"lastLatencyMs"`

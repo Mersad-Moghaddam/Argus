@@ -12,6 +12,7 @@ import (
 // WebsiteRepository declares persistence operations for websites.
 type WebsiteRepository interface {
 	Create(ctx context.Context, website models.Website) (int64, error)
+	GetByID(ctx context.Context, id int64) (*models.Website, error)
 	List(ctx context.Context) ([]models.Website, error)
 	Delete(ctx context.Context, id int64) error
 	ListDue(ctx context.Context, now time.Time) ([]models.Website, error)
@@ -54,6 +55,7 @@ func scanWebsite(rows interface{ Scan(dest ...any) error }, w *models.Website) e
 		&w.HeartbeatGraceSeconds,
 		&w.Status,
 		&w.LastCheckedAt,
+		&w.LastHeartbeatAt,
 		&w.NextCheckAt,
 		&w.LastStatusCode,
 		&w.LastLatencyMS,
@@ -93,10 +95,44 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	return id, nil
 }
 
+func (r *MySQLWebsiteRepository) GetByID(ctx context.Context, id int64) (*models.Website, error) {
+	const query = `
+SELECT id, url, health_check_url, check_interval_seconds, monitor_type, expected_keyword, tls_expiry_threshold_days, heartbeat_grace_seconds, status, last_checked_at, last_heartbeat_received_at, next_check_at, last_status_code, last_latency_ms, status_page_id, created_at, updated_at
+FROM websites
+WHERE id = ?
+LIMIT 1`
+	var item models.Website
+	if err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&item.ID,
+		&item.URL,
+		&item.HealthCheckURL,
+		&item.CheckInterval,
+		&item.MonitorType,
+		&item.ExpectedKeyword,
+		&item.TLSExpiryThresholdDays,
+		&item.HeartbeatGraceSeconds,
+		&item.Status,
+		&item.LastCheckedAt,
+		&item.LastHeartbeatAt,
+		&item.NextCheckAt,
+		&item.LastStatusCode,
+		&item.LastLatencyMS,
+		&item.StatusPageID,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("query website by id: %w", err)
+	}
+	return &item, nil
+}
+
 // List returns all websites sorted by id desc.
 func (r *MySQLWebsiteRepository) List(ctx context.Context) ([]models.Website, error) {
 	const query = `
-SELECT id, url, health_check_url, check_interval_seconds, monitor_type, expected_keyword, tls_expiry_threshold_days, heartbeat_grace_seconds, status, last_checked_at, next_check_at, last_status_code, last_latency_ms, status_page_id, created_at, updated_at
+SELECT id, url, health_check_url, check_interval_seconds, monitor_type, expected_keyword, tls_expiry_threshold_days, heartbeat_grace_seconds, status, last_checked_at, last_heartbeat_received_at, next_check_at, last_status_code, last_latency_ms, status_page_id, created_at, updated_at
 FROM websites
 ORDER BY id DESC`
 
@@ -133,7 +169,7 @@ func (r *MySQLWebsiteRepository) Delete(ctx context.Context, id int64) error {
 // ListDue returns websites that should be checked now.
 func (r *MySQLWebsiteRepository) ListDue(ctx context.Context, now time.Time) ([]models.Website, error) {
 	const query = `
-SELECT id, url, health_check_url, check_interval_seconds, monitor_type, expected_keyword, tls_expiry_threshold_days, heartbeat_grace_seconds, status, last_checked_at, next_check_at, last_status_code, last_latency_ms, status_page_id, created_at, updated_at
+SELECT id, url, health_check_url, check_interval_seconds, monitor_type, expected_keyword, tls_expiry_threshold_days, heartbeat_grace_seconds, status, last_checked_at, last_heartbeat_received_at, next_check_at, last_status_code, last_latency_ms, status_page_id, created_at, updated_at
 FROM websites
 WHERE next_check_at <= ?
 ORDER BY next_check_at ASC`
@@ -365,7 +401,7 @@ func (r *MySQLWebsiteRepository) GetStatusPageBySlug(ctx context.Context, slug s
 }
 
 func (r *MySQLWebsiteRepository) ListWebsitesByStatusPage(ctx context.Context, pageID int64) ([]models.Website, error) {
-	const query = `SELECT id, url, health_check_url, check_interval_seconds, monitor_type, expected_keyword, tls_expiry_threshold_days, heartbeat_grace_seconds, status, last_checked_at, next_check_at, last_status_code, last_latency_ms, status_page_id, created_at, updated_at FROM websites WHERE status_page_id = ? ORDER BY id DESC`
+	const query = `SELECT id, url, health_check_url, check_interval_seconds, monitor_type, expected_keyword, tls_expiry_threshold_days, heartbeat_grace_seconds, status, last_checked_at, last_heartbeat_received_at, next_check_at, last_status_code, last_latency_ms, status_page_id, created_at, updated_at FROM websites WHERE status_page_id = ? ORDER BY id DESC`
 	rows, err := r.db.QueryContext(ctx, query, pageID)
 	if err != nil {
 		return nil, fmt.Errorf("list websites by status page: %w", err)
@@ -383,8 +419,8 @@ func (r *MySQLWebsiteRepository) ListWebsitesByStatusPage(ctx context.Context, p
 }
 
 func (r *MySQLWebsiteRepository) MarkHeartbeat(ctx context.Context, websiteID int64, checkedAt, nextCheckAt time.Time) error {
-	const query = `UPDATE websites SET status='up', last_status_code=200, last_latency_ms=0, last_checked_at=?, next_check_at=?, updated_at=NOW() WHERE id=? AND monitor_type='heartbeat'`
-	_, err := r.db.ExecContext(ctx, query, checkedAt, nextCheckAt, websiteID)
+	const query = `UPDATE websites SET status='up', last_status_code=200, last_latency_ms=0, last_checked_at=?, last_heartbeat_received_at=?, next_check_at=?, updated_at=NOW() WHERE id=? AND monitor_type='heartbeat'`
+	_, err := r.db.ExecContext(ctx, query, checkedAt, checkedAt, nextCheckAt, websiteID)
 	if err != nil {
 		return fmt.Errorf("mark heartbeat: %w", err)
 	}

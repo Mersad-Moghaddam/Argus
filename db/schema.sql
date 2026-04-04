@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS websites (
     heartbeat_grace_seconds INT NOT NULL DEFAULT 0,
     status ENUM('pending', 'up', 'down') NOT NULL DEFAULT 'pending',
     last_checked_at DATETIME NULL,
+    last_heartbeat_received_at DATETIME NULL,
     next_check_at DATETIME NOT NULL,
     last_status_code INT NOT NULL DEFAULT 0,
     last_latency_ms INT NOT NULL DEFAULT 0,
@@ -31,6 +32,19 @@ CREATE TABLE IF NOT EXISTS websites (
     INDEX idx_websites_status_page_id (status_page_id),
     CONSTRAINT fk_websites_status_page FOREIGN KEY (status_page_id) REFERENCES status_pages(id) ON DELETE SET NULL
 );
+
+-- Backward-compatible online migration for existing installations.
+ALTER TABLE websites
+    ADD COLUMN IF NOT EXISTS monitor_type ENUM('http_status', 'keyword', 'heartbeat', 'tls_expiry') NOT NULL DEFAULT 'http_status',
+    ADD COLUMN IF NOT EXISTS expected_keyword VARCHAR(512) NULL,
+    ADD COLUMN IF NOT EXISTS tls_expiry_threshold_days INT NOT NULL DEFAULT 14,
+    ADD COLUMN IF NOT EXISTS heartbeat_grace_seconds INT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS last_heartbeat_received_at DATETIME NULL,
+    ADD COLUMN IF NOT EXISTS status_page_id BIGINT NULL;
+
+ALTER TABLE websites
+    ADD INDEX IF NOT EXISTS idx_websites_next_check_at (next_check_at),
+    ADD INDEX IF NOT EXISTS idx_websites_status_page_id (status_page_id);
 
 CREATE TABLE IF NOT EXISTS website_checks (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
