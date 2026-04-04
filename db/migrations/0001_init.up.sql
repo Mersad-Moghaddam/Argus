@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS argus;
-USE argus;
-
 CREATE TABLE IF NOT EXISTS status_pages (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     slug VARCHAR(120) NOT NULL UNIQUE,
@@ -30,21 +27,8 @@ CREATE TABLE IF NOT EXISTS websites (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_websites_next_check_at (next_check_at),
     INDEX idx_websites_status_page_id (status_page_id),
-    CONSTRAINT fk_websites_status_page FOREIGN KEY (status_page_id) REFERENCES status_pages(id) ON DELETE SET NULL
+    FOREIGN KEY (status_page_id) REFERENCES status_pages(id) ON DELETE SET NULL
 );
-
--- Backward-compatible online migration for existing installations.
-ALTER TABLE websites
-    ADD COLUMN IF NOT EXISTS monitor_type ENUM('http_status', 'keyword', 'heartbeat', 'tls_expiry') NOT NULL DEFAULT 'http_status',
-    ADD COLUMN IF NOT EXISTS expected_keyword VARCHAR(512) NULL,
-    ADD COLUMN IF NOT EXISTS tls_expiry_threshold_days INT NOT NULL DEFAULT 14,
-    ADD COLUMN IF NOT EXISTS heartbeat_grace_seconds INT NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS last_heartbeat_received_at DATETIME NULL,
-    ADD COLUMN IF NOT EXISTS status_page_id BIGINT NULL;
-
-ALTER TABLE websites
-    ADD INDEX IF NOT EXISTS idx_websites_next_check_at (next_check_at),
-    ADD INDEX IF NOT EXISTS idx_websites_status_page_id (status_page_id);
 
 CREATE TABLE IF NOT EXISTS website_checks (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -56,7 +40,7 @@ CREATE TABLE IF NOT EXISTS website_checks (
     checked_at DATETIME NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_website_checks_website_id_checked_at (website_id, checked_at DESC),
-    CONSTRAINT fk_website_checks_website FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
+    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS incidents (
@@ -70,7 +54,7 @@ CREATE TABLE IF NOT EXISTS incidents (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_incidents_website_state (website_id, state),
-    CONSTRAINT fk_incidents_website FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
+    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS alert_channels (
@@ -93,5 +77,5 @@ CREATE TABLE IF NOT EXISTS maintenance_windows (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_maintenance_active (starts_at, ends_at),
-    CONSTRAINT fk_maintenance_website FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
+    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
 );
