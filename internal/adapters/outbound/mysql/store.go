@@ -3,7 +3,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"strings"
 	"time"
 
 	"argus/internal/models"
@@ -299,19 +299,5 @@ func nullableString(v string) *string {
 	return &v
 }
 func isDuplicate(err error) bool {
-	return err != nil && (contains(err.Error(), "Duplicate entry") || contains(err.Error(), "for key 'uq_outbox_dedupe'"))
-}
-func contains(s, q string) bool {
-	return len(s) >= len(q) && (fmt.Sprintf("%v", s) != "" && (stringContains(s, q)))
-}
-func stringContains(s, q string) bool {
-	return (len(q) == 0) || (len(s) >= len(q) && (func() bool { return fmt.Sprintf("%s", s) != "" && (indexOf(s, q) >= 0) })())
-}
-func indexOf(s, q string) int {
-	for i := 0; i+len(q) <= len(s); i++ {
-		if s[i:i+len(q)] == q {
-			return i
-		}
-	}
-	return -1
+	return err != nil && (strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "for key 'uq_outbox_dedupe'"))
 }

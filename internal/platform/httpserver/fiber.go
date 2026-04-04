@@ -21,6 +21,6 @@ func NewFiberApp(service *application.Service, logStore *observability.LogStore,
 	api.RegisterWebsiteRoutes(apiGroup, websiteHandler)
 	api.RegisterLogRoutes(apiGroup, logHandler)
 	api.RegisterFeatureRoutes(apiGroup, featureHandler)
-	app.Static("/", "./web")
+	app.Static("/", "./frontend")
 	return app
 }
