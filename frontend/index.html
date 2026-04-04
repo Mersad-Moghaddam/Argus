@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Argus • Uptime Control Center</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Argus</h1>
+        <p>Production uptime monitoring control center</p>
+      </div>
+      <div class="top-actions">
+        <input id="apiKey" placeholder="API key (optional)" />
+        <button id="saveKeyBtn">Save key</button>
+        <button id="refreshBtn">Refresh</button>
+      </div>
+    </header>
+
+    <div id="message"></div>
+
+    <main class="grid">
+      <section class="card">
+        <h2>Add monitor</h2>
+        <form id="monitorForm" class="stack">
+          <input id="url" placeholder="https://example.com" required />
+          <input id="interval" type="number" min="10" value="30" required />
+          <select id="monitorType">
+            <option value="http_status">HTTP Status</option>
+            <option value="keyword">Keyword</option>
+            <option value="heartbeat">Heartbeat</option>
+            <option value="tls_expiry">TLS Expiry</option>
+          </select>
+          <input id="keyword" placeholder="Expected keyword (keyword type)" />
+          <button type="submit">Add monitor</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Add alert channel</h2>
+        <form id="channelForm" class="stack">
+          <input id="channelName" placeholder="Ops webhook" required />
+          <select id="channelType">
+            <option value="webhook">Webhook</option>
+            <option value="slack">Slack</option>
+            <option value="email">Email</option>
+          </select>
+          <input id="channelTarget" placeholder="https://hooks.example.com" required />
+          <button type="submit">Create channel</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Create status page</h2>
+        <form id="statusPageForm" class="stack">
+          <input id="statusSlug" placeholder="public-status" required />
+          <input id="statusTitle" placeholder="Public Service Status" required />
+          <button type="submit">Create status page</button>
+        </form>
+      </section>
+
+      <section class="card span3">
+        <h2>Current status</h2>
+        <table>
+          <thead><tr><th>ID</th><th>URL</th><th>Type</th><th>Status</th><th>Last code</th><th>Actions</th></tr></thead>
+          <tbody id="monitorTable"></tbody>
+        </table>
+      </section>
+
+      <section class="card span2">
+        <h2>Recent incidents</h2>
+        <ul id="incidentList" class="list"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Maintenance window</h2>
+        <form id="maintenanceForm" class="stack">
+          <input id="maintenanceWebsiteId" type="number" placeholder="Website ID (optional)" />
+          <input id="maintenanceStart" type="datetime-local" required />
+          <input id="maintenanceEnd" type="datetime-local" required />
+          <input id="maintenanceReason" placeholder="Planned deployment" />
+          <button type="submit">Create maintenance</button>
+        </form>
+      </section>
+
+      <section class="card span3">
+        <h2>Status pages</h2>
+        <ul id="statusPages" class="list"></ul>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
