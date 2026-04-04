@@ -70,6 +70,9 @@ func (s *Service) CreateMonitor(ctx context.Context, input CreateMonitorInput) (
 func (s *Service) ListMonitors(ctx context.Context, limit, offset int) ([]models.Website, error) {
 	return s.monitors.List(ctx, limit, offset)
 }
+func (s *Service) ListChecks(ctx context.Context, websiteID *int64, limit int) ([]models.WebsiteCheck, error) {
+	return s.monitors.ListChecks(ctx, websiteID, limit)
+}
 func (s *Service) DeleteMonitor(ctx context.Context, id int64) error {
 	return s.monitors.Delete(ctx, id)
 }

@@ -9,7 +9,8 @@ const el = {
   channelForm: document.getElementById('channelForm'),
   maintenanceForm: document.getElementById('maintenanceForm'),
   statusPageForm: document.getElementById('statusPageForm'),
-  statusPages: document.getElementById('statusPages')
+  statusPages: document.getElementById('statusPages'),
+  pingTable: document.getElementById('pingTable')
 };
 
 function showMessage(text, type = 'ok') {
@@ -78,10 +79,32 @@ function renderStatusPages(statusPagesResult) {
   el.statusPages.innerHTML = statusPagesResult.map(p => `<li><strong>${p.title}</strong> — /api/public/status/${p.slug}</li>`).join('');
 }
 
+function renderChecks(checksResult) {
+  if (checksResult.__error) {
+    el.pingTable.innerHTML = `<tr><td colspan="6">Failed to load ping history: ${checksResult.__error}</td></tr>`;
+    return;
+  }
+  if (!checksResult.length) {
+    el.pingTable.innerHTML = '<tr><td colspan="6">No ping history yet.</td></tr>';
+    return;
+  }
+  el.pingTable.innerHTML = checksResult.map(c => `
+    <tr>
+      <td>${c.websiteId}</td>
+      <td class="status-${c.status}">${c.status}</td>
+      <td>${c.statusCode}</td>
+      <td>${c.latencyMs} ms</td>
+      <td>${new Date(c.checkedAt).toLocaleString()}</td>
+      <td>${c.failureReason ?? '-'}</td>
+    </tr>
+  `).join('');
+}
+
 async function refresh() {
   const websites = await api('/websites?limit=100&offset=0').catch((e) => ({ __error: e.message }));
   const incidents = await api('/incidents?limit=20&offset=0').catch((e) => ({ __error: e.message }));
   const statusPages = await api('/status-pages?limit=50&offset=0').catch((e) => ({ __error: e.message }));
+  const checks = await api('/checks?limit=100').catch((e) => ({ __error: e.message }));
 
   if (websites.__error) {
     el.table.innerHTML = `<tr><td colspan="6">Failed to load monitors: ${websites.__error}</td></tr>`;
@@ -90,6 +113,7 @@ async function refresh() {
   }
   renderIncidents(incidents);
   renderStatusPages(statusPages);
+  renderChecks(checks);
 }
 
 async function deleteMonitor(id) {

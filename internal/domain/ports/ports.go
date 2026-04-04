@@ -15,6 +15,7 @@ type MonitorStore interface {
 	ListDue(ctx context.Context, now time.Time, limit int, afterID int64) ([]models.Website, error)
 	MarkChecked(ctx context.Context, id int64, status string, statusCode int, latencyMS int, checkedAt, nextCheckAt time.Time) error
 	RecordCheck(ctx context.Context, websiteID int64, status string, statusCode int, latencyMS int, failureReason string, checkedAt time.Time) error
+	ListChecks(ctx context.Context, websiteID *int64, limit int) ([]models.WebsiteCheck, error)
 	MarkHeartbeat(ctx context.Context, websiteID int64, checkedAt, nextCheckAt time.Time) error
 }
 

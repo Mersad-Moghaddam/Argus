@@ -17,11 +17,27 @@ func NewFeatureHandler(service *application.Service) *FeatureHandler {
 
 func RegisterFeatureRoutes(app fiber.Router, h *FeatureHandler) {
 	app.Get("/incidents", h.ListIncidents)
+	app.Get("/checks", h.ListChecks)
 	app.Post("/alert-channels", h.CreateAlertChannel)
 	app.Post("/maintenance-windows", h.CreateMaintenanceWindow)
 	app.Get("/status-pages", h.ListStatusPages)
 	app.Post("/status-pages", h.CreateStatusPage)
 	app.Get("/public/status/:slug", h.GetPublicStatusPage)
+}
+
+func (h *FeatureHandler) ListChecks(c *fiber.Ctx) error {
+	limit, _ := strconv.Atoi(c.Query("limit", "200"))
+	var websiteID *int64
+	if raw := c.Query("websiteId"); raw != "" {
+		if v, err := strconv.ParseInt(raw, 10, 64); err == nil {
+			websiteID = &v
+		}
+	}
+	items, err := h.service.ListChecks(c.UserContext(), websiteID, limit)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "failed to list checks"})
+	}
+	return c.JSON(items)
 }
 
 func (h *FeatureHandler) ListIncidents(c *fiber.Ctx) error {

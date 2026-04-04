@@ -141,6 +141,7 @@ GET /api/public/status/public-status
 ## 7. Common endpoints
 
 - `GET /api/websites?limit=100&offset=0`
+- `GET /api/checks?limit=100` (latest ping/check history)
 - `DELETE /api/websites/:id`
 - `GET /api/incidents?limit=100&offset=0`
 - `GET /api/status-pages?limit=100&offset=0`

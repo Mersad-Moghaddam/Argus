@@ -82,6 +82,39 @@ func (r *Store) RecordCheck(ctx context.Context, websiteID int64, status string,
 	_, err := r.db.ExecContext(ctx, `INSERT INTO website_checks (website_id,status,status_code,latency_ms,failure_reason,checked_at) VALUES (?, ?, ?, ?, ?, ?)`, websiteID, status, statusCode, latencyMS, nullableString(failureReason), checkedAt)
 	return err
 }
+func (r *Store) ListChecks(ctx context.Context, websiteID *int64, limit int) ([]models.WebsiteCheck, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	query := `SELECT id, website_id, status, status_code, latency_ms, failure_reason, checked_at, created_at FROM website_checks`
+	args := []any{}
+	if websiteID != nil {
+		query += ` WHERE website_id = ?`
+		args = append(args, *websiteID)
+	}
+	query += ` ORDER BY checked_at DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []models.WebsiteCheck{}
+	for rows.Next() {
+		var item models.WebsiteCheck
+		var reason sql.NullString
+		if err = rows.Scan(&item.ID, &item.WebsiteID, &item.Status, &item.StatusCode, &item.LatencyMS, &reason, &item.CheckedAt, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		if reason.Valid {
+			item.FailureReason = &reason.String
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
 func (r *Store) MarkHeartbeat(ctx context.Context, websiteID int64, checkedAt, nextCheckAt time.Time) error {
 	res, err := r.db.ExecContext(ctx, `UPDATE websites SET status='up', last_status_code=200, last_latency_ms=0, last_checked_at=?, last_heartbeat_received_at=?, next_check_at=?, updated_at=NOW() WHERE id=? AND monitor_type='heartbeat'`, checkedAt, checkedAt, nextCheckAt, websiteID)
 	if err != nil {
