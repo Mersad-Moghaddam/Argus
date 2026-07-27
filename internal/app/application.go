@@ -46,7 +46,8 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	appService := application.NewService(store, store, store, store, store, store, logger, store, store, store, store, store, store)
 	httpApp := httpserver.NewFiberApp(appService, logger, cfg.APIKey)
 	asynqClient := asynq.NewClient(workerplatform.RedisClientOptions(cfg))
-	processor := worker.NewProcessor(store, store, store, appService, asynqClient, notifier.NewHTTPNotifier(), logger)
+	processor := worker.NewProcessor(store, store, store, store, appService, asynqClient, notifier.NewHTTPNotifier(), logger,
+		cfg.RouteCheckBatchSize, cfg.RouteTimeoutCeiling, cfg.RouteCheckRetention, cfg.RoutePruneBatchSize)
 	workerRt, err := workerplatform.NewRuntime(cfg, processor, logger)
 	if err != nil {
 		_ = asynqClient.Close()

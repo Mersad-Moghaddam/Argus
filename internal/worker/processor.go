@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -24,22 +23,115 @@ import (
 )
 
 type Processor struct {
-	monitors ports.MonitorStore
-	alerts   ports.AlertChannelStore
-	outbox   ports.OutboxStore
-	service  *application.Service
-	client   *asynq.Client
-	notifier ports.Notifier
-	logger   *observability.LogStore
+	monitors            ports.MonitorStore
+	routes              ports.RouteStore
+	alerts              ports.AlertChannelStore
+	outbox              ports.OutboxStore
+	service             *application.Service
+	client              *asynq.Client
+	notifier            ports.Notifier
+	logger              *observability.LogStore
+	evaluator           *RouteEvaluator
+	routeBatchSize      int
+	routeTimeoutCeiling time.Duration
+	routeRetention      time.Duration
+	pruneBatchSize      int
 }
 
-func NewProcessor(monitors ports.MonitorStore, alerts ports.AlertChannelStore, outbox ports.OutboxStore, service *application.Service, client *asynq.Client, notifier ports.Notifier, logger *observability.LogStore) *Processor {
-	return &Processor{monitors: monitors, alerts: alerts, outbox: outbox, service: service, client: client, notifier: notifier, logger: logger}
+func NewProcessor(monitors ports.MonitorStore, routes ports.RouteStore, alerts ports.AlertChannelStore, outbox ports.OutboxStore, service *application.Service, client *asynq.Client, notifier ports.Notifier, logger *observability.LogStore, routeBatchSize int, timeoutCeiling, retention time.Duration, pruneBatchSize int) *Processor {
+	if routeBatchSize <= 0 {
+		routeBatchSize = 500
+	}
+	if pruneBatchSize <= 0 {
+		pruneBatchSize = 5000
+	}
+	return &Processor{monitors: monitors, routes: routes, alerts: alerts, outbox: outbox, service: service, client: client, notifier: notifier, logger: logger,
+		evaluator: NewRouteEvaluator(), routeBatchSize: routeBatchSize, routeTimeoutCeiling: timeoutCeiling, routeRetention: retention, pruneBatchSize: pruneBatchSize}
 }
 func (p *Processor) Register(mux *asynq.ServeMux) {
 	mux.HandleFunc(TypeEnqueueDueChecks, p.HandleEnqueueDueChecks)
 	mux.HandleFunc(TypeCheckWebsite, p.HandleCheckWebsite)
 	mux.HandleFunc(TypeDispatchOutbox, p.HandleDispatchOutbox)
+	mux.HandleFunc(TypeEnqueueDueRoutes, p.HandleEnqueueDueRoutes)
+	mux.HandleFunc(TypeCheckRoute, p.HandleCheckRoute)
+	mux.HandleFunc(TypeAggregateRoutes, p.HandleAggregateRoutes)
+	mux.HandleFunc(TypePruneRouteChecks, p.HandlePruneRouteChecks)
+}
+
+func (p *Processor) HandleEnqueueDueRoutes(ctx context.Context, _ *asynq.Task) error {
+	afterID := int64(0)
+	now := time.Now().UTC()
+	for {
+		due, err := p.routes.ListDueRoutes(ctx, now, p.routeBatchSize, afterID)
+		if err != nil {
+			return err
+		}
+		if len(due) == 0 {
+			return nil
+		}
+		for _, route := range due {
+			afterID = route.ID
+			task, taskErr := NewCheckRouteTask(route.ID)
+			if taskErr != nil {
+				return taskErr
+			}
+			uniqueFor := time.Duration(route.MonitorIntervalSecs) * time.Second
+			if uniqueFor < time.Second {
+				uniqueFor = time.Second
+			}
+			_, enqueueErr := p.client.EnqueueContext(ctx, task, asynq.Queue("default"), asynq.Unique(uniqueFor))
+			if enqueueErr != nil && enqueueErr != asynq.ErrDuplicateTask {
+				return enqueueErr
+			}
+		}
+		if len(due) < p.routeBatchSize {
+			return nil
+		}
+	}
+}
+
+func (p *Processor) HandleCheckRoute(ctx context.Context, task *asynq.Task) error {
+	var payload CheckRoutePayload
+	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
+		return err
+	}
+	route, err := p.routes.GetRouteByID(ctx, payload.RouteID)
+	if err != nil || route == nil {
+		return err
+	}
+	if !route.Enabled {
+		return nil
+	}
+	result := p.evaluator.Evaluate(ctx, *route, p.routeTimeoutCeiling)
+	return p.service.ProcessRouteCheckResult(ctx, *route, result.Status, result.StatusCode, result.LatencyMS, result.FailureReason, result.Attempts, time.Now().UTC())
+}
+
+func (p *Processor) HandleAggregateRoutes(ctx context.Context, _ *asynq.Task) error {
+	if err := p.routes.AggregateRouteMetrics(ctx, time.Now().UTC().Add(-24*time.Hour)); err != nil {
+		return err
+	}
+	return p.routes.AggregateProjectMetrics(ctx)
+}
+
+func (p *Processor) HandlePruneRouteChecks(ctx context.Context, _ *asynq.Task) error {
+	if p.routeRetention <= 0 {
+		return nil
+	}
+	before := time.Now().UTC().Add(-p.routeRetention)
+	for {
+		deleted, err := p.routes.PruneRouteChecks(ctx, before, p.pruneBatchSize)
+		if err != nil {
+			return err
+		}
+		if deleted < int64(p.pruneBatchSize) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+	}
 }
 
 func (p *Processor) HandleEnqueueDueChecks(ctx context.Context, _ *asynq.Task) error {
@@ -222,31 +314,7 @@ func (p *Processor) checkTLS(target string, thresholdDays int) (string, int, int
 }
 
 func validateTarget(rawURL string) error {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return err
-	}
-	host := u.Hostname()
-	if host == "" {
-		return fmt.Errorf("invalid host")
-	}
-	if strings.EqualFold(host, "169.254.169.254") || strings.HasPrefix(host, "metadata.google.internal") {
-		return fmt.Errorf("blocked metadata endpoint")
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return err
-	}
-	for _, ip := range ips {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			continue
-		}
-		if addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() {
-			return fmt.Errorf("target resolves to private address")
-		}
-	}
-	return nil
+	return validateTargetContext(context.Background(), rawURL)
 }
 
 var _ = strconv.Itoa

@@ -97,8 +97,8 @@ project/route.
 3. MySQL adapters for auth/projects/routes/checks/incidents/imports. **Done.**
 4. Application services (auth, projects, routes, import, monitoring/health). **Done.**
 5. HTTP middleware + handlers + route wiring (fiber app, config, body limits). **Done.**
-6. Worker: route monitoring engine (below). **Next.**
-7. Backend tests (below).
+6. Worker: route monitoring engine (below). **Done.**
+7. Backend tests (below). **Next.**
 8. Frontend (below).
 9. End-to-end validation pass (below).
 10. Final report (below).
@@ -349,7 +349,7 @@ work.
   projects, bounded-batch retention pruning), `route_incidents.go`, and
   `imports.go` (job persistence with parsed items as JSON). `go build`
   and `go vet` clean.
-- **Section 4 (commit pending)** — Done. Extended `application.Service`
+- **Section 4 (commit `8dec12b`)** — Done. Extended `application.Service`
   (backward-compatible additive constructor params) with: `auth.go`
   (register/login/logout/authenticate, bcrypt + sha256-hashed opaque
   bearer tokens, 30-day TTL), `projects.go` (create/update/archive/delete,
@@ -367,7 +367,7 @@ work.
   selected). Added domain unit tests for `ComputeRouteStatus`,
   `RouteIncidentPolicy`, and method/path normalization. Full repo
   `go build`, `go vet`, `go test ./...` clean.
-- **Section 5 (commit pending)** — Done. Added `BearerAuth` middleware
+- **Section 5 (commit `d38a7f3`)** — Done. Added `BearerAuth` middleware
   (independent from the legacy `APIKeyAuth`) and handlers: `auth_handler.go`
   (register/login/logout/me), `project_handler.go` (list/create/get/update/
   archive/unarchive/delete), `route_handler.go` (list with search/filter/
@@ -389,7 +389,18 @@ work.
   15MB to safely accept large OpenAPI upload requests ahead of the
   parser's own 10MB document cap. `go build`, `go vet`, `go test ./...`
   all clean.
-- **Section 6 (next)** — Worker: route check task (SSRF-safe HTTP
-  evaluator with retries/timeouts), scheduling + concurrency + duplicate-job
-  prevention, metric aggregation job, retention pruning job; wire into
-  `internal/app` and the asynq runtime.
+- **Section 6 (commit pending)** — Done. Added a persistent Asynq route
+  monitoring engine with cursor-paginated due-route enqueueing, per-route
+  unique-task dedupe, bounded worker concurrency, arbitrary HTTP methods,
+  path-parameter substitution, per-route timeout/retry policies, expected
+  status ranges, response-size limits, and custom headers. The evaluator
+  validates HTTP(S) targets before dispatch, blocks private/loopback/
+  link-local/metadata and special-purpose IP ranges, dials only validated
+  resolved addresses, and revalidates every redirect hop. Added scheduled
+  batched 24-hour route/project aggregation and bounded retention pruning
+  with safe configuration defaults. Worker tests cover unsafe targets,
+  redirect-to-metadata rejection, timeouts, retries/attempt counts, status
+  ranges, methods, and path substitution. Full `go test ./...`, `go build
+  ./...`, and `go vet ./...` pass with an isolated Go build cache.
+- **Section 7 (next)** — Application, handler, large-import, incident-rule,
+  malformed-input, authorization, partial-failure, and migration smoke tests.

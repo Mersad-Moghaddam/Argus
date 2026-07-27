@@ -30,6 +30,15 @@ func NewRuntime(cfg config.Config, processor *appworker.Processor, logger *obser
 	if _, err := scheduler.Register("@every 10s", appworker.NewDispatchOutboxTask(), asynq.Queue("default")); err != nil {
 		return nil, err
 	}
+	if _, err := scheduler.Register(fmt.Sprintf("@every %s", cfg.SchedulerInterval), appworker.NewEnqueueDueRoutesTask(), asynq.Queue("default")); err != nil {
+		return nil, err
+	}
+	if _, err := scheduler.Register(fmt.Sprintf("@every %s", cfg.RouteAggregateInterval), appworker.NewAggregateRoutesTask(), asynq.Queue("default"), asynq.Unique(cfg.RouteAggregateInterval)); err != nil {
+		return nil, err
+	}
+	if _, err := scheduler.Register("@daily", appworker.NewPruneRouteChecksTask(), asynq.Queue("default"), asynq.Unique(23*time.Hour)); err != nil {
+		return nil, err
+	}
 	mux := asynq.NewServeMux()
 	processor.Register(mux)
 	go func() { _ = server.Run(mux) }()

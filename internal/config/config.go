@@ -17,12 +17,17 @@ type Config struct {
 	RedisPassword string
 	RedisDB       int
 
-	SchedulerInterval   time.Duration
-	WorkerConcurrency   int
-	QueueCriticalWeight int
-	QueueDefaultWeight  int
-	DueCheckBatchSize   int
-	APIKey              string
+	SchedulerInterval      time.Duration
+	WorkerConcurrency      int
+	QueueCriticalWeight    int
+	QueueDefaultWeight     int
+	DueCheckBatchSize      int
+	RouteCheckBatchSize    int
+	RouteTimeoutCeiling    time.Duration
+	RouteCheckRetention    time.Duration
+	RouteAggregateInterval time.Duration
+	RoutePruneBatchSize    int
+	APIKey                 string
 
 	DBMaxOpenConns    int
 	DBMaxIdleConns    int
@@ -31,7 +36,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	_ = godotenv.Load()
-	cfg := Config{HTTPAddr: envOrDefault("HTTP_ADDR", ":8080"), MySQLDSN: envOrDefault("MYSQL_DSN", "argus:argus@tcp(localhost:3306)/argus?parseTime=true"), RedisAddr: envOrDefault("REDIS_ADDR", "localhost:6379"), RedisPassword: envOrDefault("REDIS_PASSWORD", ""), SchedulerInterval: mustDuration("SCHEDULER_INTERVAL", 30*time.Second), WorkerConcurrency: mustInt("WORKER_CONCURRENCY", 10), QueueCriticalWeight: mustInt("QUEUE_CRITICAL_WEIGHT", 6), QueueDefaultWeight: mustInt("QUEUE_DEFAULT_WEIGHT", 4), DueCheckBatchSize: mustInt("DUE_CHECK_BATCH_SIZE", 200), APIKey: os.Getenv("API_KEY"), DBMaxOpenConns: mustInt("DB_MAX_OPEN_CONNS", 25), DBMaxIdleConns: mustInt("DB_MAX_IDLE_CONNS", 25), DBConnMaxLifetime: mustDuration("DB_CONN_MAX_LIFETIME", 5*time.Minute)}
+	cfg := Config{HTTPAddr: envOrDefault("HTTP_ADDR", ":8080"), MySQLDSN: envOrDefault("MYSQL_DSN", "argus:argus@tcp(localhost:3306)/argus?parseTime=true"), RedisAddr: envOrDefault("REDIS_ADDR", "localhost:6379"), RedisPassword: envOrDefault("REDIS_PASSWORD", ""), SchedulerInterval: mustDuration("SCHEDULER_INTERVAL", 30*time.Second), WorkerConcurrency: mustInt("WORKER_CONCURRENCY", 10), QueueCriticalWeight: mustInt("QUEUE_CRITICAL_WEIGHT", 6), QueueDefaultWeight: mustInt("QUEUE_DEFAULT_WEIGHT", 4), DueCheckBatchSize: mustInt("DUE_CHECK_BATCH_SIZE", 200), RouteCheckBatchSize: mustInt("ROUTE_CHECK_BATCH_SIZE", 500), RouteTimeoutCeiling: mustDuration("ROUTE_TIMEOUT_CEILING", 60*time.Second), RouteCheckRetention: mustDuration("ROUTE_CHECK_RETENTION", 30*24*time.Hour), RouteAggregateInterval: mustDuration("ROUTE_AGGREGATE_INTERVAL", time.Minute), RoutePruneBatchSize: mustInt("ROUTE_PRUNE_BATCH_SIZE", 5000), APIKey: os.Getenv("API_KEY"), DBMaxOpenConns: mustInt("DB_MAX_OPEN_CONNS", 25), DBMaxIdleConns: mustInt("DB_MAX_IDLE_CONNS", 25), DBConnMaxLifetime: mustDuration("DB_CONN_MAX_LIFETIME", 5*time.Minute)}
 
 	dbIndex, err := strconv.Atoi(envOrDefault("REDIS_DB", "0"))
 	if err != nil {
