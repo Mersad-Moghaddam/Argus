@@ -389,7 +389,7 @@ work.
   15MB to safely accept large OpenAPI upload requests ahead of the
   parser's own 10MB document cap. `go build`, `go vet`, `go test ./...`
   all clean.
-- **Section 6 (commit pending)** — Done. Added a persistent Asynq route
+- **Section 6 (commit `4361ca4`)** — Done. Added a persistent Asynq route
   monitoring engine with cursor-paginated due-route enqueueing, per-route
   unique-task dedupe, bounded worker concurrency, arbitrary HTTP methods,
   path-parameter substitution, per-route timeout/retry policies, expected
@@ -402,7 +402,7 @@ work.
   redirect-to-metadata rejection, timeouts, retries/attempt counts, status
   ranges, methods, and path substitution. Full `go test ./...`, `go build
   ./...`, and `go vet ./...` pass with an isolated Go build cache.
-- **Section 7 (commit pending)** — Done. Added hand-rolled in-memory port
+- **Section 7 (commit `c8db698`)** — Done. Added hand-rolled in-memory port
   fakes and service-level acceptance tests covering registration, login,
   duplicate emails, bad credentials, bearer-token expiry, owner/editor/
   viewer authorization, indistinguishable nonmember/not-found access,
@@ -416,7 +416,7 @@ work.
   safety, duplicates, timeouts, redirects, retries, private/metadata
   targets, partial failures, health transitions, and recovery are covered.
   Full `go test ./...`, `go build ./...`, and `go vet ./...` pass.
-- **Section 8 (commit pending)** — Done. Extended the existing Watchtower
+- **Section 8 (commit `c982918`)** — Done. Extended the existing Watchtower
   vanilla JS/CSS UI without changing its theme or design system: separate
   project register/login session, hash-routed project list/dashboard/route
   detail/import views, owner-only archive/restore/delete controls, project
@@ -434,7 +434,7 @@ work.
   of all three frontend assets pass. Browser screenshot inspection was not
   possible because no browser backend was available; Docker-backed runtime
   validation was not possible because Docker is absent from the environment.
-- **Section 9 (commit pending)** — Done to the maximum supported by this
+- **Section 9 (commit `7049ac3`)** — Done to the maximum supported by this
   environment. Final security review disabled environment-proxy inheritance
   so monitored requests always use the validated direct-dial path, added
   malformed-header and unsafe-base-URL coverage, and made open incidents
