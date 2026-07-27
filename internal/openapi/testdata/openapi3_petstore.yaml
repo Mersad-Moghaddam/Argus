@@ -1,0 +1,77 @@
+openapi: 3.0.3
+info:
+  title: Petstore V3
+  version: 2.0.0
+servers:
+  - url: https://api.example.com/v3
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List all pets
+      tags: [pets]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+    post:
+      operationId: createPet
+      summary: Create a pet
+      tags: [pets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Pet"
+      responses:
+        "201":
+          description: created
+  /pets/{petId}:
+    parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getPet
+      summary: Get a pet by id
+      tags: [pets]
+      responses:
+        "200":
+          description: ok
+        "404":
+          description: not found
+    delete:
+      operationId: deletePet
+      summary: Delete a pet
+      deprecated: true
+      tags: [pets]
+      responses:
+        "204":
+          description: deleted
