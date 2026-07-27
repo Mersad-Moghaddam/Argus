@@ -109,4 +109,32 @@ project/route.
     commands executed, verification evidence.
 
 Each section ends with `go build ./...`, `go vet ./...`, relevant
-`go test ./...` runs, and a git commit scoped to that section.
+`go test ./...` runs, and a git commit scoped to that section. This file's
+"Progress Log" below is updated after every commit.
+
+## Progress log
+
+- **Section 1 (commit `9e06cf7`)** — Done. Added this plan, route health/
+  incident domain policies (`internal/domain/route.go`), new models
+  (`users`, `projects`, `routes`, `import`), and additive migrations
+  `0004_auth` (users, auth_tokens) and `0005_projects` (projects,
+  project_members, api_routes, route_checks, route_incidents,
+  route_import_jobs). `go build ./...` clean.
+- **Section 2 (commit `9ab86c5`)** — Done. Added new domain ports
+  (`UserStore`, `AuthTokenStore`, `ProjectStore`, `RouteStore`,
+  `RouteIncidentStore`, `ImportStore`) and the `internal/openapi` package:
+  OpenAPI 3.x / Swagger 2.0 JSON+YAML parser with local-only `$ref`
+  resolution (no remote fetches — SSRF hardening), circular-ref guard,
+  document size/operation-count limits, and spec-hash based change
+  detection. 9 unit tests added, including a 520-operation generated spec
+  and an over-limit rejection test. All passing.
+- **Section 3 (commit `5386d61`)** — Done. Implemented MySQL adapters for
+  all new ports: `users.go` (accounts + bearer tokens), `projects.go`
+  (CRUD, membership, search/filter/pagination), `routes.go` (CRUD, bulk
+  insert/delete, due-check listing, check recording, batched 24h metric
+  aggregation via single `UPDATE...JOIN` queries for both routes and
+  projects, bounded-batch retention pruning), `route_incidents.go`, and
+  `imports.go` (job persistence with parsed items as JSON). `go build`
+  and `go vet` clean.
+- **Section 4 (next)** — Application services: auth, project, route,
+  import (validate/diff/commit), monitoring/aggregation orchestration.
