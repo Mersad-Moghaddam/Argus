@@ -98,8 +98,8 @@ project/route.
 4. Application services (auth, projects, routes, import, monitoring/health). **Done.**
 5. HTTP middleware + handlers + route wiring (fiber app, config, body limits). **Done.**
 6. Worker: route monitoring engine (below). **Done.**
-7. Backend tests (below). **Next.**
-8. Frontend (below).
+7. Backend tests (below). **Done.**
+8. Frontend (below). **Next.**
 9. End-to-end validation pass (below).
 10. Final report (below).
 
@@ -402,5 +402,20 @@ work.
   redirect-to-metadata rejection, timeouts, retries/attempt counts, status
   ranges, methods, and path substitution. Full `go test ./...`, `go build
   ./...`, and `go vet ./...` pass with an isolated Go build cache.
-- **Section 7 (next)** — Application, handler, large-import, incident-rule,
-  malformed-input, authorization, partial-failure, and migration smoke tests.
+- **Section 7 (commit pending)** — Done. Added hand-rolled in-memory port
+  fakes and service-level acceptance tests covering registration, login,
+  duplicate emails, bad credentials, bearer-token expiry, owner/editor/
+  viewer authorization, indistinguishable nonmember/not-found access,
+  mixed-result bulk creation, a generated 520-route OpenAPI validate/
+  preview/commit/search flow, re-import metadata updates that preserve all
+  user monitoring settings, explicitly selected removed-route disabling,
+  and the full failure-threshold/recovery-threshold incident lifecycle
+  (including proof that consecutive extra failures do not create duplicate
+  incidents). Together with the existing parser/domain tests and Section 6
+  evaluator tests, malformed specifications, excessive specs, local ref
+  safety, duplicates, timeouts, redirects, retries, private/metadata
+  targets, partial failures, health transitions, and recovery are covered.
+  Full `go test ./...`, `go build ./...`, and `go vet ./...` pass.
+- **Section 8 (next)** — Auth UI, projects list/dashboard, route CRUD/table/
+  detail, import wizard, charts, incidents, loading/error/empty states, and
+  user documentation while preserving the existing Watchtower design.
