@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL DEFAULT '',
+    password_hash VARCHAR(255) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    token_hash CHAR(64) NOT NULL,
+    name VARCHAR(120) NOT NULL DEFAULT 'session',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at DATETIME NULL,
+    expires_at DATETIME NOT NULL,
+    UNIQUE KEY uq_auth_tokens_hash (token_hash),
+    INDEX idx_auth_tokens_user (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
