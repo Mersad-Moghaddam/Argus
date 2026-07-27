@@ -11,17 +11,33 @@ go run ./cmd/api
 
 Open `http://localhost:8080`.
 
-> If API key auth is enabled (`API_KEY`), set it in browser console:
+> If API key auth is enabled (`API_KEY`), you can either paste it into the **API key** field in the
+> top bar and click **Save key**, or set it directly in the browser console:
 >
 > ```js
 > localStorage.setItem('argus_api_key', 'your-key')
 > ```
 
+### Dashboard tour
+
+The control center is organized into tabs so related actions stay together:
+
+- **Overview** — live stat cards (total/up/down monitors, open incidents), quick-add forms for
+  monitors, alert channels and status pages, plus a summary of recent incidents.
+- **Monitors** — full monitor table with search, status filter, and per-row actions (heartbeat ping,
+  delete with confirmation).
+- **Incidents** — complete incident history and the maintenance window scheduler.
+- **Alerts & Status Pages** — manage public status pages with one-click link copying.
+- **Ping History** — the latest raw check results across all monitors.
+
+Other UI niceties: a light/dark theme toggle, toast notifications for every action, an auto-refresh
+countdown (every 30s), and a fully responsive layout for mobile/tablet use.
+
 ---
 
 ## 2. Add a monitor
 
-From the dashboard:
+From the **Overview** tab:
 1. Enter URL (e.g. `https://example.com`).
 2. Select check interval (seconds).
 3. Choose monitor type:
