@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS status_pages (
 
 CREATE TABLE IF NOT EXISTS websites (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    url VARCHAR(2083) NOT NULL UNIQUE,
+    url VARCHAR(2083) NOT NULL,
+    url_hash BINARY(32) GENERATED ALWAYS AS (UNHEX(SHA2(url, 256))) STORED,
     health_check_url VARCHAR(2083) NULL,
     check_interval_seconds INT NOT NULL,
     monitor_type ENUM('http_status', 'keyword', 'heartbeat', 'tls_expiry') NOT NULL DEFAULT 'http_status',
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS websites (
     status_page_id BIGINT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_websites_url_hash (url_hash),
     INDEX idx_websites_next_check_at (next_check_at),
     INDEX idx_websites_status_page_id (status_page_id),
     FOREIGN KEY (status_page_id) REFERENCES status_pages(id) ON DELETE SET NULL

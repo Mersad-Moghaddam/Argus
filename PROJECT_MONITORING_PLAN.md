@@ -432,8 +432,8 @@ work.
   and preserved omitted secret headers during unrelated edits. `node
   --check frontend/app.js`, full Go tests/build/vet, and local HTTP delivery
   of all three frontend assets pass. Browser screenshot inspection was not
-  possible because no browser backend was available; Docker-backed runtime
-  validation was not possible because Docker is absent from the environment.
+  possible because no browser backend was available. Docker is absent, but
+  the later runtime pass used local Homebrew MySQL and Redis services.
 - **Section 9 (commit `7049ac3`)** — Done to the maximum supported by this
   environment. Final security review disabled environment-proxy inheritance
   so monitored requests always use the validated direct-dial path, added
@@ -443,10 +443,15 @@ work.
   ./...`, `go test -race ./internal/application ./internal/domain
   ./internal/openapi ./internal/worker`, and `git diff --check` all pass.
   A temporary loopback static server returned the Projects HTML mount and
-  complete JS/CSS assets successfully. A real MySQL/Redis migration and API
-  walkthrough could not run because Docker is not installed and neither
-  service is reachable locally. Visual browser inspection could not run
-  because browser discovery returned no available browser backends. These
-  are environment limitations rather than suppressed or failing checks.
+  complete JS/CSS assets successfully. A subsequent runtime pass applied all
+  migrations to local MySQL, verified all 15 tables plus the fixed-size
+  generated URL/route uniqueness columns, connected the Asynq scheduler and
+  workers to local Redis, returned the full UI with HTTP 200, returned the
+  expected HTTP 401 from a protected endpoint without a token, and restarted
+  cleanly to prove migration idempotency. Migration portability fixes replaced
+  overlong UTF-8 indexes with stored SHA-256 keys and replaced MariaDB-only
+  `ADD COLUMN IF NOT EXISTS` syntax with information-schema guards accepted by
+  MySQL. Visual browser inspection could not run because browser discovery
+  returned no available browser backends.
 - **Section 10 (next)** — Final architecture/schema/API/UI/security/test
   report with exact verification evidence and the external runtime limits.
