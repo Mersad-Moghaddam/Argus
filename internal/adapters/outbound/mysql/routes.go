@@ -127,8 +127,30 @@ func (r *Store) UpdateRoute(ctx context.Context, route models.APIRoute) error {
 	return err
 }
 
+// UpdateRouteImportedMetadata updates only spec-derived fields on an
+// existing route during re-import. It deliberately never touches
+// user-owned monitoring configuration (enabled, interval, timeout, retries,
+// thresholds, expected status range) so re-importing a spec can never
+// silently clobber a user's monitoring settings.
+func (r *Store) UpdateRouteImportedMetadata(ctx context.Context, route models.APIRoute) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET name=?, summary=?, description=?, tags=?, deprecated=?,
+			parameters=?, request_body=?, responses=?, security=?, spec_hash=?, base_url=?, updated_at=NOW()
+		WHERE id=?`,
+		route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
+		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), route.SpecHash, route.BaseURL, route.ID)
+	return err
+}
+
 func (r *Store) SetRouteEnabled(ctx context.Context, id int64, enabled bool) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET enabled=?, updated_at=NOW() WHERE id=?`, enabled, id)
+	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET enabled=?, updated_at=NOW(),
+			status = CASE
+				WHEN ? = 0 THEN 'disabled'
+				WHEN last_checked_at IS NULL THEN 'unknown'
+				WHEN consecutive_failures >= failure_threshold THEN 'failing'
+				WHEN consecutive_failures > 0 THEN 'degraded'
+				ELSE 'healthy'
+			END
+		WHERE id=?`, enabled, enabled, id)
 	return err
 }
 
@@ -194,6 +216,24 @@ func (r *Store) ListAllRouteKeys(ctx context.Context, projectID int64) (map[stri
 			return nil, err
 		}
 		out[method+" "+path] = id
+	}
+	return out, rows.Err()
+}
+
+func (r *Store) ListRouteSpecHashes(ctx context.Context, projectID int64) (map[int64]string, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, spec_hash FROM api_routes WHERE project_id=?`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]string{}
+	for rows.Next() {
+		var id int64
+		var hash string
+		if err = rows.Scan(&id, &hash); err != nil {
+			return nil, err
+		}
+		out[id] = hash
 	}
 	return out, rows.Err()
 }

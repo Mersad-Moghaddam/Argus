@@ -136,5 +136,24 @@ Each section ends with `go build ./...`, `go vet ./...`, relevant
   projects, bounded-batch retention pruning), `route_incidents.go`, and
   `imports.go` (job persistence with parsed items as JSON). `go build`
   and `go vet` clean.
-- **Section 4 (next)** — Application services: auth, project, route,
-  import (validate/diff/commit), monitoring/aggregation orchestration.
+- **Section 4 (commit pending)** — Done. Extended `application.Service`
+  (backward-compatible additive constructor params) with: `auth.go`
+  (register/login/logout/authenticate, bcrypt + sha256-hashed opaque
+  bearer tokens, 30-day TTL), `projects.go` (create/update/archive/delete,
+  slug generation, `AuthorizeProject` central 404-for-both-cases
+  authz helper), `routes.go` (manual create/bulk-create with per-row
+  partial-failure reporting, update/enable/disable/delete, and
+  `ProcessRouteCheckResult` which is the single place check outcomes turn
+  into route status + persisted check + incident open/resolve, reusing the
+  existing outbox for alert dispatch), and `imports.go` (`ValidateImport`
+  parses+diffs a spec into a persisted preview job with per-item
+  create/update/skip/remove actions and conflict labels; `CommitImport`
+  applies a user-confirmed selection, only ever touching spec-derived
+  metadata on updates — never user-owned monitoring config — and disables
+  (never hard-deletes) routes removed from the spec unless explicitly
+  selected). Added domain unit tests for `ComputeRouteStatus`,
+  `RouteIncidentPolicy`, and method/path normalization. Full repo
+  `go build`, `go vet`, `go test ./...` clean.
+- **Section 5 (next)** — HTTP middleware (bearer auth + project
+  authorization) and handlers (auth, projects, routes, imports), wired
+  into the fiber app with upload size limits.

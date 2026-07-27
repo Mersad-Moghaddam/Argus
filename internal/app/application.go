@@ -17,6 +17,7 @@ import (
 	"argus/internal/platform/storage"
 	workerplatform "argus/internal/platform/worker"
 	"argus/internal/worker"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gofiber/fiber/v2"
 	"github.com/hibiken/asynq"
@@ -42,7 +43,7 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 		return nil, fmt.Errorf("apply migrations: %w", err)
 	}
 	store := mysql.NewStore(db)
-	appService := application.NewService(store, store, store, store, store, store, logger)
+	appService := application.NewService(store, store, store, store, store, store, logger, store, store, store, store, store, store)
 	httpApp := httpserver.NewFiberApp(appService, logger, cfg.APIKey)
 	asynqClient := asynq.NewClient(workerplatform.RedisClientOptions(cfg))
 	processor := worker.NewProcessor(store, store, store, appService, asynqClient, notifier.NewHTTPNotifier(), logger)

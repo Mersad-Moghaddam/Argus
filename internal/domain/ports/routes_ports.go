@@ -39,6 +39,7 @@ type RouteStore interface {
 	CreateRoute(ctx context.Context, route models.APIRoute) (int64, error)
 	BulkCreateRoutes(ctx context.Context, routes []models.APIRoute) (int, error)
 	UpdateRoute(ctx context.Context, route models.APIRoute) error
+	UpdateRouteImportedMetadata(ctx context.Context, route models.APIRoute) error
 	SetRouteEnabled(ctx context.Context, id int64, enabled bool) error
 	DeleteRoute(ctx context.Context, id int64) error
 	BulkDeleteRoutes(ctx context.Context, projectID int64, ids []int64) (int64, error)
@@ -46,6 +47,7 @@ type RouteStore interface {
 	GetRouteByMethodPath(ctx context.Context, projectID int64, method, path string) (*models.APIRoute, error)
 	ListRoutes(ctx context.Context, filter models.RouteFilter) ([]models.APIRoute, int, error)
 	ListAllRouteKeys(ctx context.Context, projectID int64) (map[string]int64, error)
+	ListRouteSpecHashes(ctx context.Context, projectID int64) (map[int64]string, error)
 	ListDueRoutes(ctx context.Context, now time.Time, limit int, afterID int64) ([]models.APIRoute, error)
 	MarkRouteChecked(ctx context.Context, id int64, status string, statusCode, latencyMS int, failureReason string, consecutiveFailures, consecutiveSuccesses int, routeStatus string, checkedAt, nextCheckAt time.Time) error
 	RecordRouteCheck(ctx context.Context, check models.RouteCheck) error
