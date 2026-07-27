@@ -154,6 +154,29 @@ Each section ends with `go build ./...`, `go vet ./...`, relevant
   selected). Added domain unit tests for `ComputeRouteStatus`,
   `RouteIncidentPolicy`, and method/path normalization. Full repo
   `go build`, `go vet`, `go test ./...` clean.
-- **Section 5 (next)** — HTTP middleware (bearer auth + project
-  authorization) and handlers (auth, projects, routes, imports), wired
-  into the fiber app with upload size limits.
+- **Section 5 (commit pending)** — Done. Added `BearerAuth` middleware
+  (independent from the legacy `APIKeyAuth`) and handlers: `auth_handler.go`
+  (register/login/logout/me), `project_handler.go` (list/create/get/update/
+  archive/unarchive/delete), `route_handler.go` (list with search/filter/
+  sort/pagination, create, bulk create with per-row error reporting,
+  get/update/enable/disable/delete, bulk delete, check history, project
+  incidents), `import_handler.go` (validate via multipart file upload or
+  JSON paste, get job, commit with per-item selections). Added
+  `project_authz.go`: a single `authorizeProject` helper used by every
+  project-scoped handler, returning 404 for both "project does not exist"
+  and "caller is not a member" (prevents project-ID enumeration), 403 for
+  insufficient role, and route/import lookups additionally verify the
+  resource's `projectId` matches the URL to block cross-project access via
+  guessed IDs. Route/import responses redact sensitive header values
+  (`RedactHeaders`) so configured secrets are never echoed back. Wired
+  everything into `internal/platform/httpserver/fiber.go`: legacy
+  `/api/websites|checks|...` routes keep the exact same `APIKeyAuth`
+  behavior as before (fully backward compatible); new `/api/auth`,
+  `/api/projects...` routes use bearer auth; Fiber `BodyLimit` raised to
+  15MB to safely accept large OpenAPI upload requests ahead of the
+  parser's own 10MB document cap. `go build`, `go vet`, `go test ./...`
+  all clean.
+- **Section 6 (next)** — Worker: route check task (SSRF-safe HTTP
+  evaluator with retries/timeouts), scheduling + concurrency + duplicate-job
+  prevention, metric aggregation job, retention pruning job; wire into
+  `internal/app` and the asynq runtime.
