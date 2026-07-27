@@ -31,7 +31,7 @@ type projectRequest struct {
 	Description              string `json:"description"`
 	DefaultIntervalSeconds   int    `json:"defaultIntervalSeconds"`
 	DefaultTimeoutMS         int    `json:"defaultTimeoutMs"`
-	DefaultRetries           int    `json:"defaultRetries"`
+	DefaultRetries           *int   `json:"defaultRetries"`
 	FailureThreshold         int    `json:"failureThreshold"`
 	RecoverySuccessThreshold int    `json:"recoverySuccessThreshold"`
 }
@@ -55,11 +55,15 @@ func (h *ProjectHandler) CreateProject(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
 	}
 	userID := currentUserID(c)
-	project, err := h.service.CreateProject(c.UserContext(), userID, application.CreateProjectInput{
+	input := application.CreateProjectInput{
 		Name: req.Name, Description: req.Description, DefaultIntervalSeconds: req.DefaultIntervalSeconds,
-		DefaultTimeoutMS: req.DefaultTimeoutMS, DefaultRetries: req.DefaultRetries,
+		DefaultTimeoutMS: req.DefaultTimeoutMS,
 		FailureThreshold: req.FailureThreshold, RecoverySuccessThreshold: req.RecoverySuccessThreshold,
-	})
+	}
+	if req.DefaultRetries != nil {
+		input.DefaultRetries, input.DefaultRetriesSet = *req.DefaultRetries, true
+	}
+	project, err := h.service.CreateProject(c.UserContext(), userID, input)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -83,11 +87,15 @@ func (h *ProjectHandler) UpdateProject(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
 	}
-	updated, err := h.service.UpdateProject(c.UserContext(), project, application.UpdateProjectInput{
+	input := application.UpdateProjectInput{
 		Name: req.Name, Description: req.Description, DefaultIntervalSeconds: req.DefaultIntervalSeconds,
-		DefaultTimeoutMS: req.DefaultTimeoutMS, DefaultRetries: req.DefaultRetries,
+		DefaultTimeoutMS: req.DefaultTimeoutMS,
 		FailureThreshold: req.FailureThreshold, RecoverySuccessThreshold: req.RecoverySuccessThreshold,
-	})
+	}
+	if req.DefaultRetries != nil {
+		input.DefaultRetries, input.DefaultRetriesSet = *req.DefaultRetries, true
+	}
+	updated, err := h.service.UpdateProject(c.UserContext(), project, input)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}

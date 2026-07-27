@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,11 +42,7 @@ func (s *Service) ValidateImport(ctx context.Context, in ValidateImportInput) (m
 		return models.ImportJob{}, err
 	}
 
-	baseURL := strings.TrimRight(strings.TrimSpace(in.BaseURLOverride), "/")
-	if baseURL == "" {
-		baseURL = parsed.BaseURL
-	}
-	baseURL, err = validateBaseURL(baseURL)
+	baseURL, err := resolveImportBaseURL(in.BaseURLOverride, parsed.BaseURL)
 	if err != nil {
 		return models.ImportJob{}, err
 	}
@@ -52,7 +51,7 @@ func (s *Service) ValidateImport(ctx context.Context, in ValidateImportInput) (m
 	if err != nil {
 		return models.ImportJob{}, err
 	}
-	existingHashes, err := s.routes.ListRouteSpecHashes(ctx, in.ProjectID)
+	existingStates, err := s.routes.ListRouteImportStates(ctx, in.ProjectID)
 	if err != nil {
 		return models.ImportJob{}, err
 	}
@@ -81,6 +80,9 @@ func (s *Service) ValidateImport(ctx context.Context, in ValidateImportInput) (m
 		}
 		item.Method, item.Path = method, path
 		item.Key = method + " " + path
+		if !isSafeImportedMonitorMethod(method) {
+			item.ValidationWarning = "created disabled: enable only if this operation is safe to probe without a request body"
+		}
 
 		if seenInSpec[item.Key] {
 			item.Action = models.ImportActionSkip
@@ -93,7 +95,13 @@ func (s *Service) ValidateImport(ctx context.Context, in ValidateImportInput) (m
 
 		if existingID, ok := existingIDs[item.Key]; ok {
 			item.ExistingRouteID = existingID
-			if existingHashes[existingID] == route.SpecHash {
+			state := existingStates[existingID]
+			legacyExpected := expectedStatusRange(item.Responses, "")
+			currentExpected := expectedStatusRange(item.Responses, item.Security)
+			needsLegacyStatusUpgrade := state.Source == "import" &&
+				(state.ExpectedStatusRange == "200-399" || state.ExpectedStatusRange == legacyExpected) &&
+				state.ExpectedStatusRange != currentExpected
+			if state.SpecHash == route.SpecHash && state.BaseURL == baseURL && !needsLegacyStatusUpgrade {
 				item.Action = models.ImportActionSkip
 				item.Conflict = models.ImportConflictNone
 				item.Selected = false
@@ -136,6 +144,44 @@ func (s *Service) ValidateImport(ctx context.Context, in ValidateImportInput) (m
 	}
 	job.ID = id
 	return job, nil
+}
+
+// resolveImportBaseURL combines a deployment origin supplied by the user
+// with a relative OpenAPI servers URL. A common production specification
+// declares "/api/v1" while the user knows only "https://example.com"; treating
+// the override as a full replacement silently drops the API prefix and sends
+// every monitor to the wrong endpoint.
+func resolveImportBaseURL(rawOverride, rawSpecBase string) (string, error) {
+	override := strings.TrimRight(strings.TrimSpace(rawOverride), "/")
+	specBase := strings.TrimRight(strings.TrimSpace(rawSpecBase), "/")
+
+	if override == "" {
+		return validateBaseURL(specBase)
+	}
+	overrideURL, err := url.Parse(override)
+	if err != nil {
+		return "", ErrInvalidBaseURL
+	}
+	if _, err = validateBaseURL(override); err != nil {
+		return "", err
+	}
+
+	specURL, parseErr := url.Parse(specBase)
+	if parseErr != nil {
+		return "", ErrInvalidBaseURL
+	}
+	if specBase != "" && !specURL.IsAbs() {
+		// A root-only override is an origin. Resolve the specification's
+		// relative server path against it. If the override already contains a
+		// path, it is an explicit full base URL and remains authoritative.
+		if overrideURL.EscapedPath() == "" || overrideURL.EscapedPath() == "/" {
+			overrideURL.Path = "/"
+			overrideURL.RawPath = ""
+			resolved := overrideURL.ResolveReference(specURL)
+			return validateBaseURL(strings.TrimRight(resolved.String(), "/"))
+		}
+	}
+	return validateBaseURL(override)
 }
 
 func marshalOrEmpty(v any) string {
@@ -184,15 +230,16 @@ func (s *Service) CommitImport(ctx context.Context, project models.Project, jobI
 
 		switch item.Action {
 		case models.ImportActionCreate:
+			enabled := isSafeImportedMonitorMethod(item.Method)
 			route := models.APIRoute{
 				ProjectID: project.ID, Method: item.Method, Path: item.Path, BaseURL: item.BaseURL,
 				OperationID: item.OperationID, Summary: item.Summary, Description: item.Description,
 				Tags: item.Tags, Deprecated: item.Deprecated, SpecHash: item.SpecHash,
 				Parameters: item.Parameters, RequestBody: item.RequestBody, Responses: item.Responses, Security: item.Security,
-				Source: "import", Enabled: true,
+				Source: "import", Enabled: enabled,
 				MonitorIntervalSecs: project.DefaultIntervalSeconds, TimeoutMS: project.DefaultTimeoutMS, Retries: project.DefaultRetries,
-				ExpectedStatusRange: "200-399", FailureThreshold: project.FailureThreshold, RecoverySuccesses: project.RecoverySuccessThreshold,
-				Status: domain.RouteStatusUnknown, NextCheckAt: time.Now().UTC(),
+				ExpectedStatusRange: expectedStatusRange(item.Responses, item.Security), FailureThreshold: project.FailureThreshold, RecoverySuccesses: project.RecoverySuccessThreshold,
+				Status: domain.ComputeRouteStatus(domain.RouteHealthInput{Enabled: enabled, Checked: false}), NextCheckAt: time.Now().UTC(),
 			}
 			toCreate = append(toCreate, route)
 			created++
@@ -214,6 +261,11 @@ func (s *Service) CommitImport(ctx context.Context, project models.Project, jobI
 			existing.Responses = item.Responses
 			existing.Security = item.Security
 			existing.SpecHash = item.SpecHash
+			legacyExpected := expectedStatusRange(item.Responses, "")
+			if existing.Source == "import" &&
+				(existing.ExpectedStatusRange == "200-399" || existing.ExpectedStatusRange == legacyExpected) {
+				existing.ExpectedStatusRange = expectedStatusRange(item.Responses, item.Security)
+			}
 			if item.BaseURL != "" {
 				existing.BaseURL = item.BaseURL
 			}
@@ -258,6 +310,60 @@ func (s *Service) CommitImport(ctx context.Context, project models.Project, jobI
 		"updated": fmt.Sprintf("%d", updated), "disabled": fmt.Sprintf("%d", removed), "skipped": fmt.Sprintf("%d", skipped),
 	})
 	return *job, nil
+}
+
+func isSafeImportedMonitorMethod(method string) bool {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case "GET", "HEAD", "OPTIONS":
+		return true
+	default:
+		return false
+	}
+}
+
+// expectedStatusRange turns the response statuses declared by OpenAPI into
+// the checker's compact range syntax. This makes an unauthenticated 401 or a
+// validation 422 healthy when the contract explicitly documents it, while a
+// truly unexpected response remains a failure.
+func expectedStatusRange(rawResponses, rawSecurity string) string {
+	var responses map[string]any
+	if json.Unmarshal([]byte(rawResponses), &responses) != nil {
+		return "200-399"
+	}
+	valueSet := make(map[int]bool, len(responses)+2)
+	ranges := make([]string, 0, len(responses))
+	for key := range responses {
+		normalized := strings.ToUpper(strings.TrimSpace(key))
+		if len(normalized) == 3 && normalized[1:] == "XX" && normalized[0] >= '1' && normalized[0] <= '5' {
+			low := int(normalized[0]-'0') * 100
+			ranges = append(ranges, fmt.Sprintf("%d-%d", low, low+99))
+			continue
+		}
+		code, err := strconv.Atoi(normalized)
+		if err == nil && code >= 100 && code <= 599 {
+			valueSet[code] = true
+		}
+	}
+	var security []any
+	if json.Unmarshal([]byte(rawSecurity), &security) == nil && len(security) > 0 {
+		// Without configured credentials, reaching the authentication boundary
+		// is the expected safe probe for a protected operation.
+		valueSet[401] = true
+		valueSet[403] = true
+	}
+	values := make([]int, 0, len(valueSet))
+	for code := range valueSet {
+		values = append(values, code)
+	}
+	sort.Ints(values)
+	for _, code := range values {
+		ranges = append(ranges, strconv.Itoa(code))
+	}
+	sort.Strings(ranges)
+	if len(ranges) == 0 {
+		return "200-399"
+	}
+	return strings.Join(ranges, ",")
 }
 
 func (s *Service) GetImportJob(ctx context.Context, projectID, jobID int64) (*models.ImportJob, error) {

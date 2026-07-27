@@ -130,14 +130,15 @@ func (r *Store) UpdateRoute(ctx context.Context, route models.APIRoute) error {
 // UpdateRouteImportedMetadata updates only spec-derived fields on an
 // existing route during re-import. It deliberately never touches
 // user-owned monitoring configuration (enabled, interval, timeout, retries,
-// thresholds, expected status range) so re-importing a spec can never
-// silently clobber a user's monitoring settings.
+// and thresholds) so re-importing a spec can never silently clobber it. The
+// expected status range is passed through unchanged except when the
+// application explicitly upgrades the old generic import default.
 func (r *Store) UpdateRouteImportedMetadata(ctx context.Context, route models.APIRoute) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET name=?, summary=?, description=?, tags=?, deprecated=?,
-			parameters=?, request_body=?, responses=?, security=?, spec_hash=?, base_url=?, updated_at=NOW()
+			parameters=?, request_body=?, responses=?, security=?, spec_hash=?, base_url=?, expected_status_range=?, updated_at=NOW()
 		WHERE id=?`,
 		route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
-		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), route.SpecHash, route.BaseURL, route.ID)
+		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), route.SpecHash, route.BaseURL, route.ExpectedStatusRange, route.ID)
 	return err
 }
 
@@ -220,20 +221,20 @@ func (r *Store) ListAllRouteKeys(ctx context.Context, projectID int64) (map[stri
 	return out, rows.Err()
 }
 
-func (r *Store) ListRouteSpecHashes(ctx context.Context, projectID int64) (map[int64]string, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, spec_hash FROM api_routes WHERE project_id=?`, projectID)
+func (r *Store) ListRouteImportStates(ctx context.Context, projectID int64) (map[int64]models.RouteImportState, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, spec_hash, base_url, expected_status_range, source FROM api_routes WHERE project_id=?`, projectID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[int64]string{}
+	out := map[int64]models.RouteImportState{}
 	for rows.Next() {
 		var id int64
-		var hash string
-		if err = rows.Scan(&id, &hash); err != nil {
+		var state models.RouteImportState
+		if err = rows.Scan(&id, &state.SpecHash, &state.BaseURL, &state.ExpectedStatusRange, &state.Source); err != nil {
 			return nil, err
 		}
-		out[id] = hash
+		out[id] = state
 	}
 	return out, rows.Err()
 }
@@ -326,12 +327,16 @@ func (r *Store) ListDueRoutes(ctx context.Context, now time.Time, limit int, aft
 	return out, rows.Err()
 }
 
-func (r *Store) MarkRouteChecked(ctx context.Context, id int64, status string, statusCode, latencyMS int, failureReason string, consecutiveFailures, consecutiveSuccesses int, routeStatus string, checkedAt, nextCheckAt time.Time) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET last_checked_at=?, last_status_code=?, last_latency_ms=?, last_failure_reason=?,
+func (r *Store) MarkRouteChecked(ctx context.Context, id int64, status string, statusCode, latencyMS int, failureReason string, consecutiveFailures, consecutiveSuccesses int, routeStatus string, checkedAt, nextCheckAt time.Time) (bool, error) {
+	result, err := r.db.ExecContext(ctx, `UPDATE api_routes SET last_checked_at=?, last_status_code=?, last_latency_ms=?, last_failure_reason=?,
 			consecutive_failures=?, consecutive_successes=?, status=?, next_check_at=?, updated_at=NOW()
-		WHERE id=?`,
+		WHERE id=? AND enabled=1`,
 		checkedAt, statusCode, latencyMS, nullableString(failureReason), consecutiveFailures, consecutiveSuccesses, routeStatus, nextCheckAt, id)
-	return err
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	return affected == 1, err
 }
 
 func (r *Store) RecordRouteCheck(ctx context.Context, check models.RouteCheck) error {

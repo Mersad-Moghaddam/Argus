@@ -1,0 +1,28 @@
+openapi: 3.0.3
+info:
+  title: TetherYaab Smoke Monitoring
+  version: "1.0.0"
+  description: Safe, read-only routes for an Argus sample project.
+servers:
+  - url: http://87.248.152.247/api/v1
+paths:
+  /health:
+    get:
+      summary: API process health
+      responses:
+        "200":
+          description: Healthy
+  /ready:
+    get:
+      summary: MySQL, Redis, and worker readiness
+      responses:
+        "200":
+          description: Ready
+        "503":
+          description: A required dependency is unavailable
+  /prices/usdt:
+    get:
+      summary: Public USDT price snapshot
+      responses:
+        "200":
+          description: Current price snapshot

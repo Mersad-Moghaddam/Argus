@@ -78,6 +78,24 @@ func TestRouteEvaluatorExpectedStatusAndMethod(t *testing.T) {
 	}
 }
 
+func TestRouteEvaluatorPreservesServerBasePath(t *testing.T) {
+	t.Parallel()
+	var path string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	route := routeFor(server)
+	route.BaseURL = server.URL + "/api/v1"
+	route.Path = "/health"
+	result := testEvaluator(server).Evaluate(context.Background(), route, time.Second)
+	if result.Status != "up" || path != "/api/v1/health" {
+		t.Fatalf("unexpected result=%+v path=%q", result, path)
+	}
+}
+
 func TestRouteEvaluatorRetriesAndCountsFinalAttempt(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32

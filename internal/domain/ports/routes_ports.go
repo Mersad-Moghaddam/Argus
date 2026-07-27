@@ -47,9 +47,9 @@ type RouteStore interface {
 	GetRouteByMethodPath(ctx context.Context, projectID int64, method, path string) (*models.APIRoute, error)
 	ListRoutes(ctx context.Context, filter models.RouteFilter) ([]models.APIRoute, int, error)
 	ListAllRouteKeys(ctx context.Context, projectID int64) (map[string]int64, error)
-	ListRouteSpecHashes(ctx context.Context, projectID int64) (map[int64]string, error)
+	ListRouteImportStates(ctx context.Context, projectID int64) (map[int64]models.RouteImportState, error)
 	ListDueRoutes(ctx context.Context, now time.Time, limit int, afterID int64) ([]models.APIRoute, error)
-	MarkRouteChecked(ctx context.Context, id int64, status string, statusCode, latencyMS int, failureReason string, consecutiveFailures, consecutiveSuccesses int, routeStatus string, checkedAt, nextCheckAt time.Time) error
+	MarkRouteChecked(ctx context.Context, id int64, status string, statusCode, latencyMS int, failureReason string, consecutiveFailures, consecutiveSuccesses int, routeStatus string, checkedAt, nextCheckAt time.Time) (bool, error)
 	RecordRouteCheck(ctx context.Context, check models.RouteCheck) error
 	ListRouteChecks(ctx context.Context, routeID int64, limit, offset int) ([]models.RouteCheck, error)
 	ListProjectMetricSeries(ctx context.Context, projectID int64, since time.Time, bucketSeconds int) ([]models.ProjectMetricPoint, error)

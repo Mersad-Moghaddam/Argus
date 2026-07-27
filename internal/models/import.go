@@ -73,3 +73,14 @@ type ImportCommitSelection struct {
 	Selected bool   `json:"selected"`
 	Action   string `json:"action"`
 }
+
+// RouteImportState is the minimal existing-route state needed to decide
+// whether an OpenAPI re-import must update a route. The server/base URL is
+// intentionally compared separately from SpecHash because it belongs to the
+// top-level OpenAPI servers declaration, not to an individual operation.
+type RouteImportState struct {
+	SpecHash            string
+	BaseURL             string
+	ExpectedStatusRange string
+	Source              string
+}

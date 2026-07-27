@@ -11,6 +11,7 @@ const el = {
   refreshDot: document.getElementById('refreshDot'),
   apiKey: document.getElementById('apiKey'),
   saveKeyBtn: document.getElementById('saveKeyBtn'),
+  apiKeyForm: document.getElementById('apiKeyForm'),
   toggleKeyVisibility: document.getElementById('toggleKeyVisibility'),
   channelForm: document.getElementById('channelForm'),
   maintenanceForm: document.getElementById('maintenanceForm'),
@@ -36,11 +37,16 @@ const el = {
   statusBanner: document.getElementById('statusBanner'),
   statusBannerLamp: document.getElementById('statusBannerLamp'),
   statusBannerText: document.getElementById('statusBannerText'),
+  openProjectsBtn: document.getElementById('openProjectsBtn'),
+  projectCalloutText: document.getElementById('projectCalloutText'),
+  projectPrimaryCta: document.getElementById('projectPrimaryCta'),
+  projectSecondaryCta: document.getElementById('projectSecondaryCta'),
 };
 
 let latestWebsites = [];
 const AUTO_REFRESH_SECONDS = 30;
 let countdown = AUTO_REFRESH_SECONDS;
+let projectRefreshInFlight = false;
 
 /* ---------------------------- Toasts ---------------------------- */
 
@@ -108,6 +114,17 @@ function activateTab(btn, { focus = false } = {}) {
   document.getElementById(`panel-${btn.dataset.tab}`).classList.add('active');
   if (focus) btn.focus();
 }
+
+let projectAuthMode = 'register';
+
+function openProjects(mode = '') {
+  if (mode) projectAuthMode = mode;
+  projectNavigate('#/projects');
+  if (!localStorage.getItem(PROJECT_TOKEN_KEY) && window.location.hash === '#/projects') {
+    renderProjectAuth(projectAuthMode);
+  }
+}
+window.openProjects = openProjects;
 
 tabButtons.forEach((btn, index) => {
   btn.addEventListener('click', () => activateTab(btn));
@@ -394,7 +411,7 @@ function setStatusBanner(state, total, up, down) {
   el.refreshDot.classList.toggle('is-down', state === 'down');
   const messages = {
     unknown: ['var(--text-faint)', 'Scanning your infrastructure&hellip;'],
-    empty: ['var(--text-faint)', 'No monitors yet — add one to start watching.'],
+    empty: ['var(--text-faint)', 'No legacy website monitors yet — API Projects run separately below.'],
     up: ['var(--ok)', `All ${total} monitor${total === 1 ? '' : 's'} operational.`],
     down: ['var(--down)', `${down} of ${total} monitor${total === 1 ? '' : 's'} <strong>down</strong> right now.`],
   };
@@ -612,7 +629,8 @@ el.maintenanceForm.addEventListener('submit', async (e) => {
   }
 });
 
-el.saveKeyBtn.addEventListener('click', () => {
+el.apiKeyForm.addEventListener('submit', (event) => {
+  event.preventDefault();
   localStorage.setItem('argus_api_key', el.apiKey.value.trim());
   showToast('API key saved in your browser.', 'success');
   refresh();
@@ -624,7 +642,12 @@ el.refreshCountdown.textContent = `auto-refresh ${AUTO_REFRESH_SECONDS}s`;
 setInterval(() => {
   countdown -= 1;
   if (countdown <= 0) {
-    refresh({ silent: true });
+    if (window.location.hash.startsWith('#/projects')) {
+      countdown = AUTO_REFRESH_SECONDS;
+      refreshActiveProjectView();
+    } else {
+      refresh({ silent: true });
+    }
     return;
   }
   el.refreshCountdown.textContent = `refreshing in ${countdown}s`;
@@ -634,7 +657,10 @@ setInterval(() => {
 
 initTheme();
 el.apiKey.value = localStorage.getItem('argus_api_key') || '';
-el.refreshBtn.addEventListener('click', () => refresh());
+el.refreshBtn.addEventListener('click', () => {
+  if (window.location.hash.startsWith('#/projects')) refreshActiveProjectView();
+  else refresh();
+});
 refresh();
 
 /* ==========================================================================
@@ -702,22 +728,27 @@ function activateProjectsTab() {
   if (button) activateTab(button);
 }
 
-function renderProjectAuth(mode = 'login') {
+function renderProjectAuth(mode = 'register') {
+  projectAuthMode = mode;
   activateProjectsTab();
   projectApp.innerHTML = `
     <section class="project-auth card">
-      <div class="project-eyebrow">PROJECT MONITORING</div>
+      <div class="project-auth-signal"><span class="projects-live-dot"></span> PROJECT MONITORING</div>
       <h2>${mode === 'register' ? 'Create your workspace account' : 'Sign in to your projects'}</h2>
-      <p>Project sessions are separate from the legacy API key above.</p>
+      <p>${mode === 'register' ? 'Start monitoring every route in your OpenAPI specification in a few minutes.' : 'Continue to your live API monitoring dashboards.'}</p>
+      <div class="project-auth-tabs" role="tablist" aria-label="Project account">
+        <button class="${mode === 'register' ? 'active' : ''}" type="button" id="projectRegisterTab" role="tab" aria-selected="${mode === 'register'}">Create account</button>
+        <button class="${mode === 'login' ? 'active' : ''}" type="button" id="projectLoginTab" role="tab" aria-selected="${mode === 'login'}">Sign in</button>
+      </div>
       <form id="projectAuthForm" class="stack">
         ${mode === 'register' ? '<div class="field"><label for="projectAuthName">Name</label><input id="projectAuthName" autocomplete="name" required /></div>' : ''}
         <div class="field"><label for="projectAuthEmail">Email</label><input id="projectAuthEmail" type="email" autocomplete="email" required /></div>
         <div class="field"><label for="projectAuthPassword">Password</label><input id="projectAuthPassword" type="password" minlength="8" autocomplete="${mode === 'register' ? 'new-password' : 'current-password'}" required /></div>
         <button id="projectAuthSubmit" type="submit">${mode === 'register' ? 'Create account' : 'Sign in'}</button>
       </form>
-      <button class="ghost project-auth-switch" type="button" id="projectAuthSwitch">${mode === 'register' ? 'Already have an account? Sign in' : 'Need an account? Register'}</button>
     </section>`;
-  document.getElementById('projectAuthSwitch').addEventListener('click', () => renderProjectAuth(mode === 'register' ? 'login' : 'register'));
+  document.getElementById('projectRegisterTab').addEventListener('click', () => renderProjectAuth('register'));
+  document.getElementById('projectLoginTab').addEventListener('click', () => renderProjectAuth('login'));
   document.getElementById('projectAuthForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const button = document.getElementById('projectAuthSubmit');
@@ -736,6 +767,7 @@ function renderProjectAuth(mode = 'login') {
       const body = await result.json().catch(() => ({}));
       if (!result.ok) throw new Error(body.error || 'Authentication failed');
       localStorage.setItem(PROJECT_TOKEN_KEY, body.token);
+      updateProjectCallout();
       showToast(mode === 'register' ? 'Account created.' : 'Signed in.', 'success');
       projectNavigate('#/projects');
       await renderProjectRoute();
@@ -751,7 +783,7 @@ async function renderProjectsList() {
   activateProjectsTab();
   projectApp.innerHTML = `
     <div class="project-view-header">
-      <div><div class="project-eyebrow">API PORTFOLIO</div><h2>Projects</h2><p>Health, incidents, and performance across every monitored route.</p></div>
+      <div><div class="project-eyebrow"><span class="live-pulse"></span> API PORTFOLIO · BACKGROUND MONITORING ACTIVE</div><h2>Projects</h2><p>Health, incidents, and performance across every monitored route.</p></div>
       <div class="project-header-actions"><button class="secondary" id="projectLogout">Sign out</button><button id="newProjectBtn">New project</button></div>
     </div>
     <section class="card project-toolbar">
@@ -762,6 +794,7 @@ async function renderProjectsList() {
   document.getElementById('projectLogout').addEventListener('click', async () => {
     try { await apiProjects('/auth/logout', { method: 'POST' }); } catch (_) {}
     localStorage.removeItem(PROJECT_TOKEN_KEY);
+    updateProjectCallout();
     renderProjectAuth();
   });
   document.getElementById('newProjectBtn').addEventListener('click', () => renderProjectForm());
@@ -888,7 +921,7 @@ function renderProjectDashboardShell() {
   const canEdit = project.viewerRole === 'owner' || project.viewerRole === 'editor';
   projectApp.innerHTML = `
     <div class="project-view-header">
-      <div><button class="ghost sm" onclick="projectNavigate('#/projects')">← Projects</button><div class="project-eyebrow">PROJECT / ${project.id}</div><h2>${escapeHtml(project.name)}</h2><p>${escapeHtml(project.description || 'API route monitoring workspace')}</p></div>
+      <div><button class="ghost sm" onclick="projectNavigate('#/projects')">← Projects</button><div class="project-eyebrow"><span class="live-pulse"></span> PROJECT / ${project.id} · CHECKS RUN IN BACKGROUND</div><h2>${escapeHtml(project.name)}</h2><p>${escapeHtml(project.description || 'API route monitoring workspace')}</p></div>
       <div class="project-header-actions">${canEdit ? `<button class="secondary" onclick="renderProjectForm(projectState.project)">Edit</button><button class="secondary" onclick="projectNavigate('#/projects/${project.id}/import')">Import spec</button><button onclick="renderRouteForm()">Add route</button>` : ''}</div>
     </div>
     <section class="project-metric-grid">
@@ -906,7 +939,7 @@ function renderProjectDashboardShell() {
       <section class="card project-incident-card"><div class="card-header"><h2>Recent incidents</h2></div><div id="projectIncidentList"></div></section>
     </div>
     <section class="card project-routes-card">
-      <div class="card-header"><div><h2>API routes</h2><span class="card-subtitle">${projectState.routeTotal.toLocaleString()} operations</span></div></div>
+      <div class="card-header"><div><h2>API routes</h2><span class="card-subtitle">${projectState.routeTotal.toLocaleString()} operations · refreshed ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div><span class="monitoring-live"><span class="live-pulse"></span> Live</span></div>
       <div class="route-filters">
         <input id="routeSearch" placeholder="Search path, summary, operation ID..." value="${escapeHtml(projectState.filters.search)}" />
         <select id="routeMethod"><option value="">All methods</option>${['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'].map((m) => `<option ${projectState.filters.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select>
@@ -990,7 +1023,7 @@ function renderRouteRows() {
     tbody.innerHTML = projectState.routes.map((route) => `<tr>
       <td><input class="route-select" type="checkbox" value="${route.id}" aria-label="Select ${escapeHtml(route.method + ' ' + route.path)}" /></td>
       <td><span class="method method-${route.method.toLowerCase()}">${route.method}</span></td>
-      <td><button class="route-link" onclick="projectNavigate('#/projects/${route.projectId}/routes/${route.id}')"><strong>${escapeHtml(route.path)}</strong><span>${escapeHtml(route.summary || route.operationId || '')}</span></button></td>
+      <td><button class="route-link" title="${escapeHtml(route.baseUrl + route.path)}" onclick="projectNavigate('#/projects/${route.projectId}/routes/${route.id}')"><strong>${escapeHtml(route.path)}</strong><span>${escapeHtml(route.baseUrl)}${route.summary || route.operationId ? ` · ${escapeHtml(route.summary || route.operationId)}` : ''}</span>${route.lastFailureReason ? `<em>${escapeHtml(route.lastFailureReason)}</em>` : ''}</button></td>
       <td>${projectStatusBadge(route.status)}</td><td class="mono">${Number(route.uptime24hPct || 0).toFixed(2)}%</td><td class="mono">${route.lastLatencyMs || 0} ms</td>
       <td class="mono">${route.lastCheckedAt ? relativeTime(route.lastCheckedAt) : 'never'}</td>
       <td><div class="row-actions"><button class="secondary sm" onclick="projectNavigate('#/projects/${route.projectId}/routes/${route.id}')">Details</button>${projectState.project.viewerRole !== 'viewer' ? `<button class="secondary sm" onclick="setRouteEnabled(${route.id}, ${!route.enabled})">${route.enabled ? 'Disable' : 'Enable'}</button>` : ''}</div></td>
@@ -1143,7 +1176,7 @@ async function renderImportWizard(projectId) {
   } catch (error) { projectApp.innerHTML = projectError(error.message); return; }
   projectState.importJob = null;
   projectApp.innerHTML = `<div class="project-view-header"><div><button class="ghost sm" onclick="projectNavigate('#/projects/${projectId}')">← ${escapeHtml(projectState.project.name)}</button><div class="project-eyebrow">IMPORT / STEP 1 OF 3</div><h2>Import OpenAPI specification</h2><p>Upload JSON/YAML or paste the full OpenAPI 3.x / Swagger 2.0 document.</p></div></div>
-    <section class="card import-card"><form id="importForm" class="stack"><div class="import-drop"><input id="importFile" type="file" accept=".json,.yaml,.yml,application/json,application/yaml" /><strong>Choose a specification file</strong><span>Maximum 10 MB. The server never fetches remote references.</span></div><div class="import-or">OR PASTE</div><div class="field"><textarea id="importSpec" rows="14" placeholder="openapi: 3.0.3&#10;info: ..."></textarea></div><div class="field"><label>Base URL override (optional)</label><input id="importBaseURL" type="url" placeholder="https://api.example.com" /></div><div class="modal-actions"><button class="secondary" type="button" onclick="history.back()">Cancel</button><button id="importValidateBtn" type="submit">Validate & preview</button></div></form></section>`;
+    <section class="card import-card"><form id="importForm" class="stack"><div class="import-drop"><input id="importFile" type="file" accept=".json,.yaml,.yml,application/json,application/yaml" /><strong>Choose a specification file</strong><span>Maximum 10 MB. The server never fetches remote references.</span></div><div class="import-or">OR PASTE</div><div class="field"><textarea id="importSpec" rows="14" placeholder="openapi: 3.0.3&#10;info: ..."></textarea></div><div class="field"><label for="importBaseURL">Deployment origin or full base URL</label><input id="importBaseURL" type="url" placeholder="https://api.example.com" aria-describedby="importBaseURLHelp" /><small id="importBaseURLHelp" class="field-help">Required when the specification uses a relative server such as /api/v1. Argus preserves that path automatically when you enter only the deployment origin.</small></div><div class="modal-actions"><button class="secondary" type="button" onclick="history.back()">Cancel</button><button id="importValidateBtn" type="submit">Validate & preview</button></div></form></section>`;
   document.getElementById('importForm').addEventListener('submit', validateProjectImport);
 }
 
@@ -1173,7 +1206,9 @@ async function validateProjectImport(event) {
 function renderImportPreview() {
   const job = projectState.importJob;
   const counts = job.items.reduce((acc, item) => { acc[item.action] = (acc[item.action] || 0) + 1; return acc; }, {});
+  const importBaseURLs = [...new Set(job.items.map((item) => item.baseUrl).filter(Boolean))];
   projectApp.innerHTML = `<div class="project-view-header"><div><button class="ghost sm" onclick="renderImportWizard(${job.projectId})">← Source</button><div class="project-eyebrow">IMPORT / STEP 2 OF 3</div><h2>Review ${job.totalParsed.toLocaleString()} operations</h2><p>Select exactly which changes to apply. Removed routes remain untouched unless selected.</p></div><button id="commitImportBtn">Commit selected</button></div>
+    <div class="import-base-review"><strong>Monitoring target</strong><code>${escapeHtml(importBaseURLs.join(', ') || 'No valid base URL')}</code><span>Argus will combine this base URL with every selected path. Confirm any required prefix such as <code>/api/v1</code> before committing; a wrong prefix commonly produces 404 checks.</span></div>
     <section class="project-metric-grid import-metrics">${projectMetric(counts.create || 0, 'New')}${projectMetric(counts.update || 0, 'Changed', 'metric-warn')}${projectMetric(counts.skip || 0, 'Unchanged')}${projectMetric(counts.remove || 0, 'Removed', 'metric-down')}</section>
     <section class="card"><div class="route-filters"><button class="secondary sm" onclick="selectImportItems('all')">Select defaults</button><button class="secondary sm" onclick="selectImportItems('none')">Select none</button><select id="importActionFilter"><option value="">All changes</option><option value="create">New</option><option value="update">Changed</option><option value="skip">Unchanged / duplicate</option><option value="remove">Removed</option></select><span id="importSelectedCount"></span></div><div class="table-wrap import-preview-table"><table><thead><tr><th></th><th>Action</th><th>Method</th><th>Path</th><th>Conflict / warning</th></tr></thead><tbody id="importItems"></tbody></table></div></section>`;
   const renderItems = () => {
@@ -1213,7 +1248,7 @@ async function commitProjectImport() {
 async function renderProjectRoute() {
   const hash = window.location.hash || '';
   if (!hash.startsWith('#/projects')) return;
-  if (!localStorage.getItem(PROJECT_TOKEN_KEY)) { renderProjectAuth(); return; }
+  if (!localStorage.getItem(PROJECT_TOKEN_KEY)) { renderProjectAuth(projectAuthMode); return; }
   const parts = hash.replace(/^#\//, '').split('/').filter(Boolean);
   const projectId = Number(parts[1]);
   if (!projectId) { await renderProjectsList(); return; }
@@ -1222,10 +1257,73 @@ async function renderProjectRoute() {
   await renderProjectDashboard(projectId);
 }
 
+async function refreshActiveProjectView() {
+  if (projectRefreshInFlight || !localStorage.getItem(PROJECT_TOKEN_KEY)) return;
+  const hash = window.location.hash || '';
+  if (!hash.startsWith('#/projects')) return;
+  const parts = hash.replace(/^#\//, '').split('/').filter(Boolean);
+  // Never destroy an in-progress import or edit form.
+  if (parts[2] === 'import' || document.getElementById('projectForm') || document.getElementById('routeForm') || document.getElementById('projectAuthForm')) return;
+  projectRefreshInFlight = true;
+  try {
+    const projectId = Number(parts[1]);
+    if (!projectId) {
+      await loadProjects();
+    } else if (parts[2] === 'routes' && Number(parts[3])) {
+      await renderRouteDetail(projectId, Number(parts[3]));
+    } else {
+      const [project, routeData, incidents, metrics] = await Promise.all([
+        apiProjects(`/projects/${projectId}`),
+        apiProjects(`/projects/${projectId}/routes?limit=${projectState.pageSize}&offset=${projectState.page * projectState.pageSize}&sortBy=${encodeURIComponent(projectState.filters.sortBy)}&sortDir=${encodeURIComponent(projectState.filters.sortDir)}&search=${encodeURIComponent(projectState.filters.search)}&method=${encodeURIComponent(projectState.filters.method)}&status=${encodeURIComponent(projectState.filters.status)}&enabled=${encodeURIComponent(projectState.filters.enabled)}`),
+        apiProjects(`/projects/${projectId}/incidents?limit=20`),
+        apiProjects(`/projects/${projectId}/metrics/timeseries?range=${projectState.metricRange}`),
+      ]);
+      projectState.project = project;
+      projectState.routes = routeData.items;
+      projectState.routeTotal = routeData.total;
+      projectState.incidents = incidents;
+      projectState.metrics = metrics.items;
+      renderProjectDashboardShell();
+    }
+  } catch (error) {
+    showToast(`Project refresh failed: ${error.message}`, 'error');
+  } finally {
+    projectRefreshInFlight = false;
+  }
+}
+
+async function updateProjectCallout() {
+  if (!el.projectCalloutText || !el.projectPrimaryCta) return;
+  const hasToken = Boolean(localStorage.getItem(PROJECT_TOKEN_KEY));
+  if (!hasToken) {
+    el.projectCalloutText.textContent = 'Create an account, import OpenAPI or Swagger, and let Argus continuously check every route in the background.';
+    el.projectPrimaryCta.textContent = 'Create free account';
+    el.projectSecondaryCta.textContent = 'Sign in';
+    return;
+  }
+  try {
+    const data = await apiProjects('/projects?limit=100');
+    const routes = data.items.reduce((sum, project) => sum + Number(project.routesTotal || 0), 0);
+    const failures = data.items.reduce((sum, project) => sum + Number(project.routesFailing || 0), 0);
+    el.projectCalloutText.textContent = `${data.total} project${data.total === 1 ? '' : 's'} · ${routes} monitored routes · ${failures} currently failing. Background checks are active.`;
+    el.projectPrimaryCta.textContent = 'Open live dashboard';
+    el.projectSecondaryCta.textContent = 'Add project';
+  } catch (_) {
+    // apiProjects handles an expired token by restoring the auth view.
+  }
+}
+
 window.renderProjectRoute = renderProjectRoute;
 window.addEventListener('hashchange', renderProjectRoute);
 document.getElementById('tab-projects').addEventListener('click', () => {
   if (!window.location.hash.startsWith('#/projects')) projectNavigate('#/projects');
   else renderProjectRoute();
 });
+el.openProjectsBtn.addEventListener('click', () => openProjects());
+el.projectPrimaryCta.addEventListener('click', () => openProjects(localStorage.getItem(PROJECT_TOKEN_KEY) ? '' : 'register'));
+el.projectSecondaryCta.addEventListener('click', () => {
+  if (localStorage.getItem(PROJECT_TOKEN_KEY)) renderProjectForm();
+  else openProjects('login');
+});
 if (window.location.hash.startsWith('#/projects')) renderProjectRoute();
+updateProjectCallout();

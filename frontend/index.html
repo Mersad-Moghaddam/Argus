@@ -32,13 +32,21 @@
           <span class="refresh-dot" id="refreshDot"></span>
           <span id="refreshCountdown">auto-refresh 30s</span>
         </div>
-        <div class="api-key-field">
-          <input id="apiKey" type="password" placeholder="API key (optional)" autocomplete="off" />
-          <button class="icon-btn-inline" id="toggleKeyVisibility" type="button" title="Show/hide key" aria-label="Toggle API key visibility">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
-        </div>
-        <button class="secondary" id="saveKeyBtn" type="button">Save key</button>
+        <form class="api-key-controls" id="apiKeyForm">
+          <div class="api-key-field">
+            <input id="apiKey" type="password" placeholder="API key (optional)" autocomplete="off" />
+            <button class="icon-btn-inline" id="toggleKeyVisibility" type="button" title="Show/hide key" aria-label="Toggle API key visibility">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <button class="secondary" id="saveKeyBtn" type="submit">Save key</button>
+        </form>
+        <button class="project-entry-btn" id="openProjectsBtn" type="button" aria-label="Open API monitoring projects">
+          <span class="project-entry-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h6l2 2h8v10H4z"/><path d="M4 7V5h6l2 2"/></svg>
+          </span>
+          Projects
+        </button>
         <button class="ghost icon-only" id="themeToggle" type="button" title="Toggle light/dark theme" aria-label="Toggle theme">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v1M12 20v1M4.2 4.2l.7.7M18.4 18.4l.7.7M3 12h1M20 12h1M4.2 19.8l.7-.7M18.4 5.6l.7-.7"/><circle cx="12" cy="12" r="5"/></svg>
         </button>
@@ -60,15 +68,15 @@
       <section class="status-rail" id="statsGrid" aria-label="Overview statistics">
         <div class="status-cell tick-brand">
           <span class="status-value" id="statTotal">&ndash;</span>
-          <span class="status-label">Total monitors</span>
+          <span class="status-label">Legacy monitors</span>
         </div>
         <div class="status-cell tick-ok">
           <span class="status-value" id="statUp">&ndash;</span>
-          <span class="status-label">Currently up</span>
+          <span class="status-label">Legacy up</span>
         </div>
         <div class="status-cell tick-down">
           <span class="status-value" id="statDown">&ndash;</span>
-          <span class="status-label">Currently down</span>
+          <span class="status-label">Legacy down</span>
         </div>
         <div class="status-cell tick-warn">
           <span class="status-value" id="statIncidents">&ndash;</span>
@@ -82,11 +90,33 @@
         <button class="tab-btn" id="tab-incidents" data-tab="incidents" role="tab" aria-selected="false" aria-controls="panel-incidents" tabindex="-1">Incidents</button>
         <button class="tab-btn" id="tab-alerts" data-tab="alerts" role="tab" aria-selected="false" aria-controls="panel-alerts" tabindex="-1">Alerts &amp; Status Pages</button>
         <button class="tab-btn" id="tab-logs" data-tab="logs" role="tab" aria-selected="false" aria-controls="panel-logs" tabindex="-1">Ping History</button>
-        <button class="tab-btn" id="tab-projects" data-tab="projects" role="tab" aria-selected="false" aria-controls="panel-projects" tabindex="-1">Projects</button>
+        <button class="tab-btn projects-tab" id="tab-projects" data-tab="projects" role="tab" aria-selected="false" aria-controls="panel-projects" tabindex="-1">
+          <span class="projects-tab-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h6l2 2h8v10H4z"/><path d="M4 7V5h6l2 2"/></svg>
+          </span>
+          Projects
+          <span class="projects-live-dot" aria-hidden="true"></span>
+        </button>
       </nav>
 
       <!-- Overview -->
       <section class="tab-panel active" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
+        <section class="project-callout" id="projectCallout">
+          <div class="project-callout-visual" aria-hidden="true">
+            <div class="project-orbit orbit-one"></div>
+            <div class="project-orbit orbit-two"></div>
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h6l2 2h8v10H4z"/><path d="M4 7V5h6l2 2"/><path d="M8 13h8M8 16h5"/></svg>
+          </div>
+          <div class="project-callout-copy">
+            <span class="project-eyebrow">PROJECT-BASED API MONITORING</span>
+            <h2>Monitor your complete OpenAPI surface</h2>
+            <p id="projectCalloutText">Create an account, import OpenAPI or Swagger, and let Argus continuously check every route in the background.</p>
+          </div>
+          <div class="project-callout-actions">
+            <button id="projectPrimaryCta" type="button">Create free account</button>
+            <button class="secondary" id="projectSecondaryCta" type="button">Sign in</button>
+          </div>
+        </section>
         <div class="grid">
           <section class="card">
             <div class="card-header">

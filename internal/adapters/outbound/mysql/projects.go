@@ -52,6 +52,12 @@ const projectColumns = `id, owner_user_id, name, slug, description, status,
 	uptime_24h_pct, avg_latency_24h_ms, checks_24h, failures_24h, open_incidents,
 	last_check_at, metrics_updated_at, created_at, updated_at`
 
+const projectColumnsAliased = `p.id, p.owner_user_id, p.name, p.slug, p.description, p.status,
+	p.default_interval_seconds, p.default_timeout_ms, p.default_retries, p.failure_threshold, p.recovery_success_threshold,
+	p.routes_total, p.routes_healthy, p.routes_degraded, p.routes_failing, p.routes_disabled, p.routes_unknown,
+	p.uptime_24h_pct, p.avg_latency_24h_ms, p.checks_24h, p.failures_24h, p.open_incidents,
+	p.last_check_at, p.metrics_updated_at, p.created_at, p.updated_at`
+
 func (r *Store) CreateProject(ctx context.Context, project models.Project, ownerUserID int64) (int64, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -130,7 +136,7 @@ func (r *Store) ListProjects(ctx context.Context, userID int64, filter models.Pr
 		return nil, 0, err
 	}
 
-	query := fmt.Sprintf(`SELECT %s, pm.role FROM projects p JOIN project_members pm ON pm.project_id=p.id %s ORDER BY p.updated_at DESC LIMIT ? OFFSET ?`, projectColumns, where)
+	query := fmt.Sprintf(`SELECT %s, pm.role FROM projects p JOIN project_members pm ON pm.project_id=p.id %s ORDER BY p.updated_at DESC LIMIT ? OFFSET ?`, projectColumnsAliased, where)
 	args = append(args, limit, filter.Offset)
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {

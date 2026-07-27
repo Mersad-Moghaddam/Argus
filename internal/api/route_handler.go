@@ -70,19 +70,24 @@ type routeRequest struct {
 	Enabled             *bool    `json:"enabled"`
 	MonitorIntervalSecs int      `json:"monitorIntervalSeconds"`
 	TimeoutMS           int      `json:"timeoutMs"`
-	Retries             int      `json:"retries"`
+	Retries             *int     `json:"retries"`
 	ExpectedStatusRange string   `json:"expectedStatusRange"`
 	FailureThreshold    int      `json:"failureThreshold"`
 	RecoverySuccesses   int      `json:"recoverySuccesses"`
 }
 
 func toRouteInput(req routeRequest) application.RouteInput {
-	return application.RouteInput{
+	input := application.RouteInput{
 		Method: req.Method, Path: req.Path, BaseURL: req.BaseURL, Name: req.Name, Summary: req.Summary,
 		Description: req.Description, Tags: req.Tags, Deprecated: req.Deprecated, Headers: req.Headers, Enabled: req.Enabled,
-		MonitorIntervalSecs: req.MonitorIntervalSecs, TimeoutMS: req.TimeoutMS, Retries: req.Retries,
+		MonitorIntervalSecs: req.MonitorIntervalSecs, TimeoutMS: req.TimeoutMS,
 		ExpectedStatusRange: req.ExpectedStatusRange, FailureThreshold: req.FailureThreshold, RecoverySuccesses: req.RecoverySuccesses,
 	}
+	if req.Retries != nil {
+		input.Retries = *req.Retries
+		input.RetriesSet = true
+	}
+	return input
 }
 
 func sanitizeRoute(rt models.APIRoute) models.APIRoute {

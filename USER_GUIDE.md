@@ -272,6 +272,13 @@ configured method, timeout, retries, status range, and interval. An incident
 opens once after the failure threshold and resolves after the configured
 number of consecutive successes.
 
+Imported `GET`, `HEAD`, and `OPTIONS` operations start enabled. Mutating
+operations (`POST`, `PUT`, `PATCH`, and `DELETE`) are imported disabled so a
+monitor cannot accidentally change production data or repeatedly trigger
+rate-limited authentication flows. Enable one explicitly only after reviewing
+its request semantics, confirming it is safe without a request body, and
+configuring suitable headers and expected statuses.
+
 ### Monitoring security and scale
 
 Monitored URLs are untrusted. Argus accepts only HTTP(S), rejects URL

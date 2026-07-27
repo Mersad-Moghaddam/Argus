@@ -13,6 +13,7 @@ import (
 	"argus/internal/domain"
 	"argus/internal/models"
 	"argus/internal/observability"
+	"argus/internal/openapi"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -186,6 +187,7 @@ func (f *fakeRouteStore) UpdateRouteImportedMetadata(_ context.Context, route mo
 	existing.Parameters, existing.RequestBody = route.Parameters, route.RequestBody
 	existing.Responses, existing.Security = route.Responses, route.Security
 	existing.SpecHash, existing.BaseURL = route.SpecHash, route.BaseURL
+	existing.ExpectedStatusRange = route.ExpectedStatusRange
 	f.routes[route.ID] = existing
 	return nil
 }
@@ -266,11 +268,11 @@ func (f *fakeRouteStore) ListAllRouteKeys(_ context.Context, projectID int64) (m
 	}
 	return out, nil
 }
-func (f *fakeRouteStore) ListRouteSpecHashes(_ context.Context, projectID int64) (map[int64]string, error) {
-	out := map[int64]string{}
+func (f *fakeRouteStore) ListRouteImportStates(_ context.Context, projectID int64) (map[int64]models.RouteImportState, error) {
+	out := map[int64]models.RouteImportState{}
 	for id, route := range f.routes {
 		if route.ProjectID == projectID {
-			out[id] = route.SpecHash
+			out[id] = models.RouteImportState{SpecHash: route.SpecHash, BaseURL: route.BaseURL, ExpectedStatusRange: route.ExpectedStatusRange, Source: route.Source}
 		}
 	}
 	return out, nil
@@ -278,13 +280,16 @@ func (f *fakeRouteStore) ListRouteSpecHashes(_ context.Context, projectID int64)
 func (f *fakeRouteStore) ListDueRoutes(context.Context, time.Time, int, int64) ([]models.APIRoute, error) {
 	return nil, nil
 }
-func (f *fakeRouteStore) MarkRouteChecked(_ context.Context, id int64, _ string, statusCode, latencyMS int, reason string, failures, successes int, status string, checkedAt, nextCheckAt time.Time) error {
+func (f *fakeRouteStore) MarkRouteChecked(_ context.Context, id int64, _ string, statusCode, latencyMS int, reason string, failures, successes int, status string, checkedAt, nextCheckAt time.Time) (bool, error) {
 	route := f.routes[id]
+	if !route.Enabled {
+		return false, nil
+	}
 	route.LastCheckedAt, route.LastStatusCode, route.LastLatencyMS = &checkedAt, statusCode, latencyMS
 	route.LastFailureReason, route.ConsecutiveFailures, route.ConsecutiveSuccesses = reason, failures, successes
 	route.Status, route.NextCheckAt = status, nextCheckAt
 	f.routes[id] = route
-	return nil
+	return true, nil
 }
 func (f *fakeRouteStore) RecordRouteCheck(_ context.Context, check models.RouteCheck) error {
 	f.checks = append(f.checks, check)
@@ -484,6 +489,120 @@ func TestReimportPreservesMonitoringSettingsAndHandlesRemovedRoutes(t *testing.T
 	}
 }
 
+func TestImportCombinesOriginOverrideWithRelativeServerPath(t *testing.T) {
+	t.Parallel()
+	routes, imports := newFakeRouteStore(), newFakeImportStore()
+	service := projectService(routes, imports, newFakeRouteIncidentStore(), &fakeOutboxStore{})
+	project := models.Project{ID: 1, DefaultIntervalSeconds: 60, DefaultTimeoutMS: 2000, FailureThreshold: 3, RecoverySuccessThreshold: 1}
+	spec := []byte(`{"openapi":"3.0.3","info":{"title":"API","version":"1"},"servers":[{"url":"/api/v1"}],"paths":{"/health":{"get":{"responses":{"200":{"description":"ok"}}}}}}`)
+
+	job, err := service.ValidateImport(context.Background(), ValidateImportInput{
+		ProjectID: 1, UserID: 1, SourceType: models.ImportSourcePaste,
+		Data: spec, BaseURLOverride: "http://87.248.152.247/",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := job.Items[0].BaseURL; got != "http://87.248.152.247/api/v1" {
+		t.Fatalf("expected relative server path to be preserved, got %q", got)
+	}
+	if _, err = service.CommitImport(context.Background(), project, job.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := routes.routes[1].BaseURL; got != "http://87.248.152.247/api/v1" {
+		t.Fatalf("unexpected stored base URL %q", got)
+	}
+}
+
+func TestImportCreatesMutatingRoutesDisabledByDefault(t *testing.T) {
+	t.Parallel()
+	routes, imports := newFakeRouteStore(), newFakeImportStore()
+	service := projectService(routes, imports, newFakeRouteIncidentStore(), &fakeOutboxStore{})
+	project := models.Project{ID: 1, DefaultIntervalSeconds: 60, DefaultTimeoutMS: 2000, FailureThreshold: 3, RecoverySuccessThreshold: 1}
+	spec := []byte(`{"openapi":"3.0.3","info":{"title":"API","version":"1"},"servers":[{"url":"https://api.example.com"}],"paths":{"/orders":{"post":{"responses":{"201":{"description":"created"}}}}}}`)
+
+	job, err := service.ValidateImport(context.Background(), ValidateImportInput{ProjectID: 1, UserID: 1, SourceType: models.ImportSourcePaste, Data: spec})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.Items[0].ValidationWarning == "" {
+		t.Fatal("expected unsafe-method preview warning")
+	}
+	if _, err = service.CommitImport(context.Background(), project, job.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	route := routes.routes[1]
+	if route.Enabled || route.Status != domain.RouteStatusDisabled {
+		t.Fatalf("mutating imported route must start disabled: %+v", route)
+	}
+}
+
+func TestReimportDetectsBaseURLOnlyChange(t *testing.T) {
+	t.Parallel()
+	routes, imports := newFakeRouteStore(), newFakeImportStore()
+	service := projectService(routes, imports, newFakeRouteIncidentStore(), &fakeOutboxStore{})
+	project := models.Project{ID: 1, DefaultIntervalSeconds: 60, DefaultTimeoutMS: 2000, FailureThreshold: 3, RecoverySuccessThreshold: 1}
+	spec := []byte(`{"openapi":"3.0.3","info":{"title":"API","version":"1"},"servers":[{"url":"/api/v1"}],"paths":{"/health":{"get":{"responses":{"200":{"description":"ok"}}}}}}`)
+	parsed, err := openapi.Parse(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = routes.CreateRoute(context.Background(), models.APIRoute{
+		ProjectID: 1, Method: "GET", Path: "/health", BaseURL: "http://87.248.152.247",
+		SpecHash: parsed.Routes[0].SpecHash, Source: "import", Enabled: true,
+		MonitorIntervalSecs: 60, TimeoutMS: 2000, ExpectedStatusRange: "200-399",
+	})
+
+	job, err := service.ValidateImport(context.Background(), ValidateImportInput{
+		ProjectID: 1, UserID: 1, SourceType: models.ImportSourcePaste,
+		Data: spec, BaseURLOverride: "http://87.248.152.247",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.Items[0].Action != models.ImportActionUpdate || !job.Items[0].Selected {
+		t.Fatalf("expected base URL change to require an update: %+v", job.Items[0])
+	}
+	result, err := service.CommitImport(context.Background(), project, job.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.UpdatedRoutes != 1 || routes.routes[1].BaseURL != "http://87.248.152.247/api/v1" || routes.routes[1].ExpectedStatusRange != "200" {
+		t.Fatalf("base URL was not updated: result=%+v route=%+v", result, routes.routes[1])
+	}
+}
+
+func TestExpectedStatusRangeUsesDocumentedResponses(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "documented auth and validation", raw: `{"200":{"description":"ok"},"401":{"description":"unauthorized"},"422":{"description":"invalid"}}`, want: "200,401,422"},
+		{name: "wildcard response family", raw: `{"2XX":{"description":"success"},"503":{"description":"unavailable"}}`, want: "200-299,503"},
+		{name: "default only falls back", raw: `{"default":{"description":"response"}}`, want: "200-399"},
+		{name: "invalid JSON falls back", raw: `{`, want: "200-399"},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := expectedStatusRange(test.raw, ""); got != test.want {
+				t.Fatalf("expected %q, got %q", test.want, got)
+			}
+		})
+	}
+}
+
+func TestExpectedStatusRangeIncludesAuthBoundaryForSecuredRoutes(t *testing.T) {
+	t.Parallel()
+	got := expectedStatusRange(`{"200":{"description":"ok"}}`, `[{"bearerAuth":[]}]`)
+	if got != "200,401,403" {
+		t.Fatalf("expected protected-route statuses, got %q", got)
+	}
+}
+
 func TestProcessRouteCheckCreatesOneIncidentAndResolvesAfterRecovery(t *testing.T) {
 	t.Parallel()
 	routes, incidents, outbox := newFakeRouteStore(), newFakeRouteIncidentStore(), &fakeOutboxStore{}
@@ -562,6 +681,32 @@ func TestRouteEditPreservesOmittedSecretHeaders(t *testing.T) {
 	}
 }
 
+func TestInFlightCheckCannotOverwriteDisabledRoute(t *testing.T) {
+	t.Parallel()
+	routes, incidents, outbox := newFakeRouteStore(), newFakeRouteIncidentStore(), &fakeOutboxStore{}
+	service := projectService(routes, newFakeImportStore(), incidents, outbox)
+	id, _ := routes.CreateRoute(context.Background(), models.APIRoute{
+		ProjectID: 1, Method: "GET", Path: "/health", Enabled: true,
+		MonitorIntervalSecs: 30, FailureThreshold: 1, RecoverySuccesses: 1, Status: domain.RouteStatusUnknown,
+	})
+	inFlight := routes.routes[id]
+	if err := routes.SetRouteEnabled(context.Background(), id, false); err != nil {
+		t.Fatal(err)
+	}
+
+	err := service.ProcessRouteCheckResult(context.Background(), inFlight, "down", 503, 10, "unavailable", 1, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored := routes.routes[id]
+	if stored.Enabled || stored.Status != domain.RouteStatusDisabled {
+		t.Fatalf("stale check overwrote disabled state: %+v", stored)
+	}
+	if len(routes.checks) != 0 || incidents.opens != 0 || outbox.events != 0 {
+		t.Fatalf("stale check produced side effects: checks=%d incidents=%d events=%d", len(routes.checks), incidents.opens, outbox.events)
+	}
+}
+
 func TestRouteCreationRejectsUnsafeBaseURLs(t *testing.T) {
 	t.Parallel()
 	service := projectService(newFakeRouteStore(), newFakeImportStore(), newFakeRouteIncidentStore(), &fakeOutboxStore{})
@@ -583,6 +728,34 @@ func TestRouteCreationRejectsMalformedHeaders(t *testing.T) {
 	})
 	if !errors.Is(err, domain.ErrInvalidInput) {
 		t.Fatalf("expected malformed header map rejection, got %v", err)
+	}
+}
+
+func TestExplicitZeroRetriesIsPreserved(t *testing.T) {
+	t.Parallel()
+	routes := newFakeRouteStore()
+	service := projectService(routes, newFakeImportStore(), newFakeRouteIncidentStore(), &fakeOutboxStore{})
+	project := models.Project{ID: 1, DefaultIntervalSeconds: 60, DefaultTimeoutMS: 1000, DefaultRetries: 2, FailureThreshold: 3, RecoverySuccessThreshold: 1}
+	route, err := service.CreateRoute(context.Background(), project, RouteInput{
+		Method: "GET", Path: "/health", BaseURL: "https://api.example.com", Retries: 0, RetriesSet: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if route.Retries != 0 {
+		t.Fatalf("expected explicit zero retries, got %d", route.Retries)
+	}
+
+	projects := newFakeProjectStore()
+	projectService := NewService(nil, nil, nil, nil, nil, nil, observability.NewLogStore(10), nil, nil, projects, nil, nil, nil)
+	created, err := projectService.CreateProject(context.Background(), 7, CreateProjectInput{
+		Name: "No retry project", DefaultRetries: 0, DefaultRetriesSet: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.DefaultRetries != 0 {
+		t.Fatalf("expected project default retries to remain zero, got %d", created.DefaultRetries)
 	}
 }
 

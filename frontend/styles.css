@@ -239,10 +239,37 @@ hr {
   flex-wrap: wrap;
 }
 
+.project-entry-btn {
+  overflow: visible;
+  background: var(--signal-soft);
+  color: var(--signal);
+  border: 1px solid color-mix(in srgb, var(--signal) 55%, var(--line));
+  box-shadow: 0 0 18px rgba(45, 212, 196, 0.12);
+}
+
+.project-entry-btn:hover {
+  background: var(--signal);
+  color: var(--signal-ink);
+  box-shadow: 0 0 24px rgba(45, 212, 196, 0.3);
+}
+
+.project-entry-icon,
+.projects-tab-icon {
+  display: inline-flex;
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
 .api-key-field {
   position: relative;
   display: flex;
   align-items: center;
+}
+
+.api-key-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
 }
 
 .api-key-field input {
@@ -555,6 +582,52 @@ label {
 .tab-btn.active {
   color: var(--signal-ink);
   background: var(--signal);
+}
+
+.projects-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--signal);
+  text-shadow: 0 0 14px rgba(45, 212, 196, 0.28);
+}
+
+.projects-tab:not(.active)::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  z-index: 0;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(45, 212, 196, 0.12), transparent 70%);
+  animation: project-tab-glow 2.8s ease-in-out infinite;
+}
+
+.projects-tab > * {
+  position: relative;
+  z-index: 1;
+}
+
+.projects-live-dot,
+.live-pulse {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 0 0 rgba(45, 212, 196, 0.45);
+  animation: project-live-pulse 1.9s ease-out infinite;
+}
+
+@keyframes project-tab-glow {
+  0%, 100% { opacity: 0.45; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+@keyframes project-live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(45, 212, 196, 0.55); }
+  70%, 100% { box-shadow: 0 0 0 8px rgba(45, 212, 196, 0); }
 }
 
 [data-theme="light"] .tab-btn.active {
@@ -1243,6 +1316,91 @@ footer.app-footer {
    Project-based API monitoring — extends the Watchtower system
    ========================================================================== */
 
+.project-callout {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 22px;
+  overflow: hidden;
+  margin-bottom: 18px;
+  padding: 20px 22px;
+  border: 1px solid color-mix(in srgb, var(--signal) 42%, var(--line));
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(110deg, var(--signal-soft), transparent 58%),
+    var(--ink-raised);
+  box-shadow: 0 0 32px rgba(45, 212, 196, 0.08), var(--shadow-sm);
+}
+
+.project-callout::before {
+  content: "";
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  top: -180px;
+  right: 12%;
+  border-radius: 50%;
+  background: rgba(45, 212, 196, 0.12);
+  filter: blur(46px);
+  pointer-events: none;
+}
+
+.project-callout-visual {
+  position: relative;
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--signal) 60%, var(--line));
+  border-radius: 18px;
+  background: var(--signal-soft);
+  color: var(--signal);
+  box-shadow: inset 0 0 22px rgba(45, 212, 196, 0.1), 0 0 22px rgba(45, 212, 196, 0.12);
+}
+
+.project-orbit {
+  position: absolute;
+  inset: -7px;
+  border: 1px solid rgba(45, 212, 196, 0.28);
+  border-radius: 22px;
+  animation: project-orbit 4s linear infinite;
+}
+
+.project-orbit.orbit-two {
+  inset: -13px;
+  border-color: rgba(45, 212, 196, 0.12);
+  animation-direction: reverse;
+  animation-duration: 5.8s;
+}
+
+@keyframes project-orbit {
+  to { transform: rotate(360deg); }
+}
+
+.project-callout-copy h2 {
+  margin: 5px 0 4px;
+  font-family: var(--font-display);
+  font-size: clamp(19px, 3vw, 25px);
+  letter-spacing: -0.025em;
+}
+
+.project-callout-copy p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.project-callout-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .project-view-header {
   display: flex;
   justify-content: space-between;
@@ -1272,6 +1430,10 @@ footer.app-footer {
   font-size: 10.5px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+.project-eyebrow .live-pulse {
+  margin-right: 6px;
 }
 
 .project-header-actions {
@@ -1532,6 +1694,16 @@ footer.app-footer {
 .route-link:hover { filter: none; color: var(--signal); }
 .route-link strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
 .route-link span { max-width: 100%; overflow: hidden; color: var(--text-faint); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.route-link em {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--down);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .badge.route-healthy { color: var(--ok); background: var(--ok-soft); }
 .badge.route-degraded { color: var(--warn); background: var(--warn-soft); }
@@ -1595,8 +1767,77 @@ footer.app-footer {
 .project-auth > p { margin: 0 0 20px; color: var(--text-muted); }
 .project-auth-switch { width: 100%; justify-content: center; margin-top: 12px; }
 
+.project-auth {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--signal) 45%, var(--line));
+  box-shadow: 0 0 42px rgba(45, 212, 196, 0.1), var(--shadow);
+}
+
+.project-auth::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--signal), transparent);
+}
+
+.project-auth-signal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--signal);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.project-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--ink-raised-2);
+}
+
+.project-auth-tabs button {
+  justify-content: center;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.project-auth-tabs button.active {
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+.monitoring-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--signal) 40%, var(--line));
+  border-radius: 99px;
+  background: var(--signal-soft);
+  color: var(--signal);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+}
+
 .project-form-card textarea,
 .import-card textarea { resize: vertical; }
+
+.field-help {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.55;
+}
 
 .import-drop {
   position: relative;
@@ -1620,6 +1861,20 @@ footer.app-footer {
 
 .import-drop strong { color: var(--signal); }
 .import-drop span { color: var(--text-faint); font-size: 11px; }
+.import-base-review {
+  display: grid;
+  grid-template-columns: auto minmax(180px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--warn) 42%, var(--line));
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+}
+.import-base-review strong { color: var(--warn); font-size: 12px; }
+.import-base-review code { color: var(--text); font-family: var(--font-mono); overflow-wrap: anywhere; }
+.import-base-review span { color: var(--text-muted); font-size: 11.5px; line-height: 1.45; }
 .import-or { color: var(--text-faint); font-family: var(--font-mono); font-size: 10px; text-align: center; }
 .import-preview-table { max-height: 58vh; }
 .import-preview-table thead { position: sticky; top: 0; z-index: 2; background: var(--ink-raised); }
@@ -1660,6 +1915,13 @@ footer.app-footer {
 }
 
 @media (max-width: 780px) {
+  .project-callout {
+    grid-template-columns: auto 1fr;
+  }
+  .project-callout-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
   .project-view-header,
   .project-dashboard-grid { grid-template-columns: 1fr; }
   .project-view-header { flex-direction: column; }
@@ -1669,5 +1931,6 @@ footer.app-footer {
   .project-metric-grid { grid-template-columns: repeat(2, 1fr); }
   .route-filters,
   .config-list { grid-template-columns: 1fr; }
+  .import-base-review { grid-template-columns: 1fr; }
   .field-row { flex-direction: column; }
 }

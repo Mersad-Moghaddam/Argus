@@ -30,6 +30,7 @@ type CreateProjectInput struct {
 	DefaultIntervalSeconds   int
 	DefaultTimeoutMS         int
 	DefaultRetries           int
+	DefaultRetriesSet        bool
 	FailureThreshold         int
 	RecoverySuccessThreshold int
 }
@@ -46,9 +47,12 @@ func (s *Service) CreateProject(ctx context.Context, ownerUserID int64, input Cr
 		Status:                   domain.ProjectStatusActive,
 		DefaultIntervalSeconds:   orDefault(input.DefaultIntervalSeconds, 300, 10, 86400),
 		DefaultTimeoutMS:         orDefault(input.DefaultTimeoutMS, 5000, 200, 60000),
-		DefaultRetries:           orDefault(input.DefaultRetries, 1, 0, 5),
+		DefaultRetries:           1,
 		FailureThreshold:         orDefault(input.FailureThreshold, domain.DefaultFailureThreshold, 1, 20),
 		RecoverySuccessThreshold: orDefault(input.RecoverySuccessThreshold, domain.DefaultRecoverySuccesses, 1, 20),
+	}
+	if input.DefaultRetriesSet {
+		project.DefaultRetries = clampInt(input.DefaultRetries, 0, 5)
 	}
 	id, err := s.projects.CreateProject(ctx, project, ownerUserID)
 	if err != nil {
@@ -66,6 +70,7 @@ type UpdateProjectInput struct {
 	DefaultIntervalSeconds   int
 	DefaultTimeoutMS         int
 	DefaultRetries           int
+	DefaultRetriesSet        bool
 	FailureThreshold         int
 	RecoverySuccessThreshold int
 }
@@ -79,7 +84,9 @@ func (s *Service) UpdateProject(ctx context.Context, project models.Project, inp
 	project.Description = strings.TrimSpace(input.Description)
 	project.DefaultIntervalSeconds = orDefault(input.DefaultIntervalSeconds, project.DefaultIntervalSeconds, 10, 86400)
 	project.DefaultTimeoutMS = orDefault(input.DefaultTimeoutMS, project.DefaultTimeoutMS, 200, 60000)
-	project.DefaultRetries = orDefault(input.DefaultRetries, project.DefaultRetries, 0, 5)
+	if input.DefaultRetriesSet {
+		project.DefaultRetries = clampInt(input.DefaultRetries, 0, 5)
+	}
 	project.FailureThreshold = orDefault(input.FailureThreshold, project.FailureThreshold, 1, 20)
 	project.RecoverySuccessThreshold = orDefault(input.RecoverySuccessThreshold, project.RecoverySuccessThreshold, 1, 20)
 	if err := s.projects.UpdateProject(ctx, project); err != nil {

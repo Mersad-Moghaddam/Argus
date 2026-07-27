@@ -177,7 +177,24 @@ func buildRouteTarget(route models.APIRoute) (string, error) {
 	if err != nil {
 		return "", errors.New("invalid route path")
 	}
-	return base.ResolveReference(relative).String(), nil
+	if relative.IsAbs() || relative.Host != "" {
+		return "", errors.New("invalid route path")
+	}
+	// OpenAPI paths conventionally begin with "/". ResolveReference would
+	// interpret that as host-rooted and discard a server prefix such as
+	// "/api/v1". Join the paths explicitly so the monitored target retains
+	// the complete OpenAPI server base path.
+	joinedPath := strings.TrimRight(base.Path, "/") + "/" + strings.TrimLeft(relative.Path, "/")
+	joinedRawPath := strings.TrimRight(base.EscapedPath(), "/") + "/" + strings.TrimLeft(relative.EscapedPath(), "/")
+	base.Path = joinedPath
+	if joinedRawPath != joinedPath {
+		base.RawPath = joinedRawPath
+	} else {
+		base.RawPath = ""
+	}
+	base.RawQuery = relative.RawQuery
+	base.Fragment = ""
+	return base.String(), nil
 }
 
 func parameterValue(raw, name string) string {

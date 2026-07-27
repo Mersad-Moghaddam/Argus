@@ -28,6 +28,7 @@ type RouteInput struct {
 	MonitorIntervalSecs int
 	TimeoutMS           int
 	Retries             int
+	RetriesSet          bool
 	ExpectedStatusRange string
 	FailureThreshold    int
 	RecoverySuccesses   int
@@ -126,7 +127,10 @@ func (s *Service) buildRoute(project models.Project, input RouteInput, source st
 	}
 	interval := orDefault(input.MonitorIntervalSecs, project.DefaultIntervalSeconds, 10, 86400)
 	timeout := orDefault(input.TimeoutMS, project.DefaultTimeoutMS, 200, 60000)
-	retries := orDefault(input.Retries, project.DefaultRetries, 0, 5)
+	retries := project.DefaultRetries
+	if input.RetriesSet {
+		retries = clampInt(input.Retries, 0, 5)
+	}
 	failureThreshold := orDefault(input.FailureThreshold, project.FailureThreshold, 1, 20)
 	recoverySuccesses := orDefault(input.RecoverySuccesses, project.RecoverySuccessThreshold, 1, 20)
 	expectedRange := strings.TrimSpace(input.ExpectedStatusRange)
@@ -265,7 +269,9 @@ func (s *Service) UpdateRoute(ctx context.Context, existing models.APIRoute, inp
 	}
 	existing.MonitorIntervalSecs = orDefault(input.MonitorIntervalSecs, existing.MonitorIntervalSecs, 10, 86400)
 	existing.TimeoutMS = orDefault(input.TimeoutMS, existing.TimeoutMS, 200, 60000)
-	existing.Retries = orDefault(input.Retries, existing.Retries, 0, 5)
+	if input.RetriesSet {
+		existing.Retries = clampInt(input.Retries, 0, 5)
+	}
 	existing.FailureThreshold = orDefault(input.FailureThreshold, existing.FailureThreshold, 1, 20)
 	existing.RecoverySuccesses = orDefault(input.RecoverySuccesses, existing.RecoverySuccesses, 1, 20)
 	if r := strings.TrimSpace(input.ExpectedStatusRange); r != "" {
@@ -291,6 +297,16 @@ func lastStatusLabel(statusCode int, failureReason string) string {
 		return "up"
 	}
 	return "down"
+}
+
+func clampInt(value, min, max int) int {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
 }
 
 func (s *Service) SetRouteEnabled(ctx context.Context, id int64, enabled bool) error {
@@ -347,8 +363,15 @@ func (s *Service) ProcessRouteCheckResult(ctx context.Context, route models.APIR
 	})
 	nextCheckAt := checkedAt.Add(time.Duration(route.MonitorIntervalSecs) * time.Second)
 
-	if err := s.routes.MarkRouteChecked(ctx, route.ID, status, statusCode, latencyMS, failureReason, consecutiveFailures, consecutiveSuccesses, newStatus, checkedAt, nextCheckAt); err != nil {
+	updated, err := s.routes.MarkRouteChecked(ctx, route.ID, status, statusCode, latencyMS, failureReason, consecutiveFailures, consecutiveSuccesses, newStatus, checkedAt, nextCheckAt)
+	if err != nil {
 		return err
+	}
+	if !updated {
+		// The route was disabled or removed while an in-flight request was
+		// completing. Discard the stale result so it cannot overwrite the
+		// disabled state or create an incident after monitoring stopped.
+		return nil
 	}
 	if err := s.routes.RecordRouteCheck(ctx, models.RouteCheck{
 		RouteID: route.ID, ProjectID: route.ProjectID, Status: status, StatusCode: statusCode,
