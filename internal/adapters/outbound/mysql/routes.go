@@ -364,6 +364,39 @@ func (r *Store) ListRouteChecks(ctx context.Context, routeID int64, limit, offse
 	return out, rows.Err()
 }
 
+func (r *Store) ListProjectMetricSeries(ctx context.Context, projectID int64, since time.Time, bucketSeconds int) ([]models.ProjectMetricPoint, error) {
+	if bucketSeconds < 60 {
+		bucketSeconds = 60
+	}
+	if bucketSeconds > 86400 {
+		bucketSeconds = 86400
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(checked_at) / ?) * ?) AS bucket_at,
+			COUNT(*) AS checks,
+			SUM(CASE WHEN status='down' THEN 1 ELSE 0 END) AS failures,
+			ROUND(100 * SUM(CASE WHEN status='up' THEN 1 ELSE 0 END) / COUNT(*), 2) AS uptime_pct,
+			ROUND(AVG(latency_ms)) AS avg_latency_ms
+		FROM route_checks
+		WHERE project_id=? AND checked_at >= ?
+		GROUP BY bucket_at
+		ORDER BY bucket_at ASC
+		LIMIT 500`, bucketSeconds, bucketSeconds, projectID, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	points := []models.ProjectMetricPoint{}
+	for rows.Next() {
+		var point models.ProjectMetricPoint
+		if err = rows.Scan(&point.BucketAt, &point.Checks, &point.Failures, &point.UptimePct, &point.AvgLatencyMS); err != nil {
+			return nil, err
+		}
+		points = append(points, point)
+	}
+	return points, rows.Err()
+}
+
 // AggregateRouteMetrics recomputes the 24h rolling window columns for every
 // route in a single batched UPDATE...JOIN, avoiding N+1 per-route queries.
 func (r *Store) AggregateRouteMetrics(ctx context.Context, since time.Time) error {

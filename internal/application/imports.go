@@ -43,6 +43,10 @@ func (s *Service) ValidateImport(ctx context.Context, in ValidateImportInput) (m
 	if baseURL == "" {
 		baseURL = parsed.BaseURL
 	}
+	baseURL, err = validateBaseURL(baseURL)
+	if err != nil {
+		return models.ImportJob{}, err
+	}
 
 	existingIDs, err := s.routes.ListAllRouteKeys(ctx, in.ProjectID)
 	if err != nil {

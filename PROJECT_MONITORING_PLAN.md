@@ -99,8 +99,8 @@ project/route.
 5. HTTP middleware + handlers + route wiring (fiber app, config, body limits). **Done.**
 6. Worker: route monitoring engine (below). **Done.**
 7. Backend tests (below). **Done.**
-8. Frontend (below). **Next.**
-9. End-to-end validation pass (below).
+8. Frontend (below). **Done.**
+9. End-to-end validation pass (below). **Next.**
 10. Final report (below).
 
 Each section ends with `go build ./...`, `go vet ./...`, relevant
@@ -416,6 +416,24 @@ work.
   safety, duplicates, timeouts, redirects, retries, private/metadata
   targets, partial failures, health transitions, and recovery are covered.
   Full `go test ./...`, `go build ./...`, and `go vet ./...` pass.
-- **Section 8 (next)** — Auth UI, projects list/dashboard, route CRUD/table/
-  detail, import wizard, charts, incidents, loading/error/empty states, and
-  user documentation while preserving the existing Watchtower design.
+- **Section 8 (commit pending)** — Done. Extended the existing Watchtower
+  vanilla JS/CSS UI without changing its theme or design system: separate
+  project register/login session, hash-routed project list/dashboard/route
+  detail/import views, owner-only archive/restore/delete controls, project
+  create/edit, eight aggregate metric cards, real grouped 1h/24h/7d
+  time-series chart data, incident summaries, a server-paginated searchable/
+  filterable/sortable route table, role-aware manual route CRUD and bulk
+  enable/disable/delete, complete configuration/check/status/incident route
+  detail, and a three-step upload-or-paste import wizard with conflict
+  filtering, selection, and final counts. Added responsive/loading/error/
+  empty states and updated the README and user guide. Added the bounded
+  grouped metrics API and a joined project/member query that returns the
+  viewer role without N+1 reads. Tightened base-URL and header validation
+  and preserved omitted secret headers during unrelated edits. `node
+  --check frontend/app.js`, full Go tests/build/vet, and local HTTP delivery
+  of all three frontend assets pass. Browser screenshot inspection was not
+  possible because no browser backend was available; Docker-backed runtime
+  validation was not possible because Docker is absent from the environment.
+- **Section 9 (next)** — Real migration/API workflow where dependencies are
+  available, negative-path HTTP checks, final regression/security review,
+  and complete verification evidence.

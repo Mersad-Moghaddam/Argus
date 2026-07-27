@@ -52,6 +52,7 @@ type RouteStore interface {
 	MarkRouteChecked(ctx context.Context, id int64, status string, statusCode, latencyMS int, failureReason string, consecutiveFailures, consecutiveSuccesses int, routeStatus string, checkedAt, nextCheckAt time.Time) error
 	RecordRouteCheck(ctx context.Context, check models.RouteCheck) error
 	ListRouteChecks(ctx context.Context, routeID int64, limit, offset int) ([]models.RouteCheck, error)
+	ListProjectMetricSeries(ctx context.Context, projectID int64, since time.Time, bucketSeconds int) ([]models.ProjectMetricPoint, error)
 	AggregateRouteMetrics(ctx context.Context, since time.Time) error
 	AggregateProjectMetrics(ctx context.Context) error
 	PruneRouteChecks(ctx context.Context, before time.Time, batchSize int) (int64, error)

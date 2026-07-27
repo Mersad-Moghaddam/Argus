@@ -3,7 +3,10 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/netip"
+	"net/url"
 	"strings"
 	"time"
 
@@ -29,6 +32,8 @@ type RouteInput struct {
 	FailureThreshold    int
 	RecoverySuccesses   int
 }
+
+var ErrInvalidBaseURL = errors.New("base URL must be a public HTTP or HTTPS URL")
 
 func (s *Service) CreateRoute(ctx context.Context, project models.Project, input RouteInput) (models.APIRoute, error) {
 	route, err := s.buildRoute(project, input, "manual")
@@ -111,6 +116,10 @@ func (s *Service) buildRoute(project models.Project, input RouteInput, source st
 	if err != nil {
 		return models.APIRoute{}, err
 	}
+	baseURL, err := validateBaseURL(input.BaseURL)
+	if err != nil {
+		return models.APIRoute{}, err
+	}
 	enabled := true
 	if input.Enabled != nil {
 		enabled = *input.Enabled
@@ -125,18 +134,22 @@ func (s *Service) buildRoute(project models.Project, input RouteInput, source st
 		expectedRange = "200-399"
 	}
 	status := domain.ComputeRouteStatus(domain.RouteHealthInput{Enabled: enabled, Checked: false})
+	headers, err := normalizeHeaders(input.Headers)
+	if err != nil {
+		return models.APIRoute{}, err
+	}
 
 	route := models.APIRoute{
 		ProjectID:           project.ID,
 		Method:              method,
 		Path:                path,
-		BaseURL:             strings.TrimRight(strings.TrimSpace(input.BaseURL), "/"),
+		BaseURL:             baseURL,
 		Name:                strings.TrimSpace(input.Name),
 		Summary:             strings.TrimSpace(input.Summary),
 		Description:         strings.TrimSpace(input.Description),
 		Tags:                input.Tags,
 		Deprecated:          input.Deprecated,
-		Headers:             redactUnsafeHeaderKeysNoop(input.Headers),
+		Headers:             headers,
 		Source:              source,
 		Enabled:             enabled,
 		MonitorIntervalSecs: interval,
@@ -151,18 +164,40 @@ func (s *Service) buildRoute(project models.Project, input RouteInput, source st
 	return route, nil
 }
 
-// redactUnsafeHeaderKeysNoop validates the headers value is well-formed JSON
-// (or empty); actual secret redaction happens on read via RedactHeaders.
-func redactUnsafeHeaderKeysNoop(headers string) string {
+func validateBaseURL(raw string) (string, error) {
+	normalized := strings.TrimRight(strings.TrimSpace(raw), "/")
+	parsed, err := url.Parse(normalized)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.User != nil {
+		return "", ErrInvalidBaseURL
+	}
+	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
+	if host == "localhost" || host == "metadata.google.internal" || strings.HasSuffix(host, ".metadata.google.internal") {
+		return "", ErrInvalidBaseURL
+	}
+	if address, parseErr := netip.ParseAddr(host); parseErr == nil {
+		address = address.Unmap()
+		if !address.IsValid() || address.IsUnspecified() || address.IsLoopback() || address.IsPrivate() ||
+			address.IsLinkLocalUnicast() || address.IsLinkLocalMulticast() || address.IsMulticast() {
+			return "", ErrInvalidBaseURL
+		}
+	}
+	return normalized, nil
+}
+
+func normalizeHeaders(headers string) (string, error) {
 	headers = strings.TrimSpace(headers)
 	if headers == "" {
-		return ""
+		return "", nil
 	}
 	var probe map[string]string
 	if err := json.Unmarshal([]byte(headers), &probe); err != nil {
-		return ""
+		return "", domain.ErrInvalidInput
 	}
-	return headers
+	normalized, err := json.Marshal(probe)
+	if err != nil {
+		return "", domain.ErrInvalidInput
+	}
+	return string(normalized), nil
 }
 
 var sensitiveHeaderNames = map[string]bool{
@@ -208,10 +243,22 @@ func (s *Service) UpdateRoute(ctx context.Context, existing models.APIRoute, inp
 	}
 	existing.Deprecated = input.Deprecated
 	if input.BaseURL != "" {
-		existing.BaseURL = strings.TrimRight(strings.TrimSpace(input.BaseURL), "/")
+		baseURL, err := validateBaseURL(input.BaseURL)
+		if err != nil {
+			return models.APIRoute{}, err
+		}
+		existing.BaseURL = baseURL
 	}
-	if raw := redactUnsafeHeaderKeysNoop(input.Headers); raw != "" || input.Headers == "" {
-		existing.Headers = raw
+	// A route read deliberately returns redacted headers. Treat an omitted or
+	// blank edit value as "preserve" so an unrelated configuration edit cannot
+	// silently erase stored credentials. Callers can explicitly clear headers
+	// by sending an empty JSON object.
+	if strings.TrimSpace(input.Headers) != "" {
+		headers, err := normalizeHeaders(input.Headers)
+		if err != nil {
+			return models.APIRoute{}, err
+		}
+		existing.Headers = headers
 	}
 	if input.Enabled != nil {
 		existing.Enabled = *input.Enabled
@@ -268,6 +315,10 @@ func (s *Service) ListRoutes(ctx context.Context, filter models.RouteFilter) ([]
 
 func (s *Service) ListRouteChecks(ctx context.Context, routeID int64, limit, offset int) ([]models.RouteCheck, error) {
 	return s.routes.ListRouteChecks(ctx, routeID, limit, offset)
+}
+
+func (s *Service) ListProjectMetricSeries(ctx context.Context, projectID int64, since time.Time, bucketSeconds int) ([]models.ProjectMetricPoint, error) {
+	return s.routes.ListProjectMetricSeries(ctx, projectID, since, bucketSeconds)
 }
 
 func (s *Service) ListRouteIncidents(ctx context.Context, projectID int64, routeID *int64, state string, limit, offset int) ([]models.RouteIncident, error) {

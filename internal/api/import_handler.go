@@ -136,7 +136,7 @@ func importErrorResponse(c *fiber.Ctx, err error) error {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})
 	case errors.Is(err, openapi.ErrTooLarge), errors.Is(err, openapi.ErrUnsupportedInput), errors.Is(err, openapi.ErrUnsupportedSpec),
 		errors.Is(err, openapi.ErrNoPaths), errors.Is(err, openapi.ErrTooManyOperations), errors.Is(err, openapi.ErrRefBudgetExceeded),
-		errors.Is(err, domain.ErrInvalidInput):
+		errors.Is(err, domain.ErrInvalidInput), errors.Is(err, application.ErrInvalidBaseURL):
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	default:
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "import failed"})

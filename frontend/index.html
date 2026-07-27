@@ -82,6 +82,7 @@
         <button class="tab-btn" id="tab-incidents" data-tab="incidents" role="tab" aria-selected="false" aria-controls="panel-incidents" tabindex="-1">Incidents</button>
         <button class="tab-btn" id="tab-alerts" data-tab="alerts" role="tab" aria-selected="false" aria-controls="panel-alerts" tabindex="-1">Alerts &amp; Status Pages</button>
         <button class="tab-btn" id="tab-logs" data-tab="logs" role="tab" aria-selected="false" aria-controls="panel-logs" tabindex="-1">Ping History</button>
+        <button class="tab-btn" id="tab-projects" data-tab="projects" role="tab" aria-selected="false" aria-controls="panel-projects" tabindex="-1">Projects</button>
       </nav>
 
       <!-- Overview -->
@@ -282,6 +283,11 @@
             </table>
           </div>
         </section>
+      </section>
+
+      <!-- Project-based API route monitoring -->
+      <section class="tab-panel" id="panel-projects" role="tabpanel" aria-labelledby="tab-projects" tabindex="0">
+        <div id="projectApp" aria-live="polite"></div>
       </section>
 
       <footer class="app-footer">ARGUS_UPTIME &middot; open source &middot; self-hosted &middot; never sleeps</footer>

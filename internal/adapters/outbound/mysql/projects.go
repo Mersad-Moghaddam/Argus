@@ -27,6 +27,25 @@ func scanProject(row interface{ Scan(dest ...any) error }, p *models.Project) er
 	return nil
 }
 
+func scanProjectWithRole(row interface{ Scan(dest ...any) error }, p *models.Project) error {
+	var lastCheck, metricsUpdated sql.NullTime
+	err := row.Scan(&p.ID, &p.OwnerUserID, &p.Name, &p.Slug, &p.Description, &p.Status,
+		&p.DefaultIntervalSeconds, &p.DefaultTimeoutMS, &p.DefaultRetries, &p.FailureThreshold, &p.RecoverySuccessThreshold,
+		&p.RoutesTotal, &p.RoutesHealthy, &p.RoutesDegraded, &p.RoutesFailing, &p.RoutesDisabled, &p.RoutesUnknown,
+		&p.Uptime24hPct, &p.AvgLatency24hMS, &p.Checks24h, &p.Failures24h, &p.OpenIncidents,
+		&lastCheck, &metricsUpdated, &p.CreatedAt, &p.UpdatedAt, &p.ViewerRole)
+	if err != nil {
+		return err
+	}
+	if lastCheck.Valid {
+		p.LastCheckAt = &lastCheck.Time
+	}
+	if metricsUpdated.Valid {
+		p.MetricsUpdatedAt = &metricsUpdated.Time
+	}
+	return nil
+}
+
 const projectColumns = `id, owner_user_id, name, slug, description, status,
 	default_interval_seconds, default_timeout_ms, default_retries, failure_threshold, recovery_success_threshold,
 	routes_total, routes_healthy, routes_degraded, routes_failing, routes_disabled, routes_unknown,
@@ -93,7 +112,7 @@ func (r *Store) ListProjects(ctx context.Context, userID int64, filter models.Pr
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	where := `WHERE p.id IN (SELECT project_id FROM project_members WHERE user_id = ?)`
+	where := `WHERE pm.user_id = ?`
 	args := []any{userID}
 	if filter.Status != "" {
 		where += ` AND p.status = ?`
@@ -106,12 +125,12 @@ func (r *Store) ListProjects(ctx context.Context, userID int64, filter models.Pr
 	}
 
 	var total int
-	countQuery := fmt.Sprintf(`SELECT COUNT(1) FROM projects p %s`, where)
+	countQuery := fmt.Sprintf(`SELECT COUNT(1) FROM projects p JOIN project_members pm ON pm.project_id=p.id %s`, where)
 	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	query := fmt.Sprintf(`SELECT %s FROM projects p %s ORDER BY p.updated_at DESC LIMIT ? OFFSET ?`, projectColumns, where)
+	query := fmt.Sprintf(`SELECT %s, pm.role FROM projects p JOIN project_members pm ON pm.project_id=p.id %s ORDER BY p.updated_at DESC LIMIT ? OFFSET ?`, projectColumns, where)
 	args = append(args, limit, filter.Offset)
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -121,7 +140,7 @@ func (r *Store) ListProjects(ctx context.Context, userID int64, filter models.Pr
 	out := []models.Project{}
 	for rows.Next() {
 		var p models.Project
-		if err = scanProject(rows, &p); err != nil {
+		if err = scanProjectWithRole(rows, &p); err != nil {
 			return nil, 0, err
 		}
 		out = append(out, p)

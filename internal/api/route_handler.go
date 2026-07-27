@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"argus/internal/application"
 	"argus/internal/domain"
@@ -30,6 +31,30 @@ func RegisterRouteRoutes(app fiber.Router, h *RouteHandler) {
 	app.Delete("/projects/:projectId/routes/:routeId", h.DeleteRoute)
 	app.Get("/projects/:projectId/routes/:routeId/checks", h.ListRouteChecks)
 	app.Get("/projects/:projectId/incidents", h.ListIncidents)
+	app.Get("/projects/:projectId/metrics/timeseries", h.ProjectMetricSeries)
+}
+
+func (h *RouteHandler) ProjectMetricSeries(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleViewer)
+	if !ok {
+		return nil
+	}
+	now := time.Now().UTC()
+	since, bucketSeconds := now.Add(-24*time.Hour), 15*60
+	switch c.Query("range", "24h") {
+	case "1h":
+		since, bucketSeconds = now.Add(-time.Hour), 60
+	case "24h":
+	case "7d":
+		since, bucketSeconds = now.Add(-7*24*time.Hour), 2*60*60
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "range must be one of 1h, 24h, or 7d"})
+	}
+	points, err := h.service.ListProjectMetricSeries(c.UserContext(), project.ID, since, bucketSeconds)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load project metrics"})
+	}
+	return c.JSON(fiber.Map{"range": c.Query("range", "24h"), "items": points})
 }
 
 type routeRequest struct {
@@ -287,7 +312,7 @@ func (h *RouteHandler) ListIncidents(c *fiber.Ctx) error {
 
 func routeErrorResponse(c *fiber.Ctx, err error) error {
 	switch {
-	case errors.Is(err, domain.ErrInvalidRoute), errors.Is(err, domain.ErrDuplicateRoute), errors.Is(err, domain.ErrInvalidInput):
+	case errors.Is(err, domain.ErrInvalidRoute), errors.Is(err, domain.ErrDuplicateRoute), errors.Is(err, domain.ErrInvalidInput), errors.Is(err, application.ErrInvalidBaseURL):
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	default:
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "route operation failed"})

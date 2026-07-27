@@ -126,7 +126,8 @@ func (f *fakeProjectStore) GetProjectByID(_ context.Context, id int64) (*models.
 func (f *fakeProjectStore) ListProjects(_ context.Context, userID int64, _ models.ProjectFilter) ([]models.Project, int, error) {
 	out := []models.Project{}
 	for id, project := range f.projects {
-		if _, ok := f.members[memberKey(id, userID)]; ok {
+		if member, ok := f.members[memberKey(id, userID)]; ok {
+			project.ViewerRole = member.Role
 			out = append(out, project)
 		}
 	}
@@ -304,6 +305,9 @@ func (f *fakeRouteStore) ListRouteChecks(_ context.Context, routeID int64, limit
 		out = out[:limit]
 	}
 	return out, nil
+}
+func (f *fakeRouteStore) ListProjectMetricSeries(context.Context, int64, time.Time, int) ([]models.ProjectMetricPoint, error) {
+	return []models.ProjectMetricPoint{}, nil
 }
 func (f *fakeRouteStore) AggregateRouteMetrics(context.Context, time.Time) error { return nil }
 func (f *fakeRouteStore) AggregateProjectMetrics(context.Context) error          { return nil }
@@ -525,6 +529,36 @@ func TestBulkCreateReportsDuplicatesAndInvalidRows(t *testing.T) {
 	}
 	if len(result.Created) != 1 || len(result.Failed) != 3 {
 		t.Fatalf("unexpected partial result: %+v", result)
+	}
+}
+
+func TestRouteEditPreservesOmittedSecretHeaders(t *testing.T) {
+	t.Parallel()
+	routes := newFakeRouteStore()
+	service := projectService(routes, newFakeImportStore(), newFakeRouteIncidentStore(), &fakeOutboxStore{})
+	id, _ := routes.CreateRoute(context.Background(), models.APIRoute{
+		ProjectID: 1, Method: "GET", Path: "/secure", Headers: `{"Authorization":"Bearer secret"}`,
+		Enabled: true, MonitorIntervalSecs: 60, TimeoutMS: 1000, FailureThreshold: 3, RecoverySuccesses: 1,
+	})
+	existing := routes.routes[id]
+	updated, err := service.UpdateRoute(context.Background(), existing, RouteInput{Name: "renamed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Headers != `{"Authorization":"Bearer secret"}` {
+		t.Fatalf("omitted headers erased stored secret: %q", updated.Headers)
+	}
+}
+
+func TestRouteCreationRejectsUnsafeBaseURLs(t *testing.T) {
+	t.Parallel()
+	service := projectService(newFakeRouteStore(), newFakeImportStore(), newFakeRouteIncidentStore(), &fakeOutboxStore{})
+	project := models.Project{ID: 1, DefaultIntervalSeconds: 60, DefaultTimeoutMS: 1000, FailureThreshold: 3, RecoverySuccessThreshold: 1}
+	for _, baseURL := range []string{"", "file:///etc/passwd", "http://localhost:8080", "http://127.0.0.1", "http://169.254.169.254", "https://user:pass@example.com"} {
+		_, err := service.CreateRoute(context.Background(), project, RouteInput{Method: "GET", Path: "/health", BaseURL: baseURL})
+		if !errors.Is(err, ErrInvalidBaseURL) {
+			t.Fatalf("expected unsafe base URL %q to be rejected, got %v", baseURL, err)
+		}
 	}
 }
 

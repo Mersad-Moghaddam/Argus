@@ -74,6 +74,15 @@ type RouteCheck struct {
 	CreatedAt     time.Time `json:"createdAt"`
 }
 
+// ProjectMetricPoint is one bounded, grouped dashboard time-series bucket.
+type ProjectMetricPoint struct {
+	BucketAt     time.Time `json:"bucketAt"`
+	Checks       int       `json:"checks"`
+	Failures     int       `json:"failures"`
+	UptimePct    float64   `json:"uptimePct"`
+	AvgLatencyMS int       `json:"avgLatencyMs"`
+}
+
 // RouteIncident tracks an open/resolved failure window for a route.
 type RouteIncident struct {
 	ID                int64      `json:"id"`
