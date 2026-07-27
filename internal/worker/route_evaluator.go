@@ -58,7 +58,10 @@ func NewRouteEvaluator() *RouteEvaluator {
 func safeTransport() *http.Transport {
 	dialer := &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}
 	return &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
+		// Monitored targets must always use the validated direct-dial path.
+		// Environment proxies resolve/fetch the target themselves and would
+		// undermine the DNS-rebinding protections in DialContext.
+		Proxy: nil,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			host, port, err := net.SplitHostPort(address)
 			if err != nil {

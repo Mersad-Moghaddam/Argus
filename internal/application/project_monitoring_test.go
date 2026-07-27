@@ -364,9 +364,16 @@ func (f *fakeRouteIncidentStore) GetOpenRouteIncident(_ context.Context, routeID
 func (f *fakeRouteIncidentStore) CreateRouteIncident(_ context.Context, routeID, projectID int64, reason string, startedAt time.Time) (int64, error) {
 	id := f.nextID
 	f.nextID++
-	f.incidents[id] = models.RouteIncident{ID: id, RouteID: routeID, ProjectID: projectID, State: "open", StartedAt: startedAt, LastFailureReason: reason}
+	f.incidents[id] = models.RouteIncident{ID: id, RouteID: routeID, ProjectID: projectID, State: "open", StartedAt: startedAt, FailureCount: 1, LastFailureReason: reason}
 	f.opens++
 	return id, nil
+}
+func (f *fakeRouteIncidentStore) RecordRouteIncidentFailure(_ context.Context, incidentID int64, reason string) error {
+	incident := f.incidents[incidentID]
+	incident.FailureCount++
+	incident.LastFailureReason = reason
+	f.incidents[incidentID] = incident
+	return nil
 }
 func (f *fakeRouteIncidentStore) ResolveRouteIncident(_ context.Context, incidentID int64, resolvedAt time.Time) error {
 	incident := f.incidents[incidentID]
@@ -495,6 +502,11 @@ func TestProcessRouteCheckCreatesOneIncidentAndResolvesAfterRecovery(t *testing.
 	if incidents.opens != 1 || incidents.resolves != 0 || outbox.events != 1 {
 		t.Fatalf("failure transition mismatch: opens=%d resolves=%d events=%d", incidents.opens, incidents.resolves, outbox.events)
 	}
+	for _, incident := range incidents.incidents {
+		if incident.FailureCount != 2 {
+			t.Fatalf("expected the open incident to record its additional failure, got %d", incident.FailureCount)
+		}
+	}
 	if routes.routes[id].Status != domain.RouteStatusFailing {
 		t.Fatalf("expected failing, got %s", routes.routes[id].Status)
 	}
@@ -559,6 +571,18 @@ func TestRouteCreationRejectsUnsafeBaseURLs(t *testing.T) {
 		if !errors.Is(err, ErrInvalidBaseURL) {
 			t.Fatalf("expected unsafe base URL %q to be rejected, got %v", baseURL, err)
 		}
+	}
+}
+
+func TestRouteCreationRejectsMalformedHeaders(t *testing.T) {
+	t.Parallel()
+	service := projectService(newFakeRouteStore(), newFakeImportStore(), newFakeRouteIncidentStore(), &fakeOutboxStore{})
+	project := models.Project{ID: 1, DefaultIntervalSeconds: 60, DefaultTimeoutMS: 1000, FailureThreshold: 3, RecoverySuccessThreshold: 1}
+	_, err := service.CreateRoute(context.Background(), project, RouteInput{
+		Method: "GET", Path: "/health", BaseURL: "https://api.example.com", Headers: `{"Authorization":123}`,
+	})
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("expected malformed header map rejection, got %v", err)
 	}
 }
 

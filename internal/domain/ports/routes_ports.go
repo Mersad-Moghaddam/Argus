@@ -62,6 +62,7 @@ type RouteStore interface {
 type RouteIncidentStore interface {
 	GetOpenRouteIncident(ctx context.Context, routeID int64) (*models.RouteIncident, error)
 	CreateRouteIncident(ctx context.Context, routeID, projectID int64, reason string, startedAt time.Time) (int64, error)
+	RecordRouteIncidentFailure(ctx context.Context, incidentID int64, reason string) error
 	ResolveRouteIncident(ctx context.Context, incidentID int64, resolvedAt time.Time) error
 	ListRouteIncidents(ctx context.Context, projectID int64, routeID *int64, state string, limit, offset int) ([]models.RouteIncident, error)
 }

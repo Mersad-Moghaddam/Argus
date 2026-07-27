@@ -34,6 +34,13 @@ func (r *Store) CreateRouteIncident(ctx context.Context, routeID, projectID int6
 	return res.LastInsertId()
 }
 
+func (r *Store) RecordRouteIncidentFailure(ctx context.Context, incidentID int64, reason string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE route_incidents
+		SET failure_count=failure_count+1, last_failure_reason=?, updated_at=NOW()
+		WHERE id=? AND state='open'`, nullableString(reason), incidentID)
+	return err
+}
+
 func (r *Store) ResolveRouteIncident(ctx context.Context, incidentID int64, resolvedAt time.Time) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE route_incidents SET state='resolved', resolved_at=?, updated_at=NOW() WHERE id=?`, resolvedAt, incidentID)
 	return err

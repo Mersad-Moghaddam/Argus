@@ -363,6 +363,9 @@ func (s *Service) ProcessRouteCheckResult(ctx context.Context, route models.APIR
 	}
 	transition := domain.RouteIncidentPolicy(openIncident != nil, consecutiveFailures, route.FailureThreshold, consecutiveSuccesses, route.RecoverySuccesses)
 	if !transition.ShouldOpen && !transition.ShouldResolve {
+		if openIncident != nil && status != "up" {
+			return s.routeIncidents.RecordRouteIncidentFailure(ctx, openIncident.ID, failureReason)
+		}
 		return nil
 	}
 

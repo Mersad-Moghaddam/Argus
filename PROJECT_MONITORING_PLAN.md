@@ -100,8 +100,8 @@ project/route.
 6. Worker: route monitoring engine (below). **Done.**
 7. Backend tests (below). **Done.**
 8. Frontend (below). **Done.**
-9. End-to-end validation pass (below). **Next.**
-10. Final report (below).
+9. End-to-end validation pass (below). **Done with environment limitations recorded.**
+10. Final report (below). **Next.**
 
 Each section ends with `go build ./...`, `go vet ./...`, relevant
 `go test ./...` runs, and a git commit scoped to that section. This file's
@@ -434,6 +434,19 @@ work.
   of all three frontend assets pass. Browser screenshot inspection was not
   possible because no browser backend was available; Docker-backed runtime
   validation was not possible because Docker is absent from the environment.
-- **Section 9 (next)** — Real migration/API workflow where dependencies are
-  available, negative-path HTTP checks, final regression/security review,
-  and complete verification evidence.
+- **Section 9 (commit pending)** — Done to the maximum supported by this
+  environment. Final security review disabled environment-proxy inheritance
+  so monitored requests always use the validated direct-dial path, added
+  malformed-header and unsafe-base-URL coverage, and made open incidents
+  accumulate subsequent failure count/reason without creating duplicates.
+  `node --check frontend/app.js`, `go test ./...`, `go build ./...`, `go vet
+  ./...`, `go test -race ./internal/application ./internal/domain
+  ./internal/openapi ./internal/worker`, and `git diff --check` all pass.
+  A temporary loopback static server returned the Projects HTML mount and
+  complete JS/CSS assets successfully. A real MySQL/Redis migration and API
+  walkthrough could not run because Docker is not installed and neither
+  service is reachable locally. Visual browser inspection could not run
+  because browser discovery returned no available browser backends. These
+  are environment limitations rather than suppressed or failing checks.
+- **Section 10 (next)** — Final architecture/schema/API/UI/security/test
+  report with exact verification evidence and the external runtime limits.
