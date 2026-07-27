@@ -1,31 +1,132 @@
+/* ==========================================================================
+   Argus dashboard client
+   ========================================================================== */
+
 const el = {
   table: document.getElementById('monitorTable'),
   incidents: document.getElementById('incidentList'),
+  incidentsOverview: document.getElementById('incidentListOverview'),
   form: document.getElementById('monitorForm'),
   refreshBtn: document.getElementById('refreshBtn'),
-  message: document.getElementById('message'),
   apiKey: document.getElementById('apiKey'),
   saveKeyBtn: document.getElementById('saveKeyBtn'),
+  toggleKeyVisibility: document.getElementById('toggleKeyVisibility'),
   channelForm: document.getElementById('channelForm'),
   maintenanceForm: document.getElementById('maintenanceForm'),
   statusPageForm: document.getElementById('statusPageForm'),
   statusPages: document.getElementById('statusPages'),
-  pingTable: document.getElementById('pingTable')
+  pingTable: document.getElementById('pingTable'),
+  toastStack: document.getElementById('toastStack'),
+  themeToggle: document.getElementById('themeToggle'),
+  monitorType: document.getElementById('monitorType'),
+  keywordField: document.getElementById('keywordField'),
+  monitorSearch: document.getElementById('monitorSearch'),
+  monitorFilter: document.getElementById('monitorFilter'),
+  refreshCountdown: document.getElementById('refreshCountdown'),
+  confirmModal: document.getElementById('confirmModal'),
+  confirmTitle: document.getElementById('confirmTitle'),
+  confirmBody: document.getElementById('confirmBody'),
+  confirmCancelBtn: document.getElementById('confirmCancelBtn'),
+  confirmOkBtn: document.getElementById('confirmOkBtn'),
+  statTotal: document.getElementById('statTotal'),
+  statUp: document.getElementById('statUp'),
+  statDown: document.getElementById('statDown'),
+  statIncidents: document.getElementById('statIncidents'),
 };
 
-function showMessage(text, type = 'ok') {
-  el.message.className = type;
-  el.message.textContent = text;
-  if (text) setTimeout(() => { if (el.message.textContent === text) el.message.textContent = ''; }, 3500);
+let latestWebsites = [];
+const AUTO_REFRESH_SECONDS = 30;
+let countdown = AUTO_REFRESH_SECONDS;
+
+/* ---------------------------- Toasts ---------------------------- */
+
+const ICONS = {
+  success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>',
+  error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>',
+};
+
+function showToast(message, type = 'success', timeout = 4200) {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `${ICONS[type] || ICONS.info}<span>${escapeHtml(message)}</span><button class="toast-close" aria-label="Dismiss">&times;</button>`;
+  el.toastStack.appendChild(toast);
+
+  const remove = () => {
+    toast.classList.add('leaving');
+    setTimeout(() => toast.remove(), 180);
+  };
+  toast.querySelector('.toast-close').addEventListener('click', remove);
+  if (timeout) setTimeout(remove, timeout);
 }
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* ---------------------------- Theme ---------------------------- */
+
+function initTheme() {
+  const saved = localStorage.getItem('argus_theme');
+  const theme = saved || 'dark';
+  applyTheme(theme);
+}
+
+function applyTheme(theme) {
+  if (theme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  localStorage.setItem('argus_theme', theme);
+}
+
+el.themeToggle.addEventListener('click', () => {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  applyTheme(isLight ? 'dark' : 'light');
+});
+
+/* ---------------------------- Tabs ---------------------------- */
+
+document.querySelectorAll('.tab-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach((b) => {
+      b.classList.remove('active');
+      b.setAttribute('aria-selected', 'false');
+    });
+    document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
+    document.getElementById(`panel-${btn.dataset.tab}`).classList.add('active');
+  });
+});
+
+/* ---------------------------- API key visibility ---------------------------- */
+
+el.toggleKeyVisibility.addEventListener('click', () => {
+  el.apiKey.type = el.apiKey.type === 'password' ? 'text' : 'password';
+});
+
+/* ---------------------------- Monitor type field toggle ---------------------------- */
+
+function syncKeywordFieldVisibility() {
+  el.keywordField.style.display = el.monitorType.value === 'keyword' ? '' : 'none';
+}
+el.monitorType.addEventListener('change', syncKeywordFieldVisibility);
+syncKeywordFieldVisibility();
+
+/* ---------------------------- API helper ---------------------------- */
 
 async function api(path, options = {}) {
   const key = localStorage.getItem('argus_api_key') || '';
   const res = await fetch(`/api${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', 'X-API-Key': key, ...(options.headers || {}) }
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': key, ...(options.headers || {}) },
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `Request failed (${res.status})`);
+  }
   if (res.status === 204) return null;
   return res.json();
 }
@@ -35,108 +136,286 @@ function toUTC(localDateTimeValue) {
   return new Date(localDateTimeValue).toISOString();
 }
 
-function renderMonitors(websites) {
-  if (!Array.isArray(websites) || websites.length === 0) {
-    el.table.innerHTML = '<tr><td colspan="6">No monitors yet.</td></tr>';
+function setButtonLoading(button, loading, labelWhenLoading) {
+  if (!button) return;
+  if (loading) {
+    button.dataset.originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = `<span class="btn-spinner"></span>${labelWhenLoading || 'Working...'}`;
+  } else {
+    button.disabled = false;
+    if (button.dataset.originalHtml) button.innerHTML = button.dataset.originalHtml;
+  }
+}
+
+/* ---------------------------- Rendering ---------------------------- */
+
+function relativeTime(dateStr) {
+  const date = new Date(dateStr);
+  const diffMs = Date.now() - date.getTime();
+  const diffSec = Math.round(diffMs / 1000);
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.round(diffHr / 24);
+  return `${diffDay}d ago`;
+}
+
+function emptyStateRow(colspan, iconSvg, title, subtitle) {
+  return `<tr><td colspan="${colspan}"><div class="empty-state">${iconSvg}<strong>${title}</strong><span>${subtitle}</span></div></td></tr>`;
+}
+
+const emptyIcons = {
+  monitor: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M8 4v5"/></svg>',
+  incident: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  page: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M8 8h8M8 16h5"/></svg>',
+  ping: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>',
+};
+
+function applyMonitorFilters(websites) {
+  const search = (el.monitorSearch.value || '').toLowerCase().trim();
+  const status = el.monitorFilter.value;
+  return websites.filter((w) => {
+    const matchesSearch = !search || w.url.toLowerCase().includes(search) || w.monitorType.toLowerCase().includes(search);
+    const matchesStatus = status === 'all' || w.status === status;
+    return matchesSearch && matchesStatus;
+  });
+}
+
+function renderMonitors() {
+  const filtered = applyMonitorFilters(latestWebsites);
+  if (!latestWebsites.length) {
+    el.table.innerHTML = emptyStateRow(7, emptyIcons.monitor, 'No monitors yet', 'Add your first monitor using the form in the Overview tab.');
     return;
   }
-  el.table.innerHTML = websites.map(w => `
+  if (!filtered.length) {
+    el.table.innerHTML = emptyStateRow(7, emptyIcons.monitor, 'No matches', 'Try a different search term or status filter.');
+    return;
+  }
+  el.table.innerHTML = filtered
+    .map(
+      (w) => `
     <tr>
-      <td>${w.id}</td>
-      <td>${w.url}</td>
-      <td>${w.monitorType}</td>
-      <td class="status-${w.status}">${w.status}</td>
-      <td>${w.lastStatusCode ?? '-'}</td>
+      <td class="mono">#${w.id}</td>
+      <td class="url-cell" title="${escapeHtml(w.url)}">${escapeHtml(w.url)}</td>
+      <td><span class="type-tag">${escapeHtml(w.monitorType)}</span></td>
+      <td>${w.checkInterval ?? '-'}s</td>
+      <td><span class="badge status-${w.status}">${w.status}</span></td>
+      <td class="mono">${w.lastStatusCode ?? '–'}</td>
       <td>
-        <button onclick="deleteMonitor(${w.id})">Delete</button>
-        ${w.monitorType === 'heartbeat' ? `<button onclick="sendHeartbeat(${w.id})">Heartbeat</button>` : ''}
+        <div class="row-actions">
+          ${w.monitorType === 'heartbeat' ? `<button class="secondary sm" onclick="sendHeartbeat(${w.id})">Heartbeat</button>` : ''}
+          <button class="danger sm" onclick="confirmDeleteMonitor(${w.id}, '${escapeHtml(w.url).replace(/'/g, "\\'")}')">Delete</button>
+        </div>
       </td>
     </tr>
-  `).join('');
+  `
+    )
+    .join('');
+}
+
+function incidentItemHtml(i) {
+  return `
+    <li class="list-item">
+      <div class="list-item-main">
+        <span class="list-item-title">Incident #${i.id} &middot; Website #${i.websiteId}</span>
+        <span class="list-item-meta">Started ${relativeTime(i.startedAt)} (${new Date(i.startedAt).toLocaleString()})</span>
+      </div>
+      <span class="badge status-${(i.state || '').toLowerCase()}">${i.state}</span>
+    </li>`;
 }
 
 function renderIncidents(incidentResult) {
+  const targets = [el.incidents, el.incidentsOverview];
   if (incidentResult.__error) {
-    el.incidents.innerHTML = `<li>Incident feed unavailable: ${incidentResult.__error}</li>`;
+    targets.forEach((t) => (t.innerHTML = `<li class="list-item"><span class="list-item-meta">Incident feed unavailable: ${escapeHtml(incidentResult.__error)}</span></li>`));
+    el.statIncidents.textContent = '–';
     return;
   }
   if (!incidentResult.length) {
-    el.incidents.innerHTML = '<li>No incidents.</li>';
+    targets.forEach((t) => (t.innerHTML = `<div class="empty-state">${emptyIcons.incident}<strong>No incidents</strong><span>All monitors are healthy.</span></div>`));
+    el.statIncidents.textContent = '0';
     return;
   }
-  el.incidents.innerHTML = incidentResult.map(i => `<li>#${i.id} website:${i.websiteId} • ${i.state} • started ${new Date(i.startedAt).toLocaleString()}</li>`).join('');
+  const openCount = incidentResult.filter((i) => (i.state || '').toLowerCase() === 'open').length;
+  el.statIncidents.textContent = String(openCount);
+  el.incidents.innerHTML = incidentResult.map(incidentItemHtml).join('');
+  el.incidentsOverview.innerHTML = incidentResult.slice(0, 5).map(incidentItemHtml).join('');
 }
 
 function renderStatusPages(statusPagesResult) {
   if (statusPagesResult.__error) {
-    el.statusPages.innerHTML = `<li>Failed to load status pages: ${statusPagesResult.__error}</li>`;
+    el.statusPages.innerHTML = `<li class="list-item"><span class="list-item-meta">Failed to load status pages: ${escapeHtml(statusPagesResult.__error)}</span></li>`;
     return;
   }
   if (!statusPagesResult.length) {
-    el.statusPages.innerHTML = '<li>No status pages created.</li>';
+    el.statusPages.innerHTML = `<div class="empty-state">${emptyIcons.page}<strong>No status pages</strong><span>Create one from the Overview tab to share uptime publicly.</span></div>`;
     return;
   }
-  el.statusPages.innerHTML = statusPagesResult.map(p => `<li><strong>${p.title}</strong> — /api/public/status/${p.slug}</li>`).join('');
+  el.statusPages.innerHTML = statusPagesResult
+    .map((p) => {
+      const path = `/api/public/status/${p.slug}`;
+      return `
+      <li class="list-item">
+        <div class="list-item-main">
+          <span class="list-item-title">${escapeHtml(p.title)}</span>
+          <span class="list-item-meta">/${p.slug}</span>
+        </div>
+        <span class="link-chip" onclick="copyStatusLink('${escapeHtml(path)}')" title="Copy link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy link
+        </span>
+      </li>`;
+    })
+    .join('');
 }
+
+function copyStatusLink(path) {
+  const fullUrl = `${window.location.origin}${path}`;
+  navigator.clipboard
+    ?.writeText(fullUrl)
+    .then(() => showToast('Status page link copied to clipboard.', 'success'))
+    .catch(() => showToast(fullUrl, 'info'));
+}
+window.copyStatusLink = copyStatusLink;
 
 function renderChecks(checksResult) {
   if (checksResult.__error) {
-    el.pingTable.innerHTML = `<tr><td colspan="6">Failed to load ping history: ${checksResult.__error}</td></tr>`;
+    el.pingTable.innerHTML = emptyStateRow(6, emptyIcons.ping, 'Failed to load ping history', escapeHtml(checksResult.__error));
     return;
   }
   if (!checksResult.length) {
-    el.pingTable.innerHTML = '<tr><td colspan="6">No ping history yet.</td></tr>';
+    el.pingTable.innerHTML = emptyStateRow(6, emptyIcons.ping, 'No ping history yet', 'Checks will appear here once monitors start running.');
     return;
   }
-  el.pingTable.innerHTML = checksResult.map(c => `
+  el.pingTable.innerHTML = checksResult
+    .map(
+      (c) => `
     <tr>
-      <td>${c.websiteId}</td>
-      <td class="status-${c.status}">${c.status}</td>
-      <td>${c.statusCode}</td>
-      <td>${c.latencyMs} ms</td>
+      <td class="mono">#${c.websiteId}</td>
+      <td><span class="badge status-${c.status}">${c.status}</span></td>
+      <td class="mono">${c.statusCode ?? '–'}</td>
+      <td class="mono">${c.latencyMs} ms</td>
       <td>${new Date(c.checkedAt).toLocaleString()}</td>
-      <td>${c.failureReason ?? '-'}</td>
+      <td>${c.failureReason ? escapeHtml(c.failureReason) : '–'}</td>
     </tr>
-  `).join('');
+  `
+    )
+    .join('');
 }
 
-async function refresh() {
-  const websites = await api('/websites?limit=100&offset=0').catch((e) => ({ __error: e.message }));
-  const incidents = await api('/incidents?limit=20&offset=0').catch((e) => ({ __error: e.message }));
-  const statusPages = await api('/status-pages?limit=50&offset=0').catch((e) => ({ __error: e.message }));
-  const checks = await api('/checks?limit=100').catch((e) => ({ __error: e.message }));
+function renderStats(websites) {
+  if (!Array.isArray(websites)) {
+    el.statTotal.textContent = '–';
+    el.statUp.textContent = '–';
+    el.statDown.textContent = '–';
+    return;
+  }
+  el.statTotal.textContent = String(websites.length);
+  el.statUp.textContent = String(websites.filter((w) => w.status === 'up').length);
+  el.statDown.textContent = String(websites.filter((w) => w.status === 'down').length);
+}
+
+function showTableSkeleton(tbody, cols, rows = 4) {
+  tbody.innerHTML = Array.from({ length: rows })
+    .map(
+      () => `<tr class="skeleton-row">${Array.from({ length: cols })
+        .map(() => `<td><div class="skeleton"></div></td>`)
+        .join('')}</tr>`
+    )
+    .join('');
+}
+
+/* ---------------------------- Data refresh ---------------------------- */
+
+async function refresh({ silent = false } = {}) {
+  if (!silent) {
+    showTableSkeleton(el.table, 7);
+    showTableSkeleton(el.pingTable, 6);
+  }
+
+  const [websites, incidents, statusPages, checks] = await Promise.all([
+    api('/websites?limit=100&offset=0').catch((e) => ({ __error: e.message })),
+    api('/incidents?limit=20&offset=0').catch((e) => ({ __error: e.message })),
+    api('/status-pages?limit=50&offset=0').catch((e) => ({ __error: e.message })),
+    api('/checks?limit=100').catch((e) => ({ __error: e.message })),
+  ]);
 
   if (websites.__error) {
-    el.table.innerHTML = `<tr><td colspan="6">Failed to load monitors: ${websites.__error}</td></tr>`;
+    el.table.innerHTML = emptyStateRow(7, emptyIcons.monitor, 'Failed to load monitors', escapeHtml(websites.__error));
+    renderStats(null);
+    latestWebsites = [];
   } else {
-    renderMonitors(websites);
+    latestWebsites = websites;
+    renderMonitors();
+    renderStats(websites);
   }
   renderIncidents(incidents);
   renderStatusPages(statusPages);
   renderChecks(checks);
+  countdown = AUTO_REFRESH_SECONDS;
 }
 
-async function deleteMonitor(id) {
+/* ---------------------------- Delete confirmation modal ---------------------------- */
+
+let pendingDeleteId = null;
+
+function confirmDeleteMonitor(id, url) {
+  pendingDeleteId = id;
+  el.confirmTitle.textContent = `Delete monitor #${id}?`;
+  el.confirmBody.textContent = `This will permanently remove monitoring for "${url}". This action cannot be undone.`;
+  el.confirmModal.classList.remove('hidden');
+}
+window.confirmDeleteMonitor = confirmDeleteMonitor;
+
+function closeConfirmModal() {
+  pendingDeleteId = null;
+  el.confirmModal.classList.add('hidden');
+}
+
+el.confirmCancelBtn.addEventListener('click', closeConfirmModal);
+el.confirmModal.addEventListener('click', (e) => {
+  if (e.target === el.confirmModal) closeConfirmModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !el.confirmModal.classList.contains('hidden')) closeConfirmModal();
+});
+
+el.confirmOkBtn.addEventListener('click', async () => {
+  if (pendingDeleteId == null) return;
+  const id = pendingDeleteId;
+  setButtonLoading(el.confirmOkBtn, true, 'Deleting...');
   try {
     await api(`/websites/${id}`, { method: 'DELETE' });
-    showMessage(`Monitor ${id} deleted.`);
+    showToast(`Monitor #${id} deleted.`, 'success');
+    closeConfirmModal();
     refresh();
   } catch (e) {
-    showMessage(`Delete failed: ${e.message}`, 'error');
+    showToast(`Delete failed: ${e.message}`, 'error');
+  } finally {
+    setButtonLoading(el.confirmOkBtn, false);
   }
-}
+});
 
 async function sendHeartbeat(id) {
   try {
     await api(`/websites/${id}/heartbeat`, { method: 'POST' });
-    showMessage(`Heartbeat accepted for #${id}.`);
+    showToast(`Heartbeat accepted for #${id}.`, 'success');
     refresh();
   } catch (e) {
-    showMessage(`Heartbeat failed: ${e.message}`, 'error');
+    showToast(`Heartbeat failed: ${e.message}`, 'error');
   }
 }
-window.deleteMonitor = deleteMonitor;
 window.sendHeartbeat = sendHeartbeat;
+
+/* ---------------------------- Search / filter listeners ---------------------------- */
+
+el.monitorSearch.addEventListener('input', renderMonitors);
+el.monitorFilter.addEventListener('change', renderMonitors);
+
+/* ---------------------------- Forms ---------------------------- */
 
 el.form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -148,13 +427,18 @@ el.form.addEventListener('submit', async (e) => {
   const kw = document.getElementById('keyword').value.trim();
   if (kw) payload.expectedKeyword = kw;
 
+  const btn = document.getElementById('monitorSubmitBtn');
+  setButtonLoading(btn, true, 'Adding...');
   try {
     await api('/websites', { method: 'POST', body: JSON.stringify(payload) });
     el.form.reset();
-    showMessage('Monitor created.');
+    syncKeywordFieldVisibility();
+    showToast('Monitor created successfully.', 'success');
     refresh();
   } catch (err) {
-    showMessage(`Create monitor failed: ${err.message}`, 'error');
+    showToast(`Create monitor failed: ${err.message}`, 'error');
+  } finally {
+    setButtonLoading(btn, false);
   }
 });
 
@@ -165,12 +449,16 @@ el.channelForm.addEventListener('submit', async (e) => {
     channelType: document.getElementById('channelType').value,
     target: document.getElementById('channelTarget').value.trim(),
   };
+  const btn = document.getElementById('channelSubmitBtn');
+  setButtonLoading(btn, true, 'Creating...');
   try {
     await api('/alert-channels', { method: 'POST', body: JSON.stringify(payload) });
     el.channelForm.reset();
-    showMessage('Alert channel created.');
+    showToast('Alert channel created.', 'success');
   } catch (err) {
-    showMessage(`Create channel failed: ${err.message}`, 'error');
+    showToast(`Create channel failed: ${err.message}`, 'error');
+  } finally {
+    setButtonLoading(btn, false);
   }
 });
 
@@ -180,13 +468,17 @@ el.statusPageForm.addEventListener('submit', async (e) => {
     slug: document.getElementById('statusSlug').value.trim(),
     title: document.getElementById('statusTitle').value.trim(),
   };
+  const btn = document.getElementById('statusPageSubmitBtn');
+  setButtonLoading(btn, true, 'Creating...');
   try {
     await api('/status-pages', { method: 'POST', body: JSON.stringify(payload) });
     el.statusPageForm.reset();
-    showMessage('Status page created.');
+    showToast('Status page created.', 'success');
     refresh();
   } catch (err) {
-    showMessage(`Create status page failed: ${err.message}`, 'error');
+    showToast(`Create status page failed: ${err.message}`, 'error');
+  } finally {
+    setButtonLoading(btn, false);
   }
 });
 
@@ -199,21 +491,40 @@ el.maintenanceForm.addEventListener('submit', async (e) => {
     endsAt: toUTC(document.getElementById('maintenanceEnd').value),
     reason: document.getElementById('maintenanceReason').value.trim() || null,
   };
+  const btn = document.getElementById('maintenanceSubmitBtn');
+  setButtonLoading(btn, true, 'Creating...');
   try {
     await api('/maintenance-windows', { method: 'POST', body: JSON.stringify(payload) });
     el.maintenanceForm.reset();
-    showMessage('Maintenance window created.');
+    showToast('Maintenance window created.', 'success');
   } catch (err) {
-    showMessage(`Create maintenance failed: ${err.message}`, 'error');
+    showToast(`Create maintenance failed: ${err.message}`, 'error');
+  } finally {
+    setButtonLoading(btn, false);
   }
 });
 
 el.saveKeyBtn.addEventListener('click', () => {
   localStorage.setItem('argus_api_key', el.apiKey.value.trim());
-  showMessage('API key saved in browser localStorage.');
+  showToast('API key saved in your browser.', 'success');
   refresh();
 });
 
+/* ---------------------------- Auto refresh countdown ---------------------------- */
+
+el.refreshCountdown.textContent = `auto-refresh ${AUTO_REFRESH_SECONDS}s`;
+setInterval(() => {
+  countdown -= 1;
+  if (countdown <= 0) {
+    refresh({ silent: true });
+    return;
+  }
+  el.refreshCountdown.textContent = `refreshing in ${countdown}s`;
+}, 1000);
+
+/* ---------------------------- Init ---------------------------- */
+
+initTheme();
 el.apiKey.value = localStorage.getItem('argus_api_key') || '';
-el.refreshBtn.addEventListener('click', refresh);
+el.refreshBtn.addEventListener('click', () => refresh());
 refresh();
