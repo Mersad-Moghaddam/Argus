@@ -8,6 +8,7 @@ const el = {
   incidentsOverview: document.getElementById('incidentListOverview'),
   form: document.getElementById('monitorForm'),
   refreshBtn: document.getElementById('refreshBtn'),
+  refreshDot: document.getElementById('refreshDot'),
   apiKey: document.getElementById('apiKey'),
   saveKeyBtn: document.getElementById('saveKeyBtn'),
   toggleKeyVisibility: document.getElementById('toggleKeyVisibility'),
@@ -32,6 +33,9 @@ const el = {
   statUp: document.getElementById('statUp'),
   statDown: document.getElementById('statDown'),
   statIncidents: document.getElementById('statIncidents'),
+  statusBanner: document.getElementById('statusBanner'),
+  statusBannerLamp: document.getElementById('statusBannerLamp'),
+  statusBannerText: document.getElementById('statusBannerText'),
 };
 
 let latestWebsites = [];
@@ -49,12 +53,15 @@ const ICONS = {
 function showToast(message, type = 'success', timeout = 4200) {
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.innerHTML = `${ICONS[type] || ICONS.info}<span>${escapeHtml(message)}</span><button class="toast-close" aria-label="Dismiss">&times;</button>`;
+  toast.setAttribute('data-entering', 'true');
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  toast.innerHTML = `${ICONS[type] || ICONS.info}<span>${escapeHtml(message)}</span><span class="toast-time">${time}</span><button class="toast-close" aria-label="Dismiss">&times;</button>`;
   el.toastStack.appendChild(toast);
+  requestAnimationFrame(() => toast.removeAttribute('data-entering'));
 
   const remove = () => {
     toast.classList.add('leaving');
-    setTimeout(() => toast.remove(), 180);
+    setTimeout(() => toast.remove(), 200);
   };
   toast.querySelector('.toast-close').addEventListener('click', remove);
   if (timeout) setTimeout(remove, timeout);
@@ -115,6 +122,17 @@ tabButtons.forEach((btn, index) => {
     e.preventDefault();
     activateTab(tabButtons[keyToIndex[e.key]], { focus: true });
   });
+});
+
+/* ---------------------------- Global keyboard shortcuts ---------------------------- */
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== '/') return;
+  const tag = (document.activeElement && document.activeElement.tagName) || '';
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)) return;
+  e.preventDefault();
+  activateTab(document.getElementById('tab-monitors'));
+  el.monitorSearch.focus();
 });
 
 /* ---------------------------- API key visibility ---------------------------- */
@@ -200,14 +218,46 @@ function applyMonitorFilters(websites) {
   });
 }
 
+/* ---------------------------- Monitor table sorting ---------------------------- */
+
+const sortState = { key: null, dir: 1 };
+const sortHeaders = Array.from(document.querySelectorAll('th.sortable'));
+
+function sortWebsites(websites) {
+  if (!sortState.key) return websites;
+  const { key, dir } = sortState;
+  return [...websites].sort((a, b) => {
+    const av = a[key];
+    const bv = b[key];
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+    return String(av ?? '').localeCompare(String(bv ?? '')) * dir;
+  });
+}
+
+sortHeaders.forEach((th) => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortState.key === key) {
+      sortState.dir *= -1;
+    } else {
+      sortState.key = key;
+      sortState.dir = 1;
+    }
+    sortHeaders.forEach((h) => h.classList.remove('sort-active', 'sort-desc'));
+    th.classList.add('sort-active');
+    if (sortState.dir === -1) th.classList.add('sort-desc');
+    renderMonitors();
+  });
+});
+
 function renderMonitors() {
-  const filtered = applyMonitorFilters(latestWebsites);
+  const filtered = sortWebsites(applyMonitorFilters(latestWebsites));
   if (!latestWebsites.length) {
-    el.table.innerHTML = emptyStateRow(7, emptyIcons.monitor, 'No monitors yet', 'Add your first monitor using the form in the Overview tab.');
+    el.table.innerHTML = emptyStateRow(8, emptyIcons.monitor, 'No monitors yet', 'Add your first monitor using the form in the Overview tab.');
     return;
   }
   if (!filtered.length) {
-    el.table.innerHTML = emptyStateRow(7, emptyIcons.monitor, 'No matches', 'Try a different search term or status filter.');
+    el.table.innerHTML = emptyStateRow(8, emptyIcons.monitor, 'No matches', 'Try a different search term or status filter.');
     return;
   }
   el.table.innerHTML = filtered
@@ -217,9 +267,10 @@ function renderMonitors() {
       <td class="mono">#${w.id}</td>
       <td class="url-cell" title="${escapeHtml(w.url)}">${escapeHtml(w.url)}</td>
       <td><span class="type-tag">${escapeHtml(w.monitorType)}</span></td>
-      <td>${w.checkInterval ?? '-'}s</td>
-      <td><span class="badge status-${w.status}">${w.status}</span></td>
+      <td class="mono">${w.checkInterval ?? '-'}s</td>
+      <td><span class="badge status-${w.status}"><span class="lamp"></span>${w.status}</span></td>
       <td class="mono">${w.lastStatusCode ?? '–'}</td>
+      <td class="mono">${w.lastCheckedAt ? relativeTime(w.lastCheckedAt) : 'never'}</td>
       <td>
         <div class="row-actions">
           ${w.monitorType === 'heartbeat' ? `<button class="secondary sm" onclick="sendHeartbeat(${w.id})">Heartbeat</button>` : ''}
@@ -239,7 +290,7 @@ function incidentItemHtml(i) {
         <span class="list-item-title">Incident #${i.id} &middot; Website #${i.websiteId}</span>
         <span class="list-item-meta">Started ${relativeTime(i.startedAt)} (${new Date(i.startedAt).toLocaleString()})</span>
       </div>
-      <span class="badge status-${(i.state || '').toLowerCase()}">${i.state}</span>
+      <span class="badge status-${(i.state || '').toLowerCase()}"><span class="lamp"></span>${i.state}</span>
     </li>`;
 }
 
@@ -311,10 +362,10 @@ function renderChecks(checksResult) {
       (c) => `
     <tr>
       <td class="mono">#${c.websiteId}</td>
-      <td><span class="badge status-${c.status}">${c.status}</span></td>
+      <td><span class="badge status-${c.status}"><span class="lamp"></span>${c.status}</span></td>
       <td class="mono">${c.statusCode ?? '–'}</td>
       <td class="mono">${c.latencyMs} ms</td>
-      <td>${new Date(c.checkedAt).toLocaleString()}</td>
+      <td class="mono">${new Date(c.checkedAt).toLocaleString()}</td>
       <td>${c.failureReason ? escapeHtml(c.failureReason) : '–'}</td>
     </tr>
   `
@@ -327,11 +378,29 @@ function renderStats(websites) {
     el.statTotal.textContent = '–';
     el.statUp.textContent = '–';
     el.statDown.textContent = '–';
+    setStatusBanner('unknown', 0, 0, 0);
     return;
   }
-  el.statTotal.textContent = String(websites.length);
-  el.statUp.textContent = String(websites.filter((w) => w.status === 'up').length);
-  el.statDown.textContent = String(websites.filter((w) => w.status === 'down').length);
+  const total = websites.length;
+  const up = websites.filter((w) => w.status === 'up').length;
+  const down = websites.filter((w) => w.status === 'down').length;
+  el.statTotal.textContent = String(total);
+  el.statUp.textContent = String(up);
+  el.statDown.textContent = String(down);
+  setStatusBanner(down > 0 ? 'down' : total === 0 ? 'empty' : 'up', total, up, down);
+}
+
+function setStatusBanner(state, total, up, down) {
+  el.refreshDot.classList.toggle('is-down', state === 'down');
+  const messages = {
+    unknown: ['var(--text-faint)', 'Scanning your infrastructure&hellip;'],
+    empty: ['var(--text-faint)', 'No monitors yet — add one to start watching.'],
+    up: ['var(--ok)', `All ${total} monitor${total === 1 ? '' : 's'} operational.`],
+    down: ['var(--down)', `${down} of ${total} monitor${total === 1 ? '' : 's'} <strong>down</strong> right now.`],
+  };
+  const [color, text] = messages[state] || messages.unknown;
+  el.statusBannerLamp.style.background = color;
+  el.statusBannerText.innerHTML = text;
 }
 
 function showTableSkeleton(tbody, cols, rows = 4) {
@@ -348,7 +417,7 @@ function showTableSkeleton(tbody, cols, rows = 4) {
 
 async function refresh({ silent = false } = {}) {
   if (!silent) {
-    showTableSkeleton(el.table, 7);
+    showTableSkeleton(el.table, 8);
     showTableSkeleton(el.pingTable, 6);
   }
 
@@ -360,7 +429,7 @@ async function refresh({ silent = false } = {}) {
   ]);
 
   if (websites.__error) {
-    el.table.innerHTML = emptyStateRow(7, emptyIcons.monitor, 'Failed to load monitors', escapeHtml(websites.__error));
+    el.table.innerHTML = emptyStateRow(8, emptyIcons.monitor, 'Failed to load monitors', escapeHtml(websites.__error));
     renderStats(null);
     latestWebsites = [];
   } else {
