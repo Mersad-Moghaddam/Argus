@@ -88,16 +88,32 @@ el.themeToggle.addEventListener('click', () => {
 
 /* ---------------------------- Tabs ---------------------------- */
 
-document.querySelectorAll('.tab-btn').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach((b) => {
-      b.classList.remove('active');
-      b.setAttribute('aria-selected', 'false');
-    });
-    document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
-    btn.classList.add('active');
-    btn.setAttribute('aria-selected', 'true');
-    document.getElementById(`panel-${btn.dataset.tab}`).classList.add('active');
+const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
+
+function activateTab(btn, { focus = false } = {}) {
+  tabButtons.forEach((b) => {
+    const isActive = b === btn;
+    b.classList.toggle('active', isActive);
+    b.setAttribute('aria-selected', String(isActive));
+    b.tabIndex = isActive ? 0 : -1;
+  });
+  document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
+  document.getElementById(`panel-${btn.dataset.tab}`).classList.add('active');
+  if (focus) btn.focus();
+}
+
+tabButtons.forEach((btn, index) => {
+  btn.addEventListener('click', () => activateTab(btn));
+  btn.addEventListener('keydown', (e) => {
+    const keyToIndex = {
+      ArrowRight: (index + 1) % tabButtons.length,
+      ArrowLeft: (index - 1 + tabButtons.length) % tabButtons.length,
+      Home: 0,
+      End: tabButtons.length - 1,
+    };
+    if (keyToIndex[e.key] === undefined) return;
+    e.preventDefault();
+    activateTab(tabButtons[keyToIndex[e.key]], { focus: true });
   });
 });
 
@@ -361,18 +377,24 @@ async function refresh({ silent = false } = {}) {
 /* ---------------------------- Delete confirmation modal ---------------------------- */
 
 let pendingDeleteId = null;
+let modalTriggerEl = null;
+const modalDialog = el.confirmModal.querySelector('.modal');
 
 function confirmDeleteMonitor(id, url) {
   pendingDeleteId = id;
+  modalTriggerEl = document.activeElement;
   el.confirmTitle.textContent = `Delete monitor #${id}?`;
   el.confirmBody.textContent = `This will permanently remove monitoring for "${url}". This action cannot be undone.`;
   el.confirmModal.classList.remove('hidden');
+  el.confirmCancelBtn.focus();
 }
 window.confirmDeleteMonitor = confirmDeleteMonitor;
 
 function closeConfirmModal() {
   pendingDeleteId = null;
   el.confirmModal.classList.add('hidden');
+  if (modalTriggerEl && typeof modalTriggerEl.focus === 'function') modalTriggerEl.focus();
+  modalTriggerEl = null;
 }
 
 el.confirmCancelBtn.addEventListener('click', closeConfirmModal);
@@ -380,7 +402,24 @@ el.confirmModal.addEventListener('click', (e) => {
   if (e.target === el.confirmModal) closeConfirmModal();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !el.confirmModal.classList.contains('hidden')) closeConfirmModal();
+  if (el.confirmModal.classList.contains('hidden')) return;
+  if (e.key === 'Escape') {
+    closeConfirmModal();
+    return;
+  }
+  if (e.key === 'Tab') {
+    const focusable = modalDialog.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
 });
 
 el.confirmOkBtn.addEventListener('click', async () => {

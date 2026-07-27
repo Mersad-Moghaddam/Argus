@@ -1,0 +1,17 @@
+{
+  "name": "Argus — Uptime Control Center",
+  "short_name": "Argus",
+  "description": "Production-grade uptime monitoring control center.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e1c",
+  "theme_color": "#0a0e1c",
+  "icons": [
+    {
+      "src": "/assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

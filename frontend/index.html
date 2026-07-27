@@ -5,12 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Argus — production-grade uptime monitoring control center." />
     <title>Argus • Uptime Control Center</title>
+    <meta name="theme-color" content="#0a0e1c" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)" />
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
     <header class="topbar">
       <div class="brand">
         <img class="brand-logo" src="/assets/favicon.svg" alt="Argus logo" />
@@ -43,7 +48,7 @@
 
     <div class="toast-stack" id="toastStack" aria-live="polite"></div>
 
-    <main class="container">
+    <main class="container" id="main">
       <section class="stats-grid" id="statsGrid" aria-label="Overview statistics">
         <div class="stat-card">
           <div class="stat-icon brand">
@@ -84,15 +89,15 @@
       </section>
 
       <nav class="tabs" role="tablist" aria-label="Sections">
-        <button class="tab-btn active" data-tab="overview" role="tab" aria-selected="true">Overview</button>
-        <button class="tab-btn" data-tab="monitors" role="tab" aria-selected="false">Monitors</button>
-        <button class="tab-btn" data-tab="incidents" role="tab" aria-selected="false">Incidents</button>
-        <button class="tab-btn" data-tab="alerts" role="tab" aria-selected="false">Alerts &amp; Status Pages</button>
-        <button class="tab-btn" data-tab="logs" role="tab" aria-selected="false">Ping History</button>
+        <button class="tab-btn active" id="tab-overview" data-tab="overview" role="tab" aria-selected="true" aria-controls="panel-overview" tabindex="0">Overview</button>
+        <button class="tab-btn" id="tab-monitors" data-tab="monitors" role="tab" aria-selected="false" aria-controls="panel-monitors" tabindex="-1">Monitors</button>
+        <button class="tab-btn" id="tab-incidents" data-tab="incidents" role="tab" aria-selected="false" aria-controls="panel-incidents" tabindex="-1">Incidents</button>
+        <button class="tab-btn" id="tab-alerts" data-tab="alerts" role="tab" aria-selected="false" aria-controls="panel-alerts" tabindex="-1">Alerts &amp; Status Pages</button>
+        <button class="tab-btn" id="tab-logs" data-tab="logs" role="tab" aria-selected="false" aria-controls="panel-logs" tabindex="-1">Ping History</button>
       </nav>
 
       <!-- Overview -->
-      <section class="tab-panel active" id="panel-overview">
+      <section class="tab-panel active" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
         <div class="grid">
           <section class="card">
             <div class="card-header">
@@ -199,7 +204,7 @@
       </section>
 
       <!-- Monitors -->
-      <section class="tab-panel" id="panel-monitors">
+      <section class="tab-panel" id="panel-monitors" role="tabpanel" aria-labelledby="tab-monitors" tabindex="0">
         <section class="card">
           <div class="card-header">
             <h2>
@@ -229,7 +234,7 @@
       </section>
 
       <!-- Incidents -->
-      <section class="tab-panel" id="panel-incidents">
+      <section class="tab-panel" id="panel-incidents" role="tabpanel" aria-labelledby="tab-incidents" tabindex="0">
         <div class="grid">
           <section class="card span3">
             <div class="card-header">
@@ -277,7 +282,7 @@
       </section>
 
       <!-- Alerts & status pages -->
-      <section class="tab-panel" id="panel-alerts">
+      <section class="tab-panel" id="panel-alerts" role="tabpanel" aria-labelledby="tab-alerts" tabindex="0">
         <section class="card span3">
           <div class="card-header">
             <h2>
@@ -290,7 +295,7 @@
       </section>
 
       <!-- Ping history -->
-      <section class="tab-panel" id="panel-logs">
+      <section class="tab-panel" id="panel-logs" role="tabpanel" aria-labelledby="tab-logs" tabindex="0">
         <section class="card">
           <div class="card-header">
             <h2>
@@ -311,7 +316,7 @@
     </main>
 
     <div class="modal-overlay hidden" id="confirmModal">
-      <div class="modal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmBody" tabindex="-1">
         <h3 id="confirmTitle">Delete monitor?</h3>
         <p id="confirmBody">This action cannot be undone.</p>
         <div class="modal-actions">
@@ -321,6 +326,6 @@
       </div>
     </div>
 
-    <script src="/app.js"></script>
+    <script src="/app.js" defer></script>
   </body>
 </html>
