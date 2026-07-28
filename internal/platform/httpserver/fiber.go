@@ -1,6 +1,8 @@
 package httpserver
 
 import (
+	"context"
+	"sync"
 	"time"
 
 	adapterhttp "argus/internal/adapters/inbound/http"
@@ -17,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // maxUploadBytes bounds request bodies (including multipart OpenAPI/Swagger
@@ -24,6 +27,12 @@ import (
 // rejects oversized requests before they reach handler code.
 const maxUploadBytes = 15 * 1024 * 1024
 const maxControlBodyBytes = 256 * 1024
+
+var (
+	httpTelemetryOnce sync.Once
+	httpRequestCount  = func(context.Context, int64, ...metric.AddOption) {}
+	httpDuration      = func(context.Context, float64, ...metric.RecordOption) {}
+)
 
 func NewFiberApp(service *application.Service, logStore *observability.LogStore, apiKey string, authCookieSecure ...bool) *fiber.App {
 	cookieSecure := false
@@ -109,11 +118,29 @@ func serverTelemetry(c *fiber.Ctx) error {
 		attribute.Int("http.response.status_code", status),
 		attribute.Int64("http.server.duration_ms", time.Since(started).Milliseconds()),
 	)
+	attrs := metric.WithAttributes(
+		attribute.String("http.request.method", c.Method()),
+		attribute.String("http.route", route),
+		attribute.Int("http.response.status_code", status),
+	)
+	initHTTPMetrics()
+	httpRequestCount(ctx, 1, attrs)
+	httpDuration(ctx, float64(time.Since(started).Milliseconds()), attrs)
 	if status >= 500 || err != nil {
 		span.SetStatus(codes.Error, "server request failed")
 	}
 	span.End()
 	return err
+}
+
+func initHTTPMetrics() {
+	httpTelemetryOnce.Do(func() {
+		meter := otel.Meter("argus/http")
+		count, _ := meter.Int64Counter("argus.http.server.requests")
+		duration, _ := meter.Float64Histogram("argus.http.server.duration")
+		httpRequestCount = count.Add
+		httpDuration = duration.Record
+	})
 }
 
 func controlBodyLimit(limit int) fiber.Handler {
