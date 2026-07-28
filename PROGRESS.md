@@ -48,6 +48,7 @@
 | 3o | Source-aware route incident evidence and acknowledgement | Complete | Current checkpoint |
 | 3p | SLO state-transition notification outbox | Complete | Current checkpoint |
 | 2i | AEAD boundary for synthetic request headers | In progress | Current checkpoint |
+| 3q | Private-agent identity and outbound liveness foundation | Complete | `3002b88` |
 | 1 | Identity, authorization, secure global shell | In progress | — |
 | 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | `8ab613a` |
 | 2b | Canonical endpoint pipeline and preview API | Complete | `580e1bb` |
@@ -139,3 +140,4 @@
 | 2026-07-29 | 2i | Added a versioned AES-256-GCM storage boundary for project-route request headers. New single and bulk route writes plus edits require the operator-provided `ROUTE_SECRET_ENCRYPTION_KEY` for non-empty headers and place ciphertext in an additive column; reads decrypt ciphertext while retaining a temporary legacy plaintext fallback. AEAD round-trip/wrong-key tests passed. A restartable legacy backfill and key-rotation workflow remain. | In progress |
 | 2026-07-29 | Regression checkpoint | `go test -race ./...` completed successfully after the identity, telemetry, heartbeat, incident, SLO-outbox, and encrypted-route-header checkpoints. | Complete |
 | 2026-07-29 | Static-analysis checkpoint | `staticcheck ./...` and `go vet ./...` completed successfully. `govulncheck ./...` could not query the public vulnerability database because `vuln.go.dev` returned HTTP 403; this is an external verification limitation, not a reported dependency finding. | Partial |
+| 2026-07-29 | 3q | Added a project/environment-bound private-agent control-plane foundation. Opaque agent enrollment tokens are hashed at rest; agents can only send outbound authenticated liveness/version updates, and revocation rejects future heartbeats. The central service receives no reverse-connect or private-network dial capability. A packaged local executor, result protocol, and agent UI remain subsequent work. | Complete |
