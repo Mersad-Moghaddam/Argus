@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">Argus uptime control center</title>
+  <desc id="desc">A dark animated radar field watches service nodes around the Argus eye.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080b10"/>
+      <stop offset=".52" stop-color="#0e1720"/>
+      <stop offset="1" stop-color="#08110f"/>
+    </linearGradient>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#38f2b1" stop-opacity=".3"/>
+      <stop offset=".5" stop-color="#21b7d6" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#21b7d6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="eye" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#20c9a3"/>
+      <stop offset=".5" stop-color="#7fffd4"/>
+      <stop offset="1" stop-color="#39a8e0"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M42 0H0V42" fill="none" stroke="#80b7b0" stroke-opacity=".055"/>
+    </pattern>
+    <clipPath id="radarClip"><circle cx="600" cy="173" r="126"/></clipPath>
+    <style>
+      .node{animation:pulse 2.8s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+      .n2{animation-delay:.5s}.n3{animation-delay:1s}.n4{animation-delay:1.5s}.n5{animation-delay:2s}
+      .orbit{animation:dash 9s linear infinite}
+      @keyframes pulse{0%,100%{opacity:.45;transform:scale(.82)}50%{opacity:1;transform:scale(1.18)}}
+      @keyframes dash{to{stroke-dashoffset:-180}}
+      @media (prefers-reduced-motion:reduce){.node,.orbit{animation:none}}
+    </style>
+  </defs>
+  <rect width="1200" height="420" rx="24" fill="url(#bg)"/>
+  <rect width="1200" height="420" rx="24" fill="url(#grid)"/>
+  <path d="M0 335C220 260 338 390 585 315S925 268 1200 330V420H0Z" fill="#1ab98a" opacity=".035"/>
+  <circle cx="600" cy="173" r="180" fill="url(#halo)"/>
+  <g fill="none" stroke="#54d9bd">
+    <circle cx="600" cy="173" r="126" opacity=".13"/>
+    <circle cx="600" cy="173" r="88" opacity=".1"/>
+    <circle class="orbit" cx="600" cy="173" r="153" opacity=".3" stroke-dasharray="2 15" stroke-linecap="round"/>
+  </g>
+  <g clip-path="url(#radarClip)">
+    <path d="M600 173L600 26A147 147 0 0 1 727 99Z" fill="#37e0b0" opacity=".09">
+      <animateTransform attributeName="transform" type="rotate" from="0 600 173" to="360 600 173" dur="6s" repeatCount="indefinite"/>
+    </path>
+    <line x1="600" y1="173" x2="600" y2="36" stroke="#58f2c4" stroke-width="2" opacity=".62">
+      <animateTransform attributeName="transform" type="rotate" from="0 600 173" to="360 600 173" dur="6s" repeatCount="indefinite"/>
+    </line>
+  </g>
+  <g stroke="#4fd5b7" stroke-opacity=".2">
+    <path d="M246 105L480 151M954 91L720 147M232 252L484 192M965 255L716 194"/>
+  </g>
+  <g fill="#61f4c7" filter="url(#glow)">
+    <circle class="node" cx="246" cy="105" r="4"/>
+    <circle class="node n2" cx="954" cy="91" r="4"/>
+    <circle class="node n3" cx="232" cy="252" r="4"/>
+    <circle class="node n4" cx="965" cy="255" r="4"/>
+    <circle class="node n5" cx="690" cy="72" r="3"/>
+  </g>
+  <g transform="translate(600 173)">
+    <path d="M-76 0C-38-52 38-52 76 0C38 52-38 52-76 0Z" fill="#0b1518" stroke="url(#eye)" stroke-width="3"/>
+    <circle r="29" fill="none" stroke="#6af5ca" stroke-width="3"/>
+    <circle r="12" fill="#71f6ce" filter="url(#glow)">
+      <animate attributeName="r" values="10;13;10" dur="2.4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="6" cy="-6" r="3" fill="#fff" opacity=".9"/>
+  </g>
+  <text x="600" y="335" fill="#ecfff9" font-family="Inter,Segoe UI,sans-serif" font-size="62" font-weight="750" text-anchor="middle" letter-spacing="14">ARGUS</text>
+  <text x="600" y="376" fill="#8eaaa5" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="15" text-anchor="middle" letter-spacing="3">OBSERVE · DETECT · RESPOND</text>
+  <rect x=".75" y=".75" width="1198.5" height="418.5" rx="23.25" fill="none" stroke="#7ce6cb" stroke-opacity=".16" stroke-width="1.5"/>
+</svg>
