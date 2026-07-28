@@ -1,89 +1,116 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="350" viewBox="0 0 1100 350" role="img" aria-labelledby="title desc">
-  <title id="title">Argus ports and adapters architecture as a Greek temple</title>
-  <desc id="desc">An animated temple diagram places clients in the pediment, HTTP and application layers in the columns, domain policies at the heart, and infrastructure in the foundation.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="390" viewBox="0 0 1100 390" role="img" aria-labelledby="title desc">
+  <title id="title">Argus ports and adapters architecture</title>
+  <desc id="desc">A Greek temple diagram shows HTTP and worker driving adapters entering application services and the framework-free domain core, with MySQL, Redis, and notification infrastructure below.</desc>
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
       <stop stop-color="#11162a"/><stop offset="1" stop-color="#092027"/>
     </linearGradient>
     <linearGradient id="stone" x1="0" y1="0" x2="0" y2="1">
-      <stop stop-color="#f0dfb7"/><stop offset="1" stop-color="#bd8557"/>
+      <stop stop-color="#f2e2bb"/><stop offset=".55" stop-color="#d8ad76"/><stop offset="1" stop-color="#a96949"/>
+    </linearGradient>
+    <linearGradient id="sanctum" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#293153"/><stop offset="1" stop-color="#173b42"/>
     </linearGradient>
     <linearGradient id="core" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#246f76"/><stop offset="1" stop-color="#273f78"/>
+      <stop stop-color="#287f80"/><stop offset="1" stop-color="#303e78"/>
     </linearGradient>
     <pattern id="key" width="42" height="12" patternUnits="userSpaceOnUse">
-      <path d="M0 1h27v7H10V5h11M42 11H15V4h17v3H21" fill="none" stroke="#9c593d" stroke-width="1.5"/>
+      <path d="M0 1h27v7H10V5h11M42 11H15V4h17v3H21" fill="none" stroke="#99563e" stroke-width="1.5"/>
     </pattern>
     <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
-      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feGaussianBlur stdDeviation="3" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
+    <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0L8 4L0 8Z" fill="#68cabb"/>
+    </marker>
     <style>
-      .route{stroke-dasharray:5 9;animation:route 7s linear infinite}
-      .coreEye{animation:coreEye 3s ease-in-out infinite}
-      .ember{animation:ember 2.4s ease-in-out infinite}.e2{animation-delay:-1.2s}
-      @keyframes route{to{stroke-dashoffset:-140}}
-      @keyframes coreEye{0%,100%{opacity:.55}50%{opacity:1}}
-      @keyframes ember{0%,100%{opacity:.25}50%{opacity:1}}
-      @media (prefers-reduced-motion:reduce){.route,.coreEye,.ember{animation:none}}
+      .driveL{animation:driveL 5.4s linear infinite}
+      .driveR{animation:driveR 5.4s -2.7s linear infinite}
+      .enterL{animation:enterL 4.2s -.7s linear infinite}
+      .enterR{animation:enterR 4.2s -2.8s linear infinite}
+      .exitCore{animation:exitCore 4.8s -1.2s linear infinite}
+      .coreEye{animation:coreEye 3.4s cubic-bezier(.77,0,.175,1) infinite}
+      @keyframes driveL{0%{transform:translate(0);opacity:0}12%,82%{opacity:1}100%{transform:translate(-125px,74px);opacity:0}}
+      @keyframes driveR{0%{transform:translate(0);opacity:0}12%,82%{opacity:1}100%{transform:translate(125px,74px);opacity:0}}
+      @keyframes enterL{0%{transform:translateX(0);opacity:0}15%,80%{opacity:1}100%{transform:translateX(50px);opacity:0}}
+      @keyframes enterR{0%{transform:translateX(0);opacity:0}15%,80%{opacity:1}100%{transform:translateX(-50px);opacity:0}}
+      @keyframes exitCore{0%{transform:translateY(0);opacity:0}15%,80%{opacity:1}100%{transform:translateY(47px);opacity:0}}
+      @keyframes coreEye{0%,100%{opacity:.62}50%{opacity:1}}
+      @media (prefers-reduced-motion:reduce){
+        .driveL,.driveR,.enterL,.enterR,.exitCore{animation:none;opacity:0}
+        .coreEye{animation:coreEye 6s cubic-bezier(.77,0,.175,1) infinite}
+      }
     </style>
   </defs>
-  <rect width="1100" height="350" rx="20" fill="url(#sky)"/>
-  <rect x="16" y="16" width="1068" height="318" rx="14" fill="none" stroke="#b45d42" stroke-width="1.5"/>
 
-  <g text-anchor="middle">
-    <text x="550" y="40" fill="#f0dfb7" font-family="Georgia,Palatino Linotype,serif" font-size="22" font-weight="700" letter-spacing="4">THE TEMPLE OF PORTS &amp; ADAPTERS</text>
+  <rect width="1100" height="390" rx="20" fill="url(#sky)"/>
+  <rect x="16" y="16" width="1068" height="358" rx="14" fill="none" stroke="#b45d42" stroke-width="1.5"/>
+  <text x="550" y="43" fill="#f1e2bd" font-family="Georgia,Palatino Linotype,serif" font-size="22" font-weight="700" letter-spacing="3.5" text-anchor="middle">PORTS &amp; ADAPTERS · THE ARGUS TEMPLE</text>
 
-    <!-- Pediment / inbound -->
-    <path d="M210 119L550 58L890 119Z" fill="#282238" stroke="#d49054" stroke-width="3"/>
-    <path d="M256 108L550 71L844 108" fill="none" stroke="#6ec1b5" stroke-width="1" opacity=".5"/>
-    <text x="550" y="94" fill="#f5e8c5" font-family="Georgia,serif" font-size="16" font-weight="700">BROWSER &amp; API CLIENTS</text>
-    <text x="550" y="111" fill="#74bdb4" font-family="ui-monospace,monospace" font-size="9" letter-spacing="2">INBOUND REQUESTS</text>
+  <!-- Pediment: callers on the driving side -->
+  <path d="M145 124L550 61L955 124Z" fill="#27233a" stroke="#d49054" stroke-width="3"/>
+  <path d="M218 111L550 73L882 111" fill="none" stroke="#69c2b4" stroke-width="1" opacity=".45"/>
+  <text x="550" y="91" fill="#e8c865" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="10" letter-spacing="3" text-anchor="middle">DRIVING SIDE</text>
+  <text x="350" y="112" fill="#f4e7c3" font-family="Georgia,serif" font-size="14" font-weight="700" text-anchor="middle">HTTP clients</text>
+  <text x="750" y="112" fill="#f4e7c3" font-family="Georgia,serif" font-size="14" font-weight="700" text-anchor="middle">Scheduled tasks</text>
+  <rect x="132" y="124" width="836" height="19" rx="2" fill="url(#stone)"/>
+  <rect x="154" y="128" width="792" height="11" fill="url(#key)" opacity=".82"/>
 
-    <!-- Entablature -->
-    <rect x="196" y="119" width="708" height="18" rx="2" fill="url(#stone)"/>
-    <rect x="214" y="123" width="672" height="10" fill="url(#key)" opacity=".8"/>
-
-    <!-- Four structural columns -->
-    <g fill="url(#stone)" stroke="#9b5a40" stroke-width="1.5">
-      <path d="M228 145h132l-12 14H240ZM244 159h100v91H244ZM234 250h120l10 15H224Z"/>
-      <path d="M398 145h132l-12 14H410ZM414 159h100v91H414ZM404 250h120l10 15H394Z"/>
-      <path d="M570 145h132l-12 14H582ZM586 159h100v91H586ZM576 250h120l10 15H566Z"/>
-      <path d="M740 145h132l-12 14H752ZM756 159h100v91H756ZM746 250h120l10 15H736Z"/>
-    </g>
-    <g fill="#38283a">
-      <rect x="258" y="169" width="72" height="68" rx="4"/>
-      <rect x="428" y="169" width="72" height="68" rx="4"/>
-      <rect x="600" y="169" width="72" height="68" rx="4"/>
-      <rect x="770" y="169" width="72" height="68" rx="4"/>
-    </g>
-    <g font-family="ui-monospace,SFMono-Regular,Consolas,monospace">
-      <text x="294" y="196" fill="#f0d06f" font-size="12" font-weight="700">FIBER</text>
-      <text x="294" y="214" fill="#caa585" font-size="9">HTTP ADAPTER</text>
-      <text x="464" y="196" fill="#f0d06f" font-size="12" font-weight="700">SERVICE</text>
-      <text x="464" y="214" fill="#caa585" font-size="9">USE CASES</text>
-      <text x="636" y="196" fill="#f0d06f" font-size="12" font-weight="700">DOMAIN</text>
-      <text x="636" y="214" fill="#caa585" font-size="9">POLICIES + PORTS</text>
-      <text x="806" y="196" fill="#f0d06f" font-size="12" font-weight="700">WORKERS</text>
-      <text x="806" y="214" fill="#caa585" font-size="9">SCHEDULED JOBS</text>
-    </g>
-
-    <!-- Signals moving into the domain -->
-    <path class="route" d="M294 143V158M464 143V158M806 143V158M550 118V281" fill="none" stroke="#66d3c0" stroke-width="2"/>
-    <g class="coreEye" transform="translate(550 202)" filter="url(#glow)">
-      <path d="M-25 0C-13-15 13-15 25 0C13 15-13 15-25 0Z" fill="url(#core)" stroke="#e8c864" stroke-width="2"/>
-      <circle r="7" fill="#74ddc8"/><circle r="3" fill="#11162a"/>
-    </g>
-
-    <!-- Foundation / outbound -->
-    <rect x="181" y="265" width="738" height="18" rx="3" fill="url(#stone)"/>
-    <rect x="161" y="283" width="778" height="43" rx="4" fill="#30243a" stroke="#c26a46" stroke-width="2"/>
-    <text x="270" y="309" fill="#71c8bb" font-family="ui-monospace,monospace" font-size="11">MYSQL · DURABLE STATE</text>
-    <text x="550" y="309" fill="#71c8bb" font-family="ui-monospace,monospace" font-size="11">REDIS · ASYNQ</text>
-    <text x="830" y="309" fill="#71c8bb" font-family="ui-monospace,monospace" font-size="11">WEBHOOKS · SLACK</text>
+  <!-- Static routes remain meaningful when motion is reduced -->
+  <g fill="none" stroke="#68cabb" stroke-width="1.5" opacity=".65" marker-end="url(#arrow)">
+    <path d="M350 116L225 190"/>
+    <path d="M750 116L875 190"/>
+    <path d="M330 214H380"/>
+    <path d="M770 214H720"/>
+    <path d="M550 267V314"/>
+  </g>
+  <g fill="#f0cd69" filter="url(#glow)">
+    <circle class="driveL" cx="350" cy="116" r="3.5"/>
+    <circle class="driveR" cx="750" cy="116" r="3.5"/>
+    <circle class="enterL" cx="330" cy="214" r="3.5"/>
+    <circle class="enterR" cx="770" cy="214" r="3.5"/>
+    <circle class="exitCore" cx="550" cy="267" r="3.5"/>
   </g>
 
-  <g fill="#edc965" filter="url(#glow)">
-    <circle class="ember" cx="187" cy="305" r="3"/><circle class="ember e2" cx="913" cy="305" r="3"/>
+  <!-- Driving adapters: the outer colonnade -->
+  <g>
+    <path d="M128 151h194l-13 15H141ZM145 166h160v96H145ZM132 262h186l12 16H120Z" fill="url(#stone)" stroke="#98563f" stroke-width="1.5"/>
+    <rect x="164" y="177" width="122" height="72" rx="4" fill="#33263e"/>
+    <text x="225" y="202" fill="#f0d06f" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="13" font-weight="700" text-anchor="middle">FIBER HTTP</text>
+    <text x="225" y="221" fill="#d2b18e" font-family="ui-monospace,monospace" font-size="9" text-anchor="middle">REQUEST ADAPTER</text>
+    <text x="225" y="237" fill="#9fc0b8" font-family="ui-monospace,monospace" font-size="9" text-anchor="middle">MIDDLEWARE + HANDLERS</text>
   </g>
+  <g>
+    <path d="M778 151h194l-13 15H791ZM795 166h160v96H795ZM782 262h186l12 16H770Z" fill="url(#stone)" stroke="#98563f" stroke-width="1.5"/>
+    <rect x="814" y="177" width="122" height="72" rx="4" fill="#33263e"/>
+    <text x="875" y="202" fill="#f0d06f" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="13" font-weight="700" text-anchor="middle">ASYNQ WORKER</text>
+    <text x="875" y="221" fill="#d2b18e" font-family="ui-monospace,monospace" font-size="9" text-anchor="middle">TASK ADAPTER</text>
+    <text x="875" y="237" fill="#9fc0b8" font-family="ui-monospace,monospace" font-size="9" text-anchor="middle">SCHEDULED PROCESSORS</text>
+  </g>
+
+  <!-- Application and domain form one nested, framework-free core -->
+  <rect x="380" y="151" width="340" height="127" rx="8" fill="url(#sanctum)" stroke="#cf7b4d" stroke-width="2"/>
+  <text x="550" y="175" fill="#f3dfaa" font-family="Georgia,serif" font-size="16" font-weight="700" text-anchor="middle">Application services</text>
+  <text x="550" y="191" fill="#9fc0b8" font-family="ui-monospace,monospace" font-size="9" letter-spacing="1.5" text-anchor="middle">USE-CASE ORCHESTRATION</text>
+  <rect x="421" y="201" width="258" height="57" rx="7" fill="url(#core)" stroke="#68cabb" stroke-width="1.5"/>
+  <g class="coreEye" transform="translate(456 229)" filter="url(#glow)">
+    <path d="M-19 0C-10-11 10-11 19 0C10 11-10 11-19 0Z" fill="#17243a" stroke="#e7c765" stroke-width="1.5"/>
+    <circle r="5.5" fill="#69d4bf"/><circle r="2.5" fill="#101629"/>
+  </g>
+  <text x="562" y="223" fill="#f4e5bc" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="12" font-weight="700" text-anchor="middle">DOMAIN POLICIES + PORTS</text>
+  <text x="562" y="242" fill="#b9cec6" font-family="ui-monospace,monospace" font-size="9" text-anchor="middle">FRAMEWORK-FREE CORE</text>
+
+  <!-- Foundation: driven adapters and platform -->
+  <rect x="105" y="278" width="890" height="18" rx="3" fill="url(#stone)"/>
+  <rect x="84" y="296" width="932" height="58" rx="5" fill="#30243a" stroke="#c26a46" stroke-width="2"/>
+  <text x="550" y="312" fill="#e8c866" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="9" letter-spacing="2.5" text-anchor="middle">DRIVEN SIDE &amp; PLATFORM</text>
+  <g font-family="ui-monospace,SFMono-Regular,Consolas,monospace" text-anchor="middle">
+    <text x="238" y="337" fill="#75d0c1" font-size="11" font-weight="700">MYSQL ADAPTERS</text>
+    <text x="550" y="337" fill="#75d0c1" font-size="11" font-weight="700">REDIS RUNTIME</text>
+    <text x="862" y="337" fill="#75d0c1" font-size="11" font-weight="700">HTTP NOTIFIER</text>
+  </g>
+  <path d="M394 320V343M706 320V343" stroke="#80514a" stroke-width="1"/>
+
+  <text x="550" y="368" fill="#c59261" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="9" letter-spacing="3" text-anchor="middle">REQUESTS IN · POLICIES WITHIN · EFFECTS OUT</text>
 </svg>

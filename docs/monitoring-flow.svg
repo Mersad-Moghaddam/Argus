@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1100" height="250" viewBox="0 0 1100 250" role="img" aria-labelledby="title desc">
-  <title id="title">Argus monitoring flow</title>
-  <desc id="desc">Checks move from the scheduler to workers, durable history, incident policy, and alert delivery.</desc>
+  <title id="title">Argus website monitoring flow</title>
+  <desc id="desc">Due monitors move through the scheduler, deduplicated Asynq queue, check worker, MySQL history, incident policy, and outbox alert delivery.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop stop-color="#11162a"/><stop offset="1" stop-color="#092027"/>
@@ -14,63 +14,92 @@
     <pattern id="key" width="42" height="12" patternUnits="userSpaceOnUse">
       <path d="M0 1h27v7H10V5h11M42 11H15V4h17v3H21" fill="none" stroke="#d0834b" stroke-width="1.5"/>
     </pattern>
-    <filter id="soft"><feGaussianBlur stdDeviation="3"/></filter>
+    <filter id="soft" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
     <style>
-      .packet{animation:move 4.5s linear infinite}
-      .p2{animation-delay:1.5s}.p3{animation-delay:3s}
-      .lamp{animation:blink 2.2s ease-in-out infinite}
-      @keyframes move{0%{transform:translateX(0);opacity:0}8%{opacity:1}92%{opacity:1}100%{transform:translateX(792px);opacity:0}}
-      @keyframes blink{0%,100%{opacity:.3}50%{opacity:1}}
-      @media (prefers-reduced-motion:reduce){.packet,.lamp{animation:none}}
+      .packet{animation:move 5.4s linear infinite}
+      .p2{animation-delay:-1.8s}.p3{animation-delay:-3.6s}
+      .lamp{animation:blink 2.8s cubic-bezier(.77,0,.175,1) infinite}
+      @keyframes move{0%{transform:translateX(0);opacity:0}8%,92%{opacity:1}100%{transform:translateX(925px);opacity:0}}
+      @keyframes blink{0%,100%{opacity:.35}50%{opacity:1}}
+      @media (prefers-reduced-motion:reduce){
+        .packet{animation:none;opacity:.75;transform:translateX(462px)}
+        .lamp{animation:blink 5s cubic-bezier(.77,0,.175,1) infinite}
+      }
     </style>
   </defs>
+
   <rect width="1100" height="250" rx="20" fill="url(#bg)"/>
   <rect x="25" y="16" width="1050" height="12" fill="url(#key)" opacity=".65"/>
-  <path d="M153 119H945" stroke="#33505a" stroke-width="2"/>
-  <path d="M153 119H945" stroke="url(#line)" stroke-width="2" stroke-dasharray="3 12" opacity=".55"/>
-  <g class="packet" transform="translate(153 119)">
-    <circle r="7" fill="#55edc4" opacity=".2" filter="url(#soft)"/><circle r="3.5" fill="#74ffd8"/>
+  <path d="M88 120H1013" stroke="#33505a" stroke-width="2"/>
+  <path d="M88 120H1013" stroke="url(#line)" stroke-width="2" stroke-dasharray="3 12" opacity=".62"/>
+
+  <!-- Three evenly-spaced packets explain continuous, deduplicated work. -->
+  <g transform="translate(88 120)">
+    <g class="packet"><circle r="7" fill="#55edc4" opacity=".18" filter="url(#soft)"/><circle r="3.5" fill="#74ffd8"/></g>
   </g>
-  <g class="packet p2" transform="translate(153 119)">
-    <circle r="7" fill="#55edc4" opacity=".2" filter="url(#soft)"/><circle r="3.5" fill="#74ffd8"/>
+  <g transform="translate(88 120)">
+    <g class="packet p2"><circle r="7" fill="#55edc4" opacity=".18" filter="url(#soft)"/><circle r="3.5" fill="#74ffd8"/></g>
   </g>
-  <g class="packet p3" transform="translate(153 119)">
-    <circle r="7" fill="#55edc4" opacity=".2" filter="url(#soft)"/><circle r="3.5" fill="#74ffd8"/>
+  <g transform="translate(88 120)">
+    <g class="packet p3"><circle r="7" fill="#55edc4" opacity=".18" filter="url(#soft)"/><circle r="3.5" fill="#74ffd8"/></g>
   </g>
+
   <g font-family="Inter,Segoe UI,sans-serif" text-anchor="middle">
-    <g transform="translate(116 119)">
-      <rect x="-82" y="-48" width="164" height="96" rx="14" fill="url(#panel)" stroke="#986048"/>
-      <circle class="lamp" cx="0" cy="-15" r="8" fill="#63efc7"/>
-      <text y="15" fill="#f3e6c2" font-family="Georgia,serif" font-size="17" font-weight="700">Scheduler</text>
-      <text y="35" fill="#79938e" font-size="11">find due monitors</text>
+    <!-- 1 · Scheduler -->
+    <g transform="translate(88 120)">
+      <rect x="-70" y="-48" width="140" height="96" rx="12" fill="url(#panel)" stroke="#986048"/>
+      <circle class="lamp" cy="-16" r="8" fill="#63efc7"/>
+      <text y="15" fill="#f3e6c2" font-family="Georgia,serif" font-size="16" font-weight="700">Scheduler</text>
+      <text y="35" fill="#9fb1ab" font-size="10">scan due monitors</text>
     </g>
-    <g transform="translate(332 119)">
-      <rect x="-82" y="-48" width="164" height="96" rx="14" fill="url(#panel)" stroke="#986048"/>
-      <path d="M-13-21h26M-9-27h18M-17-15h34" stroke="#63efc7" stroke-width="3" stroke-linecap="round"/>
-      <text y="15" fill="#f3e6c2" font-family="Georgia,serif" font-size="17" font-weight="700">Asynq workers</text>
-      <text y="35" fill="#79938e" font-size="11">evaluate + dedupe</text>
+
+    <!-- 2 · Asynq queue -->
+    <g transform="translate(273 120)">
+      <rect x="-70" y="-48" width="140" height="96" rx="12" fill="url(#panel)" stroke="#986048"/>
+      <path d="M-16-26h32M-13-19h26M-10-12h20" stroke="#63efc7" stroke-width="3" stroke-linecap="round"/>
+      <text y="15" fill="#f3e6c2" font-family="Georgia,serif" font-size="16" font-weight="700">Asynq queue</text>
+      <text y="35" fill="#9fb1ab" font-size="10">enqueue + dedupe</text>
     </g>
-    <g transform="translate(548 119)">
-      <rect x="-82" y="-48" width="164" height="96" rx="14" fill="url(#panel)" stroke="#986048"/>
-      <ellipse cy="-22" rx="16" ry="6" fill="none" stroke="#63efc7" stroke-width="2"/>
-      <path d="M-16-22v16c0 8 32 8 32 0v-16M-16-14c0 8 32 8 32 0" fill="none" stroke="#63efc7" stroke-width="2"/>
-      <text y="15" fill="#f3e6c2" font-family="Georgia,serif" font-size="17" font-weight="700">MySQL history</text>
-      <text y="35" fill="#79938e" font-size="11">checks + state</text>
+
+    <!-- 3 · Check worker -->
+    <g transform="translate(458 120)">
+      <rect x="-70" y="-48" width="140" height="96" rx="12" fill="url(#panel)" stroke="#986048"/>
+      <path d="M-20-20C-10-33 10-33 20-20C10-7-10-7-20-20Z" fill="none" stroke="#63efc7" stroke-width="2"/>
+      <circle cy="-20" r="6" fill="#e8c864"/><circle cy="-20" r="2.5" fill="#15192b"/>
+      <text y="15" fill="#f3e6c2" font-family="Georgia,serif" font-size="16" font-weight="700">Check worker</text>
+      <text y="35" fill="#9fb1ab" font-size="10">evaluate target</text>
     </g>
-    <g transform="translate(764 119)">
-      <rect x="-82" y="-48" width="164" height="96" rx="14" fill="url(#panel)" stroke="#986048"/>
-      <path d="M0-29l18 31H-18Z" fill="none" stroke="#f2c75c" stroke-width="2"/>
-      <path d="M0-18v10M0-3v2" stroke="#f2c75c" stroke-width="2" stroke-linecap="round"/>
-      <text y="15" fill="#f3e6c2" font-family="Georgia,serif" font-size="17" font-weight="700">Incident policy</text>
-      <text y="35" fill="#79938e" font-size="11">open or resolve</text>
+
+    <!-- 4 · Durable history -->
+    <g transform="translate(643 120)">
+      <rect x="-70" y="-48" width="140" height="96" rx="12" fill="url(#panel)" stroke="#986048"/>
+      <ellipse cy="-24" rx="16" ry="6" fill="none" stroke="#63efc7" stroke-width="2"/>
+      <path d="M-16-24v16c0 8 32 8 32 0v-16M-16-16c0 8 32 8 32 0" fill="none" stroke="#63efc7" stroke-width="2"/>
+      <text y="15" fill="#f3e6c2" font-family="Georgia,serif" font-size="16" font-weight="700">MySQL history</text>
+      <text y="35" fill="#9fb1ab" font-size="10">persist result</text>
     </g>
-    <g transform="translate(980 119)">
-      <rect x="-82" y="-48" width="164" height="96" rx="14" fill="url(#panel)" stroke="#986048"/>
-      <path d="M-17-24h34v24h-34zM-17-24L0-11l17-13" fill="none" stroke="#4bb4ed" stroke-width="2"/>
-      <text y="15" fill="#f3e6c2" font-family="Georgia,serif" font-size="17" font-weight="700">Outbox alerts</text>
-      <text y="35" fill="#79938e" font-size="11">webhook + Slack</text>
+
+    <!-- 5 · Incident transition -->
+    <g transform="translate(828 120)">
+      <rect x="-70" y="-48" width="140" height="96" rx="12" fill="url(#panel)" stroke="#986048"/>
+      <path d="M0-31l18 31H-18Z" fill="none" stroke="#f2c75c" stroke-width="2"/>
+      <path d="M0-20v10M0-5v2" stroke="#f2c75c" stroke-width="2" stroke-linecap="round"/>
+      <text y="15" fill="#f3e6c2" font-family="Georgia,serif" font-size="16" font-weight="700">Incident policy</text>
+      <text y="35" fill="#9fb1ab" font-size="10">open or resolve</text>
     </g>
-    <text x="550" y="220" fill="#bd9265" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="12" letter-spacing="2">THE GOLDEN THREAD · FROM CHECK TO RESPONSE</text>
+
+    <!-- 6 · Reliable delivery -->
+    <g transform="translate(1013 120)">
+      <rect x="-70" y="-48" width="140" height="96" rx="12" fill="url(#panel)" stroke="#986048"/>
+      <path d="M-17-26h34v24h-34zM-17-26L0-13l17-13" fill="none" stroke="#5bb9eb" stroke-width="2"/>
+      <text y="15" fill="#f3e6c2" font-family="Georgia,serif" font-size="16" font-weight="700">Outbox alerts</text>
+      <text y="35" fill="#9fb1ab" font-size="10">webhooks + Slack</text>
+    </g>
+
+    <text x="550" y="220" fill="#d09a61" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="11" letter-spacing="2">THE GOLDEN THREAD · FROM DUE CHECK TO DELIVERED ALERT</text>
   </g>
   <rect x=".75" y=".75" width="1098.5" height="248.5" rx="19.25" fill="none" stroke="#b95d41" stroke-opacity=".75" stroke-width="1.5"/>
 </svg>
