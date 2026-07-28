@@ -60,6 +60,14 @@
     projectCancel: document.getElementById('projProjectCancel'),
     projectSubmit: document.getElementById('projProjectSubmit'),
 
+    environmentModal: document.getElementById('projEnvironmentModal'),
+    environmentForm: document.getElementById('projEnvironmentForm'),
+    environmentName: document.getElementById('projEnvironmentName'),
+    environmentBaseURL: document.getElementById('projEnvironmentBaseUrl'),
+    environmentFormError: document.getElementById('projEnvironmentFormError'),
+    environmentCancel: document.getElementById('projEnvironmentCancel'),
+    environmentSubmit: document.getElementById('projEnvironmentSubmit'),
+
     routeModal: document.getElementById('projRouteModal'),
     routeForm: document.getElementById('projRouteForm'),
     routeModalTitle: document.getElementById('projRouteModalTitle'),
@@ -1802,7 +1810,7 @@
     modalReturnFocus = null;
   }
 
-  [pel.projectModal, pel.routeModal, pel.bulkModal, pel.confirmModal].forEach((overlay) => {
+  [pel.projectModal, pel.environmentModal, pel.routeModal, pel.bulkModal, pel.confirmModal].forEach((overlay) => {
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) closeModal(overlay);
     });
@@ -1810,7 +1818,7 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    [pel.projectModal, pel.routeModal, pel.bulkModal, pel.confirmModal].forEach((overlay) => {
+    [pel.projectModal, pel.environmentModal, pel.routeModal, pel.bulkModal, pel.confirmModal].forEach((overlay) => {
       if (!overlay.classList.contains('hidden')) closeModal(overlay);
     });
   });
@@ -1861,6 +1869,32 @@
     hideFormError(pel.projectFormError);
     openModal(pel.projectModal);
   }
+
+  function openEnvironmentModal() {
+    pel.environmentForm.reset();
+    hideFormError(pel.environmentFormError);
+    openModal(pel.environmentModal);
+  }
+
+  pel.environmentCancel.addEventListener('click', () => closeModal(pel.environmentModal));
+  pel.environmentForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.environmentFormError);
+    setButtonLoading(pel.environmentSubmit, true, 'Creating...');
+    try {
+      await apiProjects(`/projects/${state.project.id}/environments`, {
+        method: 'POST',
+        body: JSON.stringify({ name: pel.environmentName.value, baseUrl: pel.environmentBaseURL.value }),
+      });
+      closeModal(pel.environmentModal);
+      showToast('Environment created.', 'success');
+      loadProjectDetail({ silent: true });
+    } catch (err) {
+      if (!(err instanceof SessionExpired)) showFormError(pel.environmentFormError, err.message);
+    } finally {
+      setButtonLoading(pel.environmentSubmit, false);
+    }
+  });
 
   pel.projectCancel.addEventListener('click', () => closeModal(pel.projectModal));
 
@@ -2208,13 +2242,7 @@
           navigate(`#/projects/${state.project.id}/import`);
           break;
         case 'create-environment': {
-          const name = window.prompt('Environment name (for example, staging):');
-          if (name === null) break;
-          const baseUrl = window.prompt('Base URL (optional, for example, https://api.example.com):');
-          if (baseUrl === null) break;
-          await apiProjects(`/projects/${state.project.id}/environments`, { method: 'POST', body: JSON.stringify({ name, baseUrl }) });
-          showToast('Environment created.', 'success');
-          loadProjectDetail({ silent: true });
+          openEnvironmentModal();
           break;
         }
         case 'edit-route': {

@@ -436,6 +436,29 @@
       </div>
     </div>
 
+    <!-- Environment create -->
+    <div class="modal-overlay hidden" id="projEnvironmentModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projEnvironmentModalTitle" tabindex="-1">
+        <h3 id="projEnvironmentModalTitle">Add environment</h3>
+        <form id="projEnvironmentForm" class="stack">
+          <div class="field">
+            <label for="projEnvironmentName">Name</label>
+            <input id="projEnvironmentName" autocomplete="off" placeholder="Staging" required maxlength="120" />
+          </div>
+          <div class="field">
+            <label for="projEnvironmentBaseUrl">Base URL <span class="hint">(optional)</span></label>
+            <input id="projEnvironmentBaseUrl" type="url" autocomplete="url" placeholder="https://api.example.com" maxlength="2083" />
+          </div>
+          <p class="hint">The base URL is normalized before it is saved. Leave it empty until this environment has a public target.</p>
+          <p class="proj-form-error hidden" id="projEnvironmentFormError" role="alert"></p>
+          <div class="modal-actions">
+            <button class="secondary" type="button" id="projEnvironmentCancel">Cancel</button>
+            <button type="submit" id="projEnvironmentSubmit">Create environment</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Route create/edit -->
     <div class="modal-overlay hidden" id="projRouteModal">
       <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="projRouteModalTitle" tabindex="-1">
