@@ -15,7 +15,7 @@
 | Identity | Token-based project auth; legacy API key can fail open | Cookie sessions, CSRF, expiry, revocation, secure defaults | `internal/application/auth.go`, `internal/adapters/inbound/http/middleware.go`, `frontend/projects.js` | In progress — cookie sessions, global routable account access, password change, and session revocation landed; recovery remains |
 | Product shell | Guest and project controls can coexist | Separate public, identity, and authenticated shells | `frontend/index.html`, `frontend/app.js`, `frontend/projects.js` | In progress — global account, authentication, and isolated project shells landed; authenticated navigation/onboarding remain |
 | Route monitoring | Imported routes can be evaluated as recurring requests | Catalog-only import; explicit budgeted synthetics | `internal/application/imports.go`, `internal/worker/route_processor.go` | Planned |
-| URL handling | Validation is split and partly deferred | One canonical backend pipeline and preview API | `internal/domain/endpoint.go`, route/import services, worker composer | In progress — core canonical pipeline and authenticated preview endpoint complete; environment/hash migration remains |
+| URL handling | Validation is split and partly deferred | One canonical backend pipeline and preview API | `internal/domain/endpoint.go`, route/import services, worker composer | In progress — core canonical pipeline, authenticated preview endpoint, hash migration, and default production environment creation complete; environment management remains |
 | Telemetry and SLOs | No telemetry-first pipeline or SLO control plane | Authenticated OTLP, mapping, SLOs, incidents, self-monitoring | New v2 components | Planned |
 | Accessibility and motion | Known hidden-state, dialog, table, refresh, and motion defects | WCAG 2.2 AA and all five motion plans | `animation-plans/`, blueprint §5 | Planned |
 
@@ -49,6 +49,7 @@
 | 2c | Additive environment and canonical-identity schema | Complete | Pending |
 | 2d | Canonical identity dual-write for route mutations | Complete | Pending |
 | 2e | Restartable legacy canonical-identity backfill command | Complete | Pending |
+| 2f | Default production environment for each new project | Complete | Pending |
 | 4a | Hidden-state contract and motion-plan implementation | Complete | Pending |
 | 2 | Environments, endpoint canonicalization, safe synthetic migration | Planned | — |
 | 3 | Telemetry ingestion, metric storage, mapping, SLO and incidents | Planned | — |
@@ -79,6 +80,7 @@
 | 2026-07-28 | 2c | Added an ordered, reversible migration for project environments, nullable versioned canonical identity/hash fields, and an operator-visible collision ledger. It retains legacy route fields during the migration window. Storage migration parser tests passed; live MySQL smoke testing remains available through `MYSQL_TEST_DSN`. | Complete |
 | 2026-07-28 | 2d | Manual and OpenAPI-created/updated routes now persist canonical identity, a 32-byte SHA-256 lookup hash, and canonicalizer version `1`. The MySQL route store dual-writes and reads these fields. Focused domain, application, and API tests passed. | Complete |
 | 2026-07-28 | 2e | Added `cmd/backfill-endpoint-identity`: an operator-run, dry-run-capable, bounded batch backfill that uses the domain canonicalizer, records invalid legacy rows and exact canonical duplicates in the conflict ledger, and can safely resume. Duplicate detection and writes share a transaction with an index-range lock. Command compilation and domain tests passed. | Complete |
+| 2026-07-28 | 2f | New projects now create a default `production` environment within the project/owner transaction. Its base URL is intentionally empty until onboarding or an integration configures it. MySQL adapter compilation and migration-storage tests passed. | Complete |
 | 2026-07-28 | 1b | Added authenticated session inventory and revoke-other-sessions controls. Only the current-session marker is returned; token hashes remain server-only. Revocation removes every sibling session while retaining the session used for the request. Application and API tests passed. | Complete |
 | 2026-07-28 | 1c | Added explicit Fiber read/write/idle timeouts, strict CSP and companion browser headers, a 256 KiB authentication/control payload guard, and per-IP authentication throttling with `429` responses. Platform, application, and HTTP API tests passed. | Complete |
 | 2026-07-28 | 1d | Moved registration/login out of the private Projects tab into dedicated `#/register` and `#/login` routes, with Register as the primary global guest action. Guest project navigation redirects to login and only accepts a constrained same-origin `#/projects/...` return target; header actions reflect the cookie-authenticated session. JavaScript syntax, diff checks, and focused domain/API tests passed. | Complete |

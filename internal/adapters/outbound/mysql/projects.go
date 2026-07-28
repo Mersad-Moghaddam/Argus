@@ -54,6 +54,14 @@ func (r *Store) CreateProject(ctx context.Context, project models.Project, owner
 	if _, err = tx.ExecContext(ctx, `INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, 'owner')`, id, ownerUserID); err != nil {
 		return 0, err
 	}
+	// Every project starts with an explicit production environment. The empty
+	// canonical base is intentional: source selection/onboarding supplies it
+	// later, while telemetry can already attribute signals to production.
+	if _, err = tx.ExecContext(ctx, `INSERT INTO project_environments
+		(project_id, name, canonical_base_url, canonical_origin, is_default)
+		VALUES (?, 'production', '', '', 1)`, id); err != nil {
+		return 0, err
+	}
 	if err = tx.Commit(); err != nil {
 		return 0, err
 	}
