@@ -57,8 +57,18 @@ func NewFiberApp(service *application.Service, logStore *observability.LogStore,
 
 	app.Static("/", "./frontend", fiber.Static{
 		Compress:      true,
-		CacheDuration: 10 * time.Minute,
-		MaxAge:        86400,
+		CacheDuration: 10 * time.Second,
+		// Frontend assets intentionally use stable names (index.html, app.js,
+		// projects.js, styles.css). Require browsers to revalidate them so a
+		// deployment cannot leave users on a day-old dashboard that is missing
+		// newly added tabs or behavior.
+		MaxAge:         0,
+		ModifyResponse: requireStaticRevalidation,
 	})
 	return app
+}
+
+func requireStaticRevalidation(c *fiber.Ctx) error {
+	c.Set(fiber.HeaderCacheControl, "no-cache")
+	return nil
 }
