@@ -37,22 +37,22 @@
 | Checkpoint | Scope | Status | Commit |
 | --- | --- | --- | --- |
 | 0 | Branch, baseline evidence, architecture/traceability controls | In progress | — |
-| 1a | Cookie session and browser credential hardening | Complete | Pending |
-| 1b | Account session inventory and revoke-other-sessions controls | Complete | Pending |
-| 1c | HTTP timeout, browser-header, and authentication-abuse baseline | Complete | Pending |
-| 1d | Global account actions, routable identity flow, and safe project return | Complete | Pending |
-| 1e | Password change with sibling-session revocation | Complete | Pending |
-| 1f | Authenticated account screen and session-management UI | Complete | Pending |
+| 1a | Cookie session and browser credential hardening | Complete | `edfa349` |
+| 1b | Account session inventory and revoke-other-sessions controls | Complete | `412cec8` |
+| 1c | HTTP timeout, browser-header, and authentication-abuse baseline | Complete | `0e38bd8` |
+| 1d | Global account actions, routable identity flow, and safe project return | Complete | `507f152` |
+| 1e | Password change with sibling-session revocation | Complete | `88aa6ae` |
+| 1f | Authenticated account screen and session-management UI | Complete | `4332cab` |
 | 1 | Identity, authorization, secure global shell | In progress | — |
-| 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | Pending |
-| 2b | Canonical endpoint pipeline and preview API | Complete | Pending |
-| 2c | Additive environment and canonical-identity schema | Complete | Pending |
-| 2d | Canonical identity dual-write for route mutations | Complete | Pending |
-| 2e | Restartable legacy canonical-identity backfill command | Complete | Pending |
-| 2f | Default production environment for each new project | Complete | Pending |
-| 2g | Tenant-scoped project environment API | Complete | Pending |
-| 2h | Project environment visibility in authenticated UI | Complete | Pending |
-| 4a | Hidden-state contract and motion-plan implementation | Complete | Pending |
+| 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | `8ab613a` |
+| 2b | Canonical endpoint pipeline and preview API | Complete | `580e1bb` |
+| 2c | Additive environment and canonical-identity schema | Complete | `154cca8` |
+| 2d | Canonical identity dual-write for route mutations | Complete | `3ae13b0` |
+| 2e | Restartable legacy canonical-identity backfill command | Complete | `4057f15`, `5b0a9e3` |
+| 2f | Default production environment for each new project | Complete | `5982c00` |
+| 2g | Tenant-scoped project environment API | Complete | `d72bdfd`, `7d6855d`, `f89ea41` |
+| 2h | Project environment visibility in authenticated UI | Complete | `0e04dbe`, `8b945e4`, `f451d18` |
+| 4a | Hidden-state contract and motion-plan implementation | Complete | `3a326a1` |
 | 2 | Environments, endpoint canonicalization, safe synthetic migration | Planned | — |
 | 3 | Telemetry ingestion, metric storage, mapping, SLO and incidents | Planned | — |
 | 4 | Onboarding and all management views; accessibility and motion | Planned | — |
