@@ -394,14 +394,44 @@
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projProjectModalTitle" tabindex="-1">
         <h3 id="projProjectModalTitle">New project</h3>
         <form id="projProjectForm" class="stack">
+          <ol class="wizard-steps project-onboarding-steps" id="projProjectSteps" aria-label="Project setup progress">
+            <li class="wizard-step is-active"><span class="wizard-step-num">1</span>Project</li>
+            <li class="wizard-step"><span class="wizard-step-num">2</span>Source</li>
+            <li class="wizard-step"><span class="wizard-step-num">3</span>Review</li>
+            <li class="wizard-step"><span class="wizard-step-num">4</span>Next steps</li>
+          </ol>
+          <div class="project-onboarding-step" data-project-step="1">
           <div class="field">
             <label for="projFormName">Name</label>
-            <input id="projFormName" placeholder="Payments API" required maxlength="255" />
+            <input id="projFormName" autocomplete="organization" placeholder="Payments API" required maxlength="255" />
           </div>
           <div class="field">
             <label for="projFormDescription">Description</label>
             <input id="projFormDescription" placeholder="Public checkout endpoints" maxlength="2000" />
           </div>
+          <p class="hint">Start with the service or product you want to understand. Monitoring traffic is not created in this step.</p>
+          </div>
+          <fieldset class="project-onboarding-step hidden" data-project-step="2">
+            <legend>How should Argus observe this project?</legend>
+            <p class="hint">Choose a starting point. You can add every other source later.</p>
+            <div class="source-options" role="radiogroup" aria-label="Monitoring source">
+              <label class="source-option"><input type="radio" name="projSource" value="telemetry" checked /><span><strong>OpenTelemetry <em>Recommended</em></strong><small>Passive production telemetry with no requests sent to your service.</small></span></label>
+              <label class="source-option"><input type="radio" name="projSource" value="openapi" /><span><strong>OpenAPI catalog</strong><small>Import endpoint definitions only. Argus sends no requests during import.</small></span></label>
+              <label class="source-option"><input type="radio" name="projSource" value="synthetic" /><span><strong>Synthetic check</strong><small>Create a deliberate, disabled GET or HEAD canary after setup.</small></span></label>
+              <label class="source-option"><input type="radio" name="projSource" value="heartbeat" /><span><strong>Heartbeat</strong><small>Use a push signal for scheduled jobs and workers.</small></span></label>
+              <label class="source-option"><input type="radio" name="projSource" value="later" /><span><strong>Do this later</strong><small>Create the project without connecting a monitoring signal.</small></span></label>
+            </div>
+          </fieldset>
+          <section class="project-onboarding-step hidden" data-project-step="3" aria-labelledby="projOnboardingReviewTitle">
+            <h4 id="projOnboardingReviewTitle">Review the setup</h4>
+            <div id="projOnboardingReview" class="onboarding-review"></div>
+            <p class="hint">Argus will create a default production environment. It will not make an outbound request or enable a synthetic check.</p>
+          </section>
+          <section class="project-onboarding-step hidden" data-project-step="4" aria-labelledby="projOnboardingNextTitle">
+            <h4 id="projOnboardingNextTitle">Project created</h4>
+            <div id="projOnboardingNext" class="onboarding-review"></div>
+          </section>
+          <div id="projProjectAdvanced" class="project-advanced hidden">
           <div class="field-row">
             <div class="field">
               <label for="projFormInterval">Check interval (s)</label>
@@ -427,10 +457,12 @@
             </div>
           </div>
           <p class="hint">These become the defaults for new routes. Existing routes keep their own settings.</p>
+          </div>
           <p class="proj-form-error hidden" id="projProjectFormError" role="alert"></p>
           <div class="modal-actions">
             <button class="secondary" type="button" id="projProjectCancel">Cancel</button>
-            <button type="submit" id="projProjectSubmit">Save project</button>
+            <button class="secondary hidden" type="button" id="projProjectBack">Back</button>
+            <button type="submit" id="projProjectSubmit">Continue</button>
           </div>
         </form>
       </div>
@@ -499,6 +531,80 @@
           <button class="secondary" type="button" id="projTelemetrySecretCopy">Copy secret</button>
           <button type="button" id="projTelemetrySecretClose">I saved it</button>
         </div>
+      </div>
+    </div>
+
+    <!-- SLO definition create -->
+    <div class="modal-overlay hidden" id="projSLOModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projSLOModalTitle" tabindex="-1">
+        <h3 id="projSLOModalTitle">Create service-level objective</h3>
+        <form id="projSLOForm" class="stack">
+          <div class="field">
+            <label for="projSLOName">Name</label>
+            <input id="projSLOName" placeholder="API availability" required maxlength="160" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="projSLOKind">Indicator</label>
+              <select id="projSLOKind"><option value="availability">Availability</option><option value="latency">Latency</option></select>
+            </div>
+            <div class="field">
+              <label for="projSLOTarget">Target (%)</label>
+              <input id="projSLOTarget" type="number" min="1" max="99.999" step="0.001" value="99.9" required />
+            </div>
+          </div>
+          <div class="field hidden" id="projSLOLatencyField">
+            <label for="projSLOLatencyThreshold">Latency threshold (ms)</label>
+            <input id="projSLOLatencyThreshold" type="number" min="1" value="500" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="projSLOWindowDays">Rolling window (days)</label>
+              <input id="projSLOWindowDays" type="number" min="1" max="90" value="30" required />
+            </div>
+            <div class="field">
+              <label for="projSLOMinEvents">Minimum events</label>
+              <input id="projSLOMinEvents" type="number" min="0" value="100" required />
+            </div>
+          </div>
+          <p class="hint">Argus evaluates SLOs from tenant-scoped telemetry. Missing or low-volume data is shown as no data, never as healthy.</p>
+          <p class="proj-form-error hidden" id="projSLOFormError" role="alert"></p>
+          <div class="modal-actions">
+            <button class="secondary" type="button" id="projSLOCancel">Cancel</button>
+            <button type="submit" id="projSLOSubmit">Create SLO</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Telemetry route mapping create -->
+    <div class="modal-overlay hidden" id="projTelemetryMappingModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projTelemetryMappingModalTitle" tabindex="-1">
+        <h3 id="projTelemetryMappingModalTitle">Map telemetry to a route</h3>
+        <form id="projTelemetryMappingForm" class="stack">
+          <div class="field">
+            <label for="projTelemetryMappingEnvironment">Environment</label>
+            <select id="projTelemetryMappingEnvironment" required></select>
+          </div>
+          <div class="field">
+            <label for="projTelemetryMappingService">Service name</label>
+            <input id="projTelemetryMappingService" autocomplete="off" placeholder="checkout-api" required maxlength="160" />
+          </div>
+          <div class="field">
+            <label for="projTelemetryMappingDeployment">Deployment environment <span class="hint">(optional)</span></label>
+            <input id="projTelemetryMappingDeployment" autocomplete="off" placeholder="production" maxlength="160" />
+          </div>
+          <div class="field">
+            <label for="projTelemetryMappingRoute">Catalog route</label>
+            <select id="projTelemetryMappingRoute" required></select>
+          </div>
+          <p class="hint">Argus matches only this project-scoped environment, service identity, and route template. It never trusts a caller-supplied project identifier from telemetry.</p>
+          <p class="proj-form-error hidden" id="projTelemetryMappingFormError" role="alert"></p>
+          <div class="modal-actions">
+            <button class="secondary" type="button" id="projTelemetryMappingCancel">Cancel</button>
+            <button type="submit" id="projTelemetryMappingSubmit">Create mapping</button>
+          </div>
+        </form>
       </div>
     </div>
 

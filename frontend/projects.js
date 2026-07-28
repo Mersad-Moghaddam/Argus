@@ -58,7 +58,12 @@
     projectModalTitle: document.getElementById('projProjectModalTitle'),
     projectFormError: document.getElementById('projProjectFormError'),
     projectCancel: document.getElementById('projProjectCancel'),
+    projectBack: document.getElementById('projProjectBack'),
     projectSubmit: document.getElementById('projProjectSubmit'),
+    projectSteps: document.getElementById('projProjectSteps'),
+    projectAdvanced: document.getElementById('projProjectAdvanced'),
+    projectReview: document.getElementById('projOnboardingReview'),
+    projectNext: document.getElementById('projOnboardingNext'),
 
     environmentModal: document.getElementById('projEnvironmentModal'),
     environmentForm: document.getElementById('projEnvironmentForm'),
@@ -80,6 +85,29 @@
     telemetrySecretValue: document.getElementById('projTelemetrySecretValue'),
     telemetrySecretCopy: document.getElementById('projTelemetrySecretCopy'),
     telemetrySecretClose: document.getElementById('projTelemetrySecretClose'),
+
+    sloModal: document.getElementById('projSLOModal'),
+    sloForm: document.getElementById('projSLOForm'),
+    sloName: document.getElementById('projSLOName'),
+    sloKind: document.getElementById('projSLOKind'),
+    sloTarget: document.getElementById('projSLOTarget'),
+    sloLatencyField: document.getElementById('projSLOLatencyField'),
+    sloLatencyThreshold: document.getElementById('projSLOLatencyThreshold'),
+    sloWindowDays: document.getElementById('projSLOWindowDays'),
+    sloMinEvents: document.getElementById('projSLOMinEvents'),
+    sloFormError: document.getElementById('projSLOFormError'),
+    sloCancel: document.getElementById('projSLOCancel'),
+    sloSubmit: document.getElementById('projSLOSubmit'),
+
+    telemetryMappingModal: document.getElementById('projTelemetryMappingModal'),
+    telemetryMappingForm: document.getElementById('projTelemetryMappingForm'),
+    telemetryMappingEnvironment: document.getElementById('projTelemetryMappingEnvironment'),
+    telemetryMappingService: document.getElementById('projTelemetryMappingService'),
+    telemetryMappingDeployment: document.getElementById('projTelemetryMappingDeployment'),
+    telemetryMappingRoute: document.getElementById('projTelemetryMappingRoute'),
+    telemetryMappingFormError: document.getElementById('projTelemetryMappingFormError'),
+    telemetryMappingCancel: document.getElementById('projTelemetryMappingCancel'),
+    telemetryMappingSubmit: document.getElementById('projTelemetryMappingSubmit'),
 
     routeModal: document.getElementById('projRouteModal'),
     routeForm: document.getElementById('projRouteForm'),
@@ -111,6 +139,7 @@
     sessionUser: null,
     sessionResolved: false,
     account: { sessions: null, loading: false },
+    onboarding: { step: 1, source: 'telemetry', createdProject: null },
     // Projects list view.
     list: { search: '', status: '', offset: 0, limit: 24, loading: false, data: null, total: 0 },
     // Project detail view.
@@ -121,7 +150,9 @@
       series: null,
       incidents: [],
       environments: [],
-	  telemetryIngress: [],
+      telemetryIngress: [],
+      telemetryMappings: [],
+      slos: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -141,6 +172,8 @@
   let refreshTimer = null;
   let modalReturnFocus = null;
   let confirmAction = null;
+  const ONBOARDING_DRAFT_KEY = 'argus_project_onboarding_draft_v1';
+  const projectModals = [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.sloModal, pel.telemetryMappingModal, pel.routeModal, pel.bulkModal, pel.confirmModal];
 
   /* ------------------------------------------------------- auth + api client */
 
@@ -853,13 +886,15 @@
     }
     try {
       const p = state.project;
-      const [project, series, incidents, routes, environments, telemetryIngress] = await Promise.all([
+	  const [project, series, incidents, routes, environments, telemetryIngress, telemetryMappings, slos] = await Promise.all([
 		apiProjects(`/project/catalog/${id}`),
 		apiProjects(`/route/metrics/${id}${qs({ range: p.range })}`),
 		apiProjects(`/route/incidents/${id}${qs({ limit: 15 })}`),
 		apiProjects(`/route/catalog/${id}${routeQuery(p)}`),
 		apiProjects(`/environment/catalog/${id}`),
 		apiProjects(`/telemetry/ingress/${id}${qs({ limit: 20 })}`),
+		apiProjects(`/telemetry/mappings/${id}`),
+		apiProjects(`/slo/catalog/${id}`),
       ]);
       state.project.project = project;
       state.project.series = series;
@@ -868,6 +903,8 @@
       state.project.routesTotal = routes.total || 0;
       state.project.environments = environments.items || [];
 	  state.project.telemetryIngress = telemetryIngress.items || [];
+	  state.project.telemetryMappings = telemetryMappings.items || [];
+	  state.project.slos = slos.items || [];
       renderCrumbs();
       renderProjectDetail();
     } catch (err) {
@@ -959,6 +996,18 @@
         <div class="card-header"><h2>Telemetry signals</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-telemetry-credential">Create OTLP credential</button>' : ''}</div>
         <p class="hint">Recent accepted OTLP resource groups. Only safe service and deployment labels are shown; raw telemetry is not displayed here.</p>
         ${telemetryIngressHtml(state.project.telemetryIngress)}
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Telemetry route mappings</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-telemetry-mapping">Create mapping</button>' : ''}</div>
+        <p class="hint">A mapping joins one trusted telemetry identity to one project route. It does not infer tenant ownership from incoming telemetry.</p>
+        ${telemetryMappingsHtml(state.project.telemetryMappings, canEdit)}
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Service-level objectives</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-slo">Create SLO</button>' : ''}</div>
+        <p class="hint">Objectives are calculated from project-scoped telemetry. No-data, stale, maintenance, and configuration errors are never presented as healthy.</p>
+        ${sloDefinitionsHtml(state.project.slos)}
       </section>
 
       <section class="card">
@@ -1074,11 +1123,12 @@
           <thead>
             <tr>
               ${canEdit ? `<th class="col-check"><input type="checkbox" data-action="toggle-page-selection" aria-label="Select all routes on this page" ${allOnPageSelected ? 'checked' : ''} /></th>` : ''}
-              ${ROUTE_COLUMNS.map((c) =>
-                c.sortable
-                  ? `<th class="sortable${state.project.sortBy === c.key ? ` sort-active${state.project.sortDir === 'desc' ? ' sort-desc' : ''}` : ''}" data-action="sort-routes" data-sort="${c.key}">${escapeHtml(c.label)}<span class="sort-arrow">&#9662;</span></th>`
-                  : `<th>${escapeHtml(c.label)}</th>`
-              ).join('')}
+              ${ROUTE_COLUMNS.map((c) => {
+                if (!c.sortable) return `<th>${escapeHtml(c.label)}</th>`;
+                const active = state.project.sortBy === c.key;
+                const direction = active ? (state.project.sortDir === 'desc' ? 'descending' : 'ascending') : 'none';
+                return `<th class="sortable${active ? ` sort-active${state.project.sortDir === 'desc' ? ' sort-desc' : ''}` : ''}" aria-sort="${direction}"><button type="button" class="sort-button" data-action="sort-routes" data-sort="${c.key}">${escapeHtml(c.label)}<span class="sort-arrow" aria-hidden="true">&#9662;</span><span class="sr-only">${active ? `, sorted ${direction}` : ', not sorted'}</span></button></th>`;
+              }).join('')}
             </tr>
           </thead>
           <tbody>${body}</tbody>
@@ -1150,6 +1200,26 @@
         </div>
         <span class="badge ${record.signalType === 'traces' ? 'route-unknown' : 'status-up'}">${escapeHtml(record.signalType || 'signal')}</span>
       </li>`).join('')}</ul>`;
+  }
+
+  function telemetryMappingsHtml(mappings, canEdit) {
+    if (!mappings.length) {
+      return emptyPanel(ICON.route, 'No telemetry mappings yet', 'Map a trusted service and environment identity to a catalog route after telemetry is arriving.');
+    }
+    return `<div class="list">${mappings.map((mapping) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(mapping.serviceName)} → ${escapeHtml(mapping.httpMethod)} ${escapeHtml(mapping.routeTemplate)}</span><span class="list-item-meta">environment #${num(mapping.environmentId)}${mapping.deploymentEnvironment ? ` &middot; deployment ${escapeHtml(mapping.deploymentEnvironment)}` : ''} &middot; ${escapeHtml(mapping.source || 'manual')}</span></div>${canEdit ? `<button class="danger sm" type="button" data-action="delete-telemetry-mapping" data-id="${mapping.id}">Delete</button>` : ''}</div>`).join('')}</div>`;
+  }
+
+  function sloDefinitionsHtml(definitions) {
+    if (!definitions.length) {
+      return emptyPanel(ICON.incident, 'No SLOs configured', 'Create an availability or latency objective after connecting telemetry. Missing data will remain visible as no data.');
+    }
+    return `<div class="list">${definitions.map((definition) => {
+      const windowDays = Math.round(definition.windowSeconds / 86400);
+      const indicator = definition.sliKind === 'latency'
+        ? `latency below ${num(definition.latencyThresholdMs)} ms`
+        : 'availability';
+      return `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(definition.name)}</span><span class="list-item-meta">${escapeHtml(indicator)} &middot; ${Number(definition.targetPercent).toFixed(3).replace(/\.?(0+)$/, '')}% target &middot; ${windowDays}-day window &middot; ${num(definition.minEvents, '0')} minimum events</span></div><span class="proj-chip is-muted">v${num(definition.version, '1')}</span></div>`;
+    }).join('')}</div>`;
   }
 
   function formatDuration(msTotal) {
@@ -1837,17 +1907,36 @@
   function openModal(overlay) {
     modalReturnFocus = document.activeElement;
     overlay.classList.remove('hidden');
-    const focusable = overlay.querySelector('input:not([type="hidden"]), select, textarea, button');
+    syncModalBackground();
+    const focusable = focusableIn(overlay)[0];
     if (focusable) focusable.focus();
   }
 
   function closeModal(overlay) {
     overlay.classList.add('hidden');
+    syncModalBackground();
     if (modalReturnFocus && typeof modalReturnFocus.focus === 'function') modalReturnFocus.focus();
     modalReturnFocus = null;
   }
 
-  [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.routeModal, pel.bulkModal, pel.confirmModal].forEach((overlay) => {
+  function focusableIn(overlay) {
+    return [...overlay.querySelectorAll('button:not([disabled]), [href], input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => !element.closest('[hidden], .hidden'));
+  }
+
+  function activeProjectModal() {
+    return projectModals.find((overlay) => !overlay.classList.contains('hidden')) || null;
+  }
+
+  function syncModalBackground() {
+    const hasProjectModal = Boolean(activeProjectModal());
+    const topbar = document.querySelector('.topbar');
+    const main = document.getElementById('main');
+    if (topbar) topbar.inert = hasProjectModal;
+    if (main) main.inert = hasProjectModal;
+  }
+
+  projectModals.forEach((overlay) => {
     overlay.addEventListener('click', (e) => {
       if (e.target !== overlay) return;
       if (overlay === pel.telemetrySecretModal) closeTelemetrySecret();
@@ -1856,12 +1945,25 @@
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.routeModal, pel.bulkModal, pel.confirmModal].forEach((overlay) => {
-      if (overlay.classList.contains('hidden')) return;
+    const overlay = activeProjectModal();
+    if (!overlay) return;
+    if (e.key === 'Escape') {
       if (overlay === pel.telemetrySecretModal) closeTelemetrySecret();
       else closeModal(overlay);
-    });
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const focusable = focusableIn(overlay);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
   });
 
   function askConfirm({ title, body, confirmLabel = 'Confirm', danger = true }, onConfirm) {
@@ -1897,16 +1999,134 @@
 
   let editingProjectId = null;
 
+  function readOnboardingDraft() {
+    try {
+      const draft = JSON.parse(localStorage.getItem(ONBOARDING_DRAFT_KEY) || '{}');
+      return draft && typeof draft === 'object' ? draft : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveOnboardingDraft() {
+    if (editingProjectId || state.onboarding.createdProject) return;
+    const selected = document.querySelector('input[name="projSource"]:checked');
+    try {
+      localStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify({
+        name: document.getElementById('projFormName').value.trim(),
+        description: document.getElementById('projFormDescription').value.trim(),
+        source: selected ? selected.value : 'telemetry',
+      }));
+    } catch (_) {
+      // Draft preservation is a convenience only; project creation remains server-authoritative.
+    }
+  }
+
+  function clearOnboardingDraft() {
+    try { localStorage.removeItem(ONBOARDING_DRAFT_KEY); } catch (_) { /* ignore unavailable storage */ }
+  }
+
+  function selectedOnboardingSource() {
+    const selected = document.querySelector('input[name="projSource"]:checked');
+    return selected ? selected.value : 'telemetry';
+  }
+
+  function sourceSummary(source) {
+    return {
+      telemetry: ['OpenTelemetry', 'Create an environment and issue a scoped OTLP credential. Argus will receive passive metrics; it will not probe your service.'],
+      openapi: ['OpenAPI catalog', 'Import a specification after creation. It adds catalog entries only and sends zero requests to imported operations.'],
+      synthetic: ['Synthetic check', 'Create a disabled GET or HEAD canary after creation, then review its target and request budget before enabling it.'],
+      heartbeat: ['Heartbeat', 'Create a project first; heartbeat setup is the next recommended action for jobs and scheduled workloads.'],
+      later: ['Do this later', 'Create a project with no connected signal. You can connect telemetry, an OpenAPI catalog, a safe canary, or a heartbeat later.'],
+    }[source] || ['Monitoring source', 'Connect a monitoring source after the project is created.'];
+  }
+
+  function setOnboardingStep(step) {
+    state.onboarding.step = step;
+    const isEdit = Boolean(editingProjectId);
+    pel.projectSteps.classList.toggle('hidden', isEdit);
+    pel.projectAdvanced.classList.toggle('hidden', !isEdit);
+    pel.projectForm.querySelectorAll('[data-project-step]').forEach((section) => {
+      section.classList.toggle('hidden', isEdit || Number(section.dataset.projectStep) !== step);
+    });
+    pel.projectSteps.querySelectorAll('.wizard-step').forEach((item, index) => {
+      item.classList.toggle('is-active', index + 1 === step);
+      item.classList.toggle('is-done', index + 1 < step);
+    });
+    pel.projectBack.classList.toggle('hidden', isEdit || step <= 1 || step >= 4);
+    pel.projectCancel.textContent = step === 4 ? 'Close' : 'Cancel';
+    pel.projectSubmit.classList.toggle('hidden', step === 4);
+    pel.projectSubmit.textContent = isEdit ? 'Save project' : step === 3 ? 'Create project' : 'Continue';
+    if (step === 3) {
+      const [title, detail] = sourceSummary(selectedOnboardingSource());
+      pel.projectReview.replaceChildren();
+      const strong = document.createElement('strong');
+      strong.textContent = title;
+      const p = document.createElement('p');
+      p.textContent = detail;
+      pel.projectReview.append(strong, p);
+    }
+  }
+
+  function finishOnboarding(project) {
+    const source = selectedOnboardingSource();
+    const [title, detail] = sourceSummary(source);
+    state.onboarding.createdProject = project;
+    clearOnboardingDraft();
+    pel.projectNext.replaceChildren();
+    const strong = document.createElement('strong');
+    strong.textContent = `${project.name} is ready.`;
+    const p = document.createElement('p');
+    p.textContent = detail;
+    const link = document.createElement('a');
+    link.className = 'btn-link';
+    link.href = source === 'openapi' ? `#/projects/${project.id}/import` : `#/projects/${project.id}`;
+    link.textContent = source === 'openapi' ? 'Import your OpenAPI catalog' : 'Open project dashboard';
+    const starterSLO = document.createElement('button');
+    starterSLO.type = 'button';
+    starterSLO.className = 'secondary sm';
+    starterSLO.textContent = 'Create starter availability SLO';
+    starterSLO.addEventListener('click', async () => {
+      setButtonLoading(starterSLO, true, 'Creating...');
+      try {
+        await apiProjects(`/slo/catalog/${project.id}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            name: 'Availability',
+            sliKind: 'availability',
+            targetPercent: 99.9,
+            windowSeconds: 30 * 86400,
+            minEvents: 100,
+          }),
+        });
+        starterSLO.disabled = true;
+        starterSLO.textContent = 'Starter availability SLO created';
+        showToast('Starter availability SLO created. It will remain no data until eligible telemetry arrives.', 'success');
+      } catch (err) {
+        if (!(err instanceof SessionExpired)) showToast(`Could not create the starter SLO: ${err.message}`, 'error');
+        setButtonLoading(starterSLO, false);
+      }
+    });
+    pel.projectNext.append(strong, p, starterSLO, link);
+    setOnboardingStep(4);
+  }
+
   function openProjectModal(project) {
     editingProjectId = project ? project.id : null;
     pel.projectModalTitle.textContent = project ? `Edit ${project.name}` : 'New project';
-    document.getElementById('projFormName').value = project ? project.name : '';
-    document.getElementById('projFormDescription').value = project ? project.description || '' : '';
+    const draft = project ? {} : readOnboardingDraft();
+    document.getElementById('projFormName').value = project ? project.name : draft.name || '';
+    document.getElementById('projFormDescription').value = project ? project.description || '' : draft.description || '';
     document.getElementById('projFormInterval').value = project ? project.defaultIntervalSeconds : 300;
     document.getElementById('projFormTimeout').value = project ? project.defaultTimeoutMs : 5000;
     document.getElementById('projFormRetries').value = project ? project.defaultRetries : 1;
     document.getElementById('projFormFailureThreshold').value = project ? project.failureThreshold : 3;
     document.getElementById('projFormRecovery').value = project ? project.recoverySuccessThreshold : 1;
+    const source = project ? 'telemetry' : draft.source || 'telemetry';
+    const sourceInput = document.querySelector(`input[name="projSource"][value="${source}"]`);
+    if (sourceInput) sourceInput.checked = true;
+    state.onboarding.createdProject = null;
+    setOnboardingStep(1);
     hideFormError(pel.projectFormError);
     openModal(pel.projectModal);
   }
@@ -2005,11 +2225,137 @@
   });
   pel.telemetrySecretClose.addEventListener('click', closeTelemetrySecret);
 
-  pel.projectCancel.addEventListener('click', () => closeModal(pel.projectModal));
+  function openTelemetryMappingModal() {
+    const { environments, routes } = state.project;
+    pel.telemetryMappingForm.reset();
+    pel.telemetryMappingEnvironment.replaceChildren();
+    pel.telemetryMappingRoute.replaceChildren();
+    environments.forEach((environment) => {
+      const option = document.createElement('option');
+      option.value = String(environment.id);
+      option.textContent = environment.isDefault ? `${environment.name} (default)` : environment.name;
+      pel.telemetryMappingEnvironment.append(option);
+    });
+    routes.forEach((route) => {
+      const option = document.createElement('option');
+      option.value = String(route.id);
+      option.textContent = `${route.method} ${route.path}`;
+      pel.telemetryMappingRoute.append(option);
+    });
+    const unavailable = !environments.length || !routes.length;
+    pel.telemetryMappingSubmit.disabled = unavailable;
+    hideFormError(pel.telemetryMappingFormError);
+    if (unavailable) showFormError(pel.telemetryMappingFormError, 'Create an environment and at least one catalog route before mapping telemetry.');
+    openModal(pel.telemetryMappingModal);
+  }
+
+  pel.telemetryMappingCancel.addEventListener('click', () => closeModal(pel.telemetryMappingModal));
+  pel.telemetryMappingForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.telemetryMappingFormError);
+    const serviceName = pel.telemetryMappingService.value.trim();
+    const environmentID = Number(pel.telemetryMappingEnvironment.value);
+    const routeID = Number(pel.telemetryMappingRoute.value);
+    if (!serviceName || !Number.isInteger(environmentID) || environmentID <= 0 || !Number.isInteger(routeID) || routeID <= 0) {
+      showFormError(pel.telemetryMappingFormError, 'Choose an environment and catalog route, then provide the service name.');
+      return;
+    }
+    setButtonLoading(pel.telemetryMappingSubmit, true, 'Creating...');
+    try {
+      await apiProjects(`/telemetry/mappings/${state.project.id}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          environmentId: environmentID,
+          routeId: routeID,
+          serviceName,
+          deploymentEnvironment: pel.telemetryMappingDeployment.value.trim(),
+        }),
+      });
+      closeModal(pel.telemetryMappingModal);
+      showToast('Telemetry route mapping created.', 'success');
+      loadProjectDetail({ silent: true });
+    } catch (err) {
+      if (!(err instanceof SessionExpired)) showFormError(pel.telemetryMappingFormError, err.message);
+    } finally {
+      setButtonLoading(pel.telemetryMappingSubmit, false);
+    }
+  });
+
+  function syncSLOKindFields() {
+    const latency = pel.sloKind.value === 'latency';
+    pel.sloLatencyField.classList.toggle('hidden', !latency);
+    pel.sloLatencyThreshold.required = latency;
+  }
+
+  function openSLOModal() {
+    pel.sloForm.reset();
+    pel.sloKind.value = 'availability';
+    pel.sloTarget.value = '99.9';
+    pel.sloWindowDays.value = '30';
+    pel.sloMinEvents.value = '100';
+    pel.sloLatencyThreshold.value = '500';
+    syncSLOKindFields();
+    hideFormError(pel.sloFormError);
+    openModal(pel.sloModal);
+  }
+
+  pel.sloKind.addEventListener('change', syncSLOKindFields);
+  pel.sloCancel.addEventListener('click', () => closeModal(pel.sloModal));
+  pel.sloForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.sloFormError);
+    const targetPercent = Number(pel.sloTarget.value);
+    const windowDays = Number(pel.sloWindowDays.value);
+    const minEvents = Number(pel.sloMinEvents.value);
+    const latency = pel.sloKind.value === 'latency';
+    const latencyThresholdMS = Number(pel.sloLatencyThreshold.value);
+    if (!pel.sloName.value.trim() || !Number.isFinite(targetPercent) || targetPercent <= 0 || targetPercent >= 100 || !Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90 || !Number.isInteger(minEvents) || minEvents < 0 || (latency && (!Number.isInteger(latencyThresholdMS) || latencyThresholdMS < 1))) {
+      showFormError(pel.sloFormError, 'Provide a name, a target between 0% and 100%, a 1–90 day window, and valid event settings.');
+      return;
+    }
+    setButtonLoading(pel.sloSubmit, true, 'Creating...');
+    try {
+      await apiProjects(`/slo/catalog/${state.project.id}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: pel.sloName.value.trim(),
+          sliKind: pel.sloKind.value,
+          targetPercent,
+          windowSeconds: windowDays * 86400,
+          latencyThresholdMs: latency ? latencyThresholdMS : 0,
+          minEvents,
+        }),
+      });
+      closeModal(pel.sloModal);
+      showToast('SLO created. It will show no data until eligible telemetry arrives.', 'success');
+      loadProjectDetail({ silent: true });
+    } catch (err) {
+      if (!(err instanceof SessionExpired)) showFormError(pel.sloFormError, err.message);
+    } finally {
+      setButtonLoading(pel.sloSubmit, false);
+    }
+  });
+
+  pel.projectCancel.addEventListener('click', () => {
+    saveOnboardingDraft();
+    closeModal(pel.projectModal);
+  });
+  pel.projectBack.addEventListener('click', () => setOnboardingStep(Math.max(1, state.onboarding.step - 1)));
 
   pel.projectForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     hideFormError(pel.projectFormError);
+    if (!editingProjectId && state.onboarding.step < 3) {
+      const name = document.getElementById('projFormName').value.trim();
+      if (!name) {
+        showFormError(pel.projectFormError, 'A project name is required.');
+        document.getElementById('projFormName').focus();
+        return;
+      }
+      saveOnboardingDraft();
+      setOnboardingStep(state.onboarding.step + 1);
+      return;
+    }
     const payload = {
       name: document.getElementById('projFormName').value.trim(),
       description: document.getElementById('projFormDescription').value.trim(),
@@ -2031,6 +2377,8 @@
       } else {
 		const created = await apiProjects('/project/catalog', { method: 'POST', body: JSON.stringify(payload) });
         showToast(`Project "${created.name}" created.`, 'success');
+        finishOnboarding(created);
+        return;
       }
       closeModal(pel.projectModal);
       if (state.route.name === 'list') loadProjectsList();
@@ -2044,6 +2392,8 @@
       setButtonLoading(pel.projectSubmit, false);
     }
   });
+
+  document.querySelectorAll('input[name="projSource"]').forEach((input) => input.addEventListener('change', saveOnboardingDraft));
 
   /* -------------------------------------------------------- route form modal */
 
@@ -2356,6 +2706,22 @@
         }
         case 'create-telemetry-credential':
           openTelemetryCredentialModal();
+          break;
+        case 'create-telemetry-mapping':
+          openTelemetryMappingModal();
+          break;
+        case 'delete-telemetry-mapping':
+          askConfirm(
+            { title: 'Delete this telemetry mapping?', body: 'Future SLO evaluation will no longer attribute this telemetry identity to the selected route.', confirmLabel: 'Delete mapping' },
+            async () => {
+              await apiProjects(`/telemetry/mappings/${state.project.id}/${id}`, { method: 'DELETE' });
+              showToast('Telemetry route mapping deleted.', 'success');
+              loadProjectDetail({ silent: true });
+            }
+          );
+          break;
+        case 'create-slo':
+          openSLOModal();
           break;
         case 'edit-route': {
           const route = state.project.routes.find((r) => r.id === id) || (state.routeDetail.route && state.routeDetail.route.id === id ? state.routeDetail.route : null);

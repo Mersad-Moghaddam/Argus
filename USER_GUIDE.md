@@ -187,16 +187,17 @@ in sections 1–8 keeps working exactly as before and is unaffected.
 
 ### 9.1 Sign in
 
-API Projects uses email/password accounts and opaque bearer tokens, independent from the global
-`API_KEY` used by the uptime dashboard. Open the **API Projects** tab and create an account; the
-token is stored in `localStorage` under `argus_project_token` and sent as
-`Authorization: Bearer <token>`. Tokens are valid for 30 days and can be revoked with **Sign out**.
+API Projects uses email/password accounts and an opaque, server-stored browser session, independent
+from the legacy `API_KEY` used by the uptime dashboard. Register or log in from the global header.
+The browser receives an HttpOnly, SameSite=Lax session cookie plus a CSRF cookie; it never stores a
+project credential in Web Storage. Sessions are valid for 30 days and can be reviewed or revoked
+from **Account**.
 
 ```http
 POST /identity/register   { "email": "you@example.com", "password": "at-least-8-chars", "name": "You" }
 POST /identity/login      { "email": "you@example.com", "password": "at-least-8-chars" }
-POST /identity/logout     Authorization: Bearer <token>
-GET  /identity/profile    Authorization: Bearer <token>
+POST /identity/logout     Cookie: argus_session=...; X-CSRF-Token: ...
+GET  /identity/profile    Cookie: argus_session=...
 ```
 
 Whoever creates a project becomes its **owner**. Roles are `owner` > `editor` > `viewer`:
@@ -213,7 +214,15 @@ does not exist — so project IDs cannot be probed.
 
 ### 9.2 Create a project
 
-Click **New project**. The interval, timeout, retries and incident thresholds you set here become the
+Click **New project**. The authenticated four-step flow first asks for the project identity, then
+asks how it should be observed: **OpenTelemetry** (recommended), an **OpenAPI catalog**, a disabled
+**Synthetic check**, a **Heartbeat**, or **Do this later**. It preserves a non-sensitive local draft
+until the project is created and does not create target traffic during setup. OpenAPI continues to
+the import wizard; every other choice opens the project dashboard with the relevant next action.
+The completion step also offers an explicit starter 99.9% availability SLO; it remains `no data`
+until the configured minimum eligible telemetry events exist.
+
+Interval, timeout, retries and incident thresholds are advanced project settings. They become the
 defaults inherited by *new* routes; changing them later never rewrites existing routes.
 
 ```http
@@ -289,6 +298,13 @@ What re-importing guarantees:
   deprecated, sort by any column, and page through results. Searching, filtering, sorting and
   paging all happen in SQL, so a project with thousands of routes stays responsive.
 - **Bulk actions** — select rows (or a whole page) and enable, disable or delete them together.
+- **Service-level objectives** — editors can create availability or latency objectives with a
+  target, rolling window, and minimum eligible-event threshold. Objectives use project-scoped
+  telemetry only; missing, stale, maintenance, and configuration-error evidence is never rendered
+  as healthy.
+- **Telemetry route mappings** — editors can bind a trusted environment and service/deployment
+  identity to one catalog route. The mapping never grants a telemetry sender the ability to choose
+  a project or route outside the credential's server-side scope.
 
 ### 9.6 Route health states
 
