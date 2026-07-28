@@ -9,9 +9,18 @@ import (
 	"argus/internal/models"
 )
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db             *sql.DB
+	routeSecretKey []byte
+}
 
-func NewStore(db *sql.DB) *Store { return &Store{db: db} }
+func NewStore(db *sql.DB, routeSecretKeys ...[]byte) *Store {
+	var key []byte
+	if len(routeSecretKeys) > 0 {
+		key = append([]byte(nil), routeSecretKeys[0]...)
+	}
+	return &Store{db: db, routeSecretKey: key}
+}
 
 func scanWebsite(rows interface{ Scan(dest ...any) error }, w *models.Website) error {
 	return rows.Scan(&w.ID, &w.URL, &w.HealthCheckURL, &w.CheckInterval, &w.MonitorType, &w.ExpectedKeyword, &w.TLSExpiryThresholdDays, &w.HeartbeatGraceSeconds, &w.Status, &w.LastCheckedAt, &w.LastHeartbeatAt, &w.NextCheckAt, &w.LastStatusCode, &w.LastLatencyMS, &w.StatusPageID, &w.CreatedAt, &w.UpdatedAt)

@@ -48,7 +48,7 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 		_ = telemetry.Shutdown(ctx)
 		return nil, fmt.Errorf("apply migrations: %w", err)
 	}
-	store := mysql.NewStore(db)
+	store := mysql.NewStore(db, cfg.RouteSecretEncryptionKey)
 	recoveryDelivery, err := recovery.NewWebhookDelivery(cfg.RecoveryDeliveryURL, cfg.RecoveryDeliveryTimeout)
 	if err != nil {
 		_ = db.Close()

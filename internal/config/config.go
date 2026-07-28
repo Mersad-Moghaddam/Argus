@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"argus/internal/secrets"
+
 	"github.com/joho/godotenv"
 )
 
@@ -29,8 +31,9 @@ type Config struct {
 	// RecoveryDeliveryURL is an operator-configured HTTPS webhook that receives
 	// one-time reset tokens for delivery to a verified account address. Empty
 	// disables delivery without exposing a token through the public API.
-	RecoveryDeliveryURL     string
-	RecoveryDeliveryTimeout time.Duration
+	RecoveryDeliveryURL      string
+	RecoveryDeliveryTimeout  time.Duration
+	RouteSecretEncryptionKey []byte
 
 	DBMaxOpenConns    int
 	DBMaxIdleConns    int
@@ -86,6 +89,10 @@ func Load() (Config, error) {
 	cfg.AuthCookieSecure = mustBool("AUTH_COOKIE_SECURE", false)
 	cfg.RecoveryDeliveryURL = os.Getenv("RECOVERY_DELIVERY_URL")
 	cfg.RecoveryDeliveryTimeout = mustDuration("RECOVERY_DELIVERY_TIMEOUT", 5*time.Second)
+	var keyErr error
+	if cfg.RouteSecretEncryptionKey, keyErr = secrets.ParseKey(os.Getenv("ROUTE_SECRET_ENCRYPTION_KEY")); keyErr != nil {
+		return Config{}, keyErr
+	}
 
 	dbIndex, err := strconv.Atoi(envOrDefault("REDIS_DB", "0"))
 	if err != nil {

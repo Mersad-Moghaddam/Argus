@@ -9,19 +9,20 @@ import (
 	"time"
 
 	"argus/internal/models"
+	"argus/internal/secrets"
 )
 
 const routeColumns = `id, project_id, method, path, base_url, canonical_identity, canonical_hash, canonical_version, operation_id, name, summary, description, tags, deprecated,
-	parameters, request_body, responses, security, headers, spec_hash, source, enabled,
+	parameters, request_body, responses, security, headers, headers_encrypted, spec_hash, source, enabled,
 	monitor_interval_seconds, timeout_ms, retries, expected_status_range, failure_threshold, recovery_successes,
 	status, last_checked_at, last_status_code, last_latency_ms, last_failure_reason, consecutive_failures, consecutive_successes,
 	next_check_at, uptime_24h_pct, avg_latency_24h_ms, checks_24h, failures_24h, created_at, updated_at`
 
-func scanRoute(row interface{ Scan(dest ...any) error }, rt *models.APIRoute) error {
-	var description, tags, parameters, requestBody, responses, security, headers, lastFailureReason sql.NullString
+func (r *Store) scanRoute(row interface{ Scan(dest ...any) error }, rt *models.APIRoute) error {
+	var description, tags, parameters, requestBody, responses, security, headers, encryptedHeaders, lastFailureReason sql.NullString
 	var lastChecked sql.NullTime
 	err := row.Scan(&rt.ID, &rt.ProjectID, &rt.Method, &rt.Path, &rt.BaseURL, &rt.CanonicalIdentity, &rt.CanonicalHash, &rt.CanonicalVersion, &rt.OperationID, &rt.Name, &rt.Summary, &description, &tags, &rt.Deprecated,
-		&parameters, &requestBody, &responses, &security, &headers, &rt.SpecHash, &rt.Source, &rt.Enabled,
+		&parameters, &requestBody, &responses, &security, &headers, &encryptedHeaders, &rt.SpecHash, &rt.Source, &rt.Enabled,
 		&rt.MonitorIntervalSecs, &rt.TimeoutMS, &rt.Retries, &rt.ExpectedStatusRange, &rt.FailureThreshold, &rt.RecoverySuccesses,
 		&rt.Status, &lastChecked, &rt.LastStatusCode, &rt.LastLatencyMS, &lastFailureReason, &rt.ConsecutiveFailures, &rt.ConsecutiveSuccesses,
 		&rt.NextCheckAt, &rt.Uptime24hPct, &rt.AvgLatency24hMS, &rt.Checks24h, &rt.Failures24h, &rt.CreatedAt, &rt.UpdatedAt)
@@ -34,6 +35,13 @@ func scanRoute(row interface{ Scan(dest ...any) error }, rt *models.APIRoute) er
 	rt.Responses = responses.String
 	rt.Security = security.String
 	rt.Headers = headers.String
+	if encryptedHeaders.Valid && encryptedHeaders.String != "" {
+		var openErr error
+		rt.Headers, openErr = secrets.Open(r.routeSecretKey, encryptedHeaders.String)
+		if openErr != nil {
+			return openErr
+		}
+	}
 	rt.LastFailureReason = lastFailureReason.String
 	if lastChecked.Valid {
 		rt.LastCheckedAt = &lastChecked.Time
@@ -42,6 +50,13 @@ func scanRoute(row interface{ Scan(dest ...any) error }, rt *models.APIRoute) er
 		_ = json.Unmarshal([]byte(tags.String), &rt.Tags)
 	}
 	return nil
+}
+
+func (r *Store) sealedHeaders(headers string) (any, error) {
+	if strings.TrimSpace(headers) == "" {
+		return nil, nil
+	}
+	return secrets.Seal(r.routeSecretKey, headers)
 }
 
 func marshalTags(tags []string) any {
@@ -63,13 +78,17 @@ func nullableJSON(s string) any {
 }
 
 func (r *Store) CreateRoute(ctx context.Context, route models.APIRoute) (int64, error) {
+	sealedHeaders, err := r.sealedHeaders(route.Headers)
+	if err != nil {
+		return 0, err
+	}
 	res, err := r.db.ExecContext(ctx, `INSERT INTO api_routes (project_id, method, path, base_url, canonical_identity, canonical_hash, canonical_version, operation_id, name, summary, description, tags, deprecated,
-			parameters, request_body, responses, security, headers, spec_hash, source, enabled,
+			parameters, request_body, responses, security, headers, headers_encrypted, spec_hash, source, enabled,
 			monitor_interval_seconds, timeout_ms, retries, expected_status_range, failure_threshold, recovery_successes,
 			status, next_check_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		route.ProjectID, route.Method, route.Path, route.BaseURL, route.CanonicalIdentity, route.CanonicalHash, route.CanonicalVersion, route.OperationID, route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
-		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nullableJSON(route.Headers), route.SpecHash, route.Source, route.Enabled,
+		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nil, sealedHeaders, route.SpecHash, route.Source, route.Enabled,
 		route.MonitorIntervalSecs, route.TimeoutMS, route.Retries, route.ExpectedStatusRange, route.FailureThreshold, route.RecoverySuccesses,
 		route.Status, route.NextCheckAt)
 	if err != nil {
@@ -89,10 +108,10 @@ func (r *Store) BulkCreateRoutes(ctx context.Context, routes []models.APIRoute) 
 	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO api_routes (project_id, method, path, base_url, canonical_identity, canonical_hash, canonical_version, operation_id, name, summary, description, tags, deprecated,
-			parameters, request_body, responses, security, headers, spec_hash, source, enabled,
+			parameters, request_body, responses, security, headers, headers_encrypted, spec_hash, source, enabled,
 			monitor_interval_seconds, timeout_ms, retries, expected_status_range, failure_threshold, recovery_successes,
 			status, next_check_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return 0, err
 	}
@@ -100,8 +119,12 @@ func (r *Store) BulkCreateRoutes(ctx context.Context, routes []models.APIRoute) 
 
 	count := 0
 	for _, route := range routes {
+		sealedHeaders, sealErr := r.sealedHeaders(route.Headers)
+		if sealErr != nil {
+			return 0, sealErr
+		}
 		if _, err = stmt.ExecContext(ctx, route.ProjectID, route.Method, route.Path, route.BaseURL, route.CanonicalIdentity, route.CanonicalHash, route.CanonicalVersion, route.OperationID, route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
-			nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nullableJSON(route.Headers), route.SpecHash, route.Source, route.Enabled,
+			nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nil, sealedHeaders, route.SpecHash, route.Source, route.Enabled,
 			route.MonitorIntervalSecs, route.TimeoutMS, route.Retries, route.ExpectedStatusRange, route.FailureThreshold, route.RecoverySuccesses,
 			route.Status, route.NextCheckAt); err != nil {
 			return 0, err
@@ -115,13 +138,17 @@ func (r *Store) BulkCreateRoutes(ctx context.Context, routes []models.APIRoute) 
 }
 
 func (r *Store) UpdateRoute(ctx context.Context, route models.APIRoute) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET name=?, summary=?, description=?, tags=?, deprecated=?,
-			parameters=?, request_body=?, responses=?, security=?, headers=?, spec_hash=?, enabled=?,
+	sealedHeaders, err := r.sealedHeaders(route.Headers)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.ExecContext(ctx, `UPDATE api_routes SET name=?, summary=?, description=?, tags=?, deprecated=?,
+			parameters=?, request_body=?, responses=?, security=?, headers=?, headers_encrypted=?, spec_hash=?, enabled=?,
 			monitor_interval_seconds=?, timeout_ms=?, retries=?, expected_status_range=?, failure_threshold=?, recovery_successes=?,
 			base_url=?, canonical_identity=?, canonical_hash=?, canonical_version=?, updated_at=NOW()
 		WHERE id=?`,
 		route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
-		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nullableJSON(route.Headers), route.SpecHash, route.Enabled,
+		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nil, sealedHeaders, route.SpecHash, route.Enabled,
 		route.MonitorIntervalSecs, route.TimeoutMS, route.Retries, route.ExpectedStatusRange, route.FailureThreshold, route.RecoverySuccesses,
 		route.BaseURL, route.CanonicalIdentity, route.CanonicalHash, route.CanonicalVersion, route.ID)
 	return err
@@ -181,7 +208,7 @@ func (r *Store) BulkDeleteRoutes(ctx context.Context, projectID int64, ids []int
 func (r *Store) GetRouteByID(ctx context.Context, id int64) (*models.APIRoute, error) {
 	var rt models.APIRoute
 	row := r.db.QueryRowContext(ctx, `SELECT `+routeColumns+` FROM api_routes WHERE id=? LIMIT 1`, id)
-	if err := scanRoute(row, &rt); err != nil {
+	if err := r.scanRoute(row, &rt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -193,7 +220,7 @@ func (r *Store) GetRouteByID(ctx context.Context, id int64) (*models.APIRoute, e
 func (r *Store) GetRouteByMethodPath(ctx context.Context, projectID int64, method, path string) (*models.APIRoute, error) {
 	var rt models.APIRoute
 	row := r.db.QueryRowContext(ctx, `SELECT `+routeColumns+` FROM api_routes WHERE project_id=? AND method=? AND path=? LIMIT 1`, projectID, method, path)
-	if err := scanRoute(row, &rt); err != nil {
+	if err := r.scanRoute(row, &rt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -298,7 +325,7 @@ func (r *Store) ListRoutes(ctx context.Context, filter models.RouteFilter) ([]mo
 	out := []models.APIRoute{}
 	for rows.Next() {
 		var rt models.APIRoute
-		if err = scanRoute(rows, &rt); err != nil {
+		if err = r.scanRoute(rows, &rt); err != nil {
 			return nil, 0, err
 		}
 		out = append(out, rt)
@@ -318,7 +345,7 @@ func (r *Store) ListDueRoutes(ctx context.Context, now time.Time, limit int, aft
 	out := []models.APIRoute{}
 	for rows.Next() {
 		var rt models.APIRoute
-		if err = scanRoute(rows, &rt); err != nil {
+		if err = r.scanRoute(rows, &rt); err != nil {
 			return nil, err
 		}
 		out = append(out, rt)
