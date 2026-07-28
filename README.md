@@ -25,7 +25,23 @@ Argus watches websites, health endpoints, expected content, heartbeat signals, a
 The name honors [Argus Panoptes](https://www.theoi.com/Gigante/GiganteArgosPanoptes.html)—the many-eyed, “all-seeing” guardian of Greek myth. Some of his eyes could sleep while others kept watch; after his death, Hera preserved them in the peacock’s tail. Argus turns that ancient image of continuous vigilance into a modern monitoring system.
 
 > [!IMPORTANT]
-> The website-monitoring workflow is the production-ready core of this repository. The newer **Projects + OpenAPI route monitoring** subsystem currently includes its database model, user auth, OpenAPI/Swagger parser, service layer, persistence adapters, and HTTP API. Its background route evaluator and dedicated project UI are still in development. See [Project status and roadmap](#project-status-and-roadmap).
+> The website-monitoring workflow is the original production core. The newer **Projects + OpenAPI route monitoring** subsystem now also includes a background evaluator, aggregate metrics, project UI, and import wizard. A 2026 architecture review found that probing every imported route—especially state-changing methods—is not a safe or scalable default. See [Monitoring v2 design and delivery plan](#monitoring-v2-design-and-delivery-plan).
+
+## Monitoring v2 design and delivery plan
+
+The current route-monitoring implementation remains documented in
+[PROJECT_MONITORING_PLAN.md](PROJECT_MONITORING_PLAN.md). The proposed next
+generation uses passive OpenTelemetry data for broad endpoint coverage and
+keeps active synthetic requests limited to explicit, safe canaries.
+
+- [Transformation index](docs/TRANSFORMATION_INDEX.fa.md)
+- [Product, UI/UX, accessibility, and user-flow audit](docs/reviews/2026-07-28-product-ux-audit.fa.md)
+- [Monitoring v2 architecture decision](docs/architecture/MONITORING_V2_ADR.fa.md)
+- [URL and route normalization specification](docs/architecture/URL_ROUTE_NORMALIZATION_SPEC.fa.md)
+- [Scrum product backlog and sprint forecast](docs/planning/MONITORING_V2_SCRUM_PLAN.fa.md)
+- [Security best-practices report](security_best_practices_report.md)
+- [Repository threat model](Argus-threat-model.md)
+- [Motion audit and implementation plans](animation-plans/README.md)
 
 ## Why Argus?
 
@@ -275,7 +291,7 @@ Argus is intended to monitor public network targets. Before direct HTTP and keyw
 - Fiber recovery, Helmet security headers, ETags, and response compression.
 
 > [!WARNING]
-> Treat Argus as privileged infrastructure. Put it behind TLS and a trusted reverse proxy, set `API_KEY`, use strong MySQL/Redis credentials, restrict database ports, and review outbound-network policy before exposing it publicly. The current website checker validates the initial destination; redirect-hop revalidation is tracked as route-worker roadmap work.
+> Treat Argus as privileged infrastructure. Put it behind TLS and a trusted reverse proxy, set `API_KEY`, use strong MySQL/Redis credentials, restrict database ports, and review outbound-network policy before exposing it publicly. The newer route evaluator revalidates redirect hops and resolved addresses; the legacy website checker still uses a less-hardened client and should not be treated as equivalent.
 
 Please report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
 
@@ -325,14 +341,15 @@ docker compose logs -f mysql redis
 | Check history, incidents, maintenance, status pages | Available |
 | Webhook and Slack-compatible outbox delivery | Available |
 | Responsive website-monitoring dashboard | Available |
-| Project users, roles, CRUD, route CRUD | Backend available |
-| OpenAPI 3.x / Swagger 2.0 import preview and commit | Backend available |
-| Project route-check worker and aggregate metrics | Planned |
-| Project dashboard and import wizard | Planned |
+| Project users, roles, CRUD, route CRUD | Available |
+| OpenAPI 3.x / Swagger 2.0 import preview and commit | Available |
+| Project route-check worker and aggregate metrics | Available; redesign proposed |
+| Project dashboard and import wizard | Available; UX redesign proposed |
+| Monitoring v2 telemetry, SLOs, and budgeted canaries | Proposed |
 | Email delivery adapter | Planned |
 | Expanded integration/E2E coverage and observability | Planned |
 
-The detailed implementation sequence and acceptance criteria live in [PROJECT_MONITORING_PLAN.md](PROJECT_MONITORING_PLAN.md). Broader modernization notes are tracked in [REWRITE_ROADMAP.md](REWRITE_ROADMAP.md).
+The implementation history lives in [PROJECT_MONITORING_PLAN.md](PROJECT_MONITORING_PLAN.md). The new product and architecture package starts at [docs/TRANSFORMATION_INDEX.fa.md](docs/TRANSFORMATION_INDEX.fa.md). Broader modernization notes remain in [REWRITE_ROADMAP.md](REWRITE_ROADMAP.md).
 
 ## Contributing
 
