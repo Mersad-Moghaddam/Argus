@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -28,7 +29,15 @@ func (s *Service) CreateProjectEnvironment(ctx context.Context, projectID int64,
 	if err != nil && strings.TrimSpace(input.BaseURL) != "" {
 		return models.ProjectEnvironment{}, err
 	}
-	env := models.ProjectEnvironment{ProjectID: projectID, Name: name, CanonicalBaseURL: base}
+	origin := ""
+	if base != "" {
+		parsed, parseErr := url.Parse(base)
+		if parseErr != nil {
+			return models.ProjectEnvironment{}, domain.ErrInvalidInput
+		}
+		origin = parsed.Scheme + "://" + parsed.Host
+	}
+	env := models.ProjectEnvironment{ProjectID: projectID, Name: name, CanonicalBaseURL: base, CanonicalOrigin: origin}
 	id, err := s.projects.CreateProjectEnvironment(ctx, env)
 	if err != nil {
 		return models.ProjectEnvironment{}, err

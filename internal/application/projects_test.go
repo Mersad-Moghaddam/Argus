@@ -254,3 +254,15 @@ func TestListProjectsFiltersByMembershipAndStatus(t *testing.T) {
 		t.Fatalf("a user with no memberships must see nothing, got %d", len(none))
 	}
 }
+
+func TestCreateProjectEnvironmentCanonicalizesBaseAndOrigin(t *testing.T) {
+	h := newTestHarness()
+	project := seedProject(t, h)
+	env, err := h.service.CreateProjectEnvironment(context.Background(), project.ID, CreateEnvironmentInput{Name: " staging ", BaseURL: "HTTPS://API.Example.com:443/v1/"})
+	if err != nil {
+		t.Fatalf("create environment: %v", err)
+	}
+	if env.Name != "staging" || env.CanonicalBaseURL != "https://api.example.com/v1" || env.CanonicalOrigin != "https://api.example.com" {
+		t.Fatalf("unexpected environment: %+v", env)
+	}
+}
