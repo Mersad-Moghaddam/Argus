@@ -1,14 +1,32 @@
 ALTER TABLE websites
-    ADD COLUMN IF NOT EXISTS health_check_url VARCHAR(2083) NULL,
-    ADD COLUMN IF NOT EXISTS monitor_type ENUM('http_status', 'keyword', 'heartbeat', 'tls_expiry') NOT NULL DEFAULT 'http_status',
-    ADD COLUMN IF NOT EXISTS expected_keyword VARCHAR(512) NULL,
-    ADD COLUMN IF NOT EXISTS tls_expiry_threshold_days INT NOT NULL DEFAULT 14,
-    ADD COLUMN IF NOT EXISTS heartbeat_grace_seconds INT NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS last_heartbeat_received_at DATETIME NULL,
-    ADD COLUMN IF NOT EXISTS status_page_id BIGINT NULL,
-    ADD COLUMN IF NOT EXISTS next_check_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS last_status_code INT NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS last_latency_ms INT NOT NULL DEFAULT 0;
+    ADD COLUMN health_check_url VARCHAR(2083) NULL;
+
+ALTER TABLE websites
+    ADD COLUMN monitor_type ENUM('http_status', 'keyword', 'heartbeat', 'tls_expiry') NOT NULL DEFAULT 'http_status';
+
+ALTER TABLE websites
+    ADD COLUMN expected_keyword VARCHAR(512) NULL;
+
+ALTER TABLE websites
+    ADD COLUMN tls_expiry_threshold_days INT NOT NULL DEFAULT 14;
+
+ALTER TABLE websites
+    ADD COLUMN heartbeat_grace_seconds INT NOT NULL DEFAULT 0;
+
+ALTER TABLE websites
+    ADD COLUMN last_heartbeat_received_at DATETIME NULL;
+
+ALTER TABLE websites
+    ADD COLUMN status_page_id BIGINT NULL;
+
+ALTER TABLE websites
+    ADD COLUMN next_check_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE websites
+    ADD COLUMN last_status_code INT NOT NULL DEFAULT 0;
+
+ALTER TABLE websites
+    ADD COLUMN last_latency_ms INT NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS incidents (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

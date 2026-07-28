@@ -3,11 +3,14 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	mysqlDriver "github.com/go-sql-driver/mysql"
 )
 
 // ApplyMigrations executes all *.up.sql files in lexical order.
@@ -38,8 +41,16 @@ func executeSQLBatch(ctx context.Context, db *sql.DB, sqlText string) error {
 			continue
 		}
 		if _, err := db.ExecContext(ctx, q); err != nil {
+			if isIgnorableMigrationError(err) {
+				continue
+			}
 			return err
 		}
 	}
 	return nil
+}
+
+func isIgnorableMigrationError(err error) bool {
+	var mysqlErr *mysqlDriver.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1060
 }
