@@ -129,6 +129,56 @@ func (a *testAPI) createProject(t *testing.T, token, name string) models.Project
 	return project
 }
 
+func TestPrivateAgentManagementIsProjectScopedAndRevokesCredentials(t *testing.T) {
+	a := newTestAPI(t)
+	_, ownerToken := a.register(t, "agent-owner@example.com")
+	_, outsiderToken := a.register(t, "agent-outsider@example.com")
+	project := a.createProject(t, ownerToken, "Agent API")
+	resp := a.do(t, http.MethodGet, fmt.Sprintf("/environment/catalog/%d", project.ID), ownerToken, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("list environments: %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+	var environments struct {
+		Items []models.ProjectEnvironment `json:"items"`
+	}
+	decode(t, resp, &environments)
+	if len(environments.Items) == 0 {
+		t.Fatal("project should have a default environment")
+	}
+	resp = a.do(t, http.MethodPost, fmt.Sprintf("/agent/catalog/%d", project.ID), ownerToken, map[string]any{"name": "private edge", "environmentId": environments.Items[0].ID})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create agent: %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+	var issued models.IssuedPrivateAgent
+	decode(t, resp, &issued)
+	if issued.EnrollmentToken == "" {
+		t.Fatal("expected one-time enrollment token")
+	}
+	resp = a.do(t, http.MethodGet, fmt.Sprintf("/agent/catalog/%d", project.ID), ownerToken, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("list agents: %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+	var listed struct {
+		Items []models.PrivateAgent `json:"items"`
+	}
+	decode(t, resp, &listed)
+	if len(listed.Items) != 1 || listed.Items[0].TokenHash != nil {
+		t.Fatalf("unsafe agent list: %+v", listed.Items)
+	}
+	resp = a.do(t, http.MethodPost, fmt.Sprintf("/agent/revoke/%d/%d", project.ID, issued.Agent.ID), outsiderToken, nil)
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("outsider revoke: expected non-enumerating 404, got %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+	resp = a.do(t, http.MethodPost, fmt.Sprintf("/agent/revoke/%d/%d", project.ID, issued.Agent.ID), ownerToken, nil)
+	if resp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("revoke agent: %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+	resp = a.do(t, http.MethodPost, "/agent/heartbeat", issued.EnrollmentToken, map[string]string{"version": "1.0.0"})
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("revoked heartbeat: expected 401, got %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+}
+
 func TestSLODefinitionEndpointsEnforceProjectRoles(t *testing.T) {
 	a := newTestAPI(t)
 	viewerID, viewerToken := a.register(t, "slo-viewer@example.com")

@@ -40,6 +40,39 @@ func (s *Service) CreatePrivateAgent(ctx context.Context, projectID, userID int6
 	a.ID = id
 	return models.IssuedPrivateAgent{Agent: a, EnrollmentToken: raw}, nil
 }
+
+func (s *Service) ListPrivateAgents(ctx context.Context, projectID int64) ([]models.PrivateAgent, error) {
+	if s.privateAgents == nil {
+		return nil, ErrPrivateAgentNotFound
+	}
+	items, err := s.privateAgents.ListPrivateAgents(ctx, projectID)
+	for i := range items {
+		// A hash is not an API credential, but withholding it keeps agent
+		// management responses strictly metadata-only and avoids future misuse.
+		items[i].TokenHash = nil
+	}
+	return items, err
+}
+
+func (s *Service) RevokePrivateAgent(ctx context.Context, projectID, agentID int64) error {
+	if s.privateAgents == nil {
+		return ErrPrivateAgentNotFound
+	}
+	agents, err := s.privateAgents.ListPrivateAgents(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	for _, agent := range agents {
+		if agent.ID == agentID {
+			if agent.RevokedAt != nil {
+				return nil
+			}
+			return s.privateAgents.RevokePrivateAgent(ctx, agentID, time.Now().UTC())
+		}
+	}
+	return ErrPrivateAgentNotFound
+}
+
 func (s *Service) AuthenticatePrivateAgent(ctx context.Context, token, version string) (*models.PrivateAgent, error) {
 	if s.privateAgents == nil {
 		return nil, ErrPrivateAgentNotFound

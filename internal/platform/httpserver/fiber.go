@@ -99,7 +99,9 @@ func NewFiberAppWithMetricSink(service *application.Service, logStore *observabi
 	api.RegisterRouteRoutes(controlGroup, routeHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterImportRoutes(controlGroup, importHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterTelemetryIngestRoutes(app, telemetryIngestHandler)
-	api.RegisterPrivateAgentRoutes(app, api.NewPrivateAgentHandler(service))
+	privateAgentHandler := api.NewPrivateAgentHandler(service)
+	api.RegisterPrivateAgentRoutes(app, privateAgentHandler)
+	api.RegisterPrivateAgentManagementRoutes(controlGroup, privateAgentHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterHeartbeatRoutes(controlGroup, heartbeatHandler, bearerGuard, adapterhttp.CSRFProtect)
 
 	app.Static("/", "./frontend", fiber.Static{

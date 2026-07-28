@@ -304,6 +304,33 @@ SLO state changes. `slo_unhealthy` and `slo_recovered` are delivered through
 the existing retryable notification workflow; repeated identical evaluations
 do not generate notification noise.
 
+### Private-agent enrollment and liveness
+
+Project editors manage environment-bound private-agent identities through
+`GET/POST /agent/catalog/:projectId` and
+`POST /agent/revoke/:projectId/:agentId`. Creation returns an opaque
+`argus_agent_...` enrollment token exactly once; Argus persists only its
+SHA-256 hash. Store the raw token in the agent's local secret store and never
+place it in source control or a target URL.
+
+An agent reports outbound liveness and its version without exposing its local
+network to the central service:
+
+```bash
+curl --request POST http://localhost:8080/agent/heartbeat \
+  --header 'Authorization: Bearer argus_agent_...' \
+  --header 'Content-Type: application/json' \
+  --data '{"version":"1.0.0"}'
+```
+
+The service returns the agent's server-bound project and environment identity;
+the agent must not select those values itself. Revocation immediately rejects
+the credential, and project non-members receive a non-enumerating response.
+This control plane currently establishes identity and liveness only: the
+packaged local executor, signed work configuration, and private result
+protocol are tracked as follow-up work. Argus does not reverse-connect or dial
+customer-private addresses.
+
 ## Architecture
 
 Argus follows a ports-and-adapters layout: business rules point inward, while HTTP, MySQL, Redis/Asynq, and outbound notifications remain replaceable edge concerns.

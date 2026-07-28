@@ -2,8 +2,10 @@ package api
 
 import (
 	"argus/internal/application"
+	"argus/internal/models"
 	"errors"
 	"github.com/gofiber/fiber/v2"
+	"strconv"
 	"strings"
 )
 
@@ -15,6 +17,11 @@ func NewPrivateAgentHandler(s *application.Service) *PrivateAgentHandler {
 
 type agentHeartbeatRequest struct {
 	Version string `json:"version"`
+}
+
+type privateAgentRequest struct {
+	Name          string `json:"name"`
+	EnvironmentID int64  `json:"environmentId"`
 }
 
 func (h *PrivateAgentHandler) Heartbeat(c *fiber.Ctx) error {
@@ -36,6 +43,58 @@ func (h *PrivateAgentHandler) Heartbeat(c *fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"agentId": agent.ID, "projectId": agent.ProjectID, "environmentId": agent.EnvironmentID})
 }
+
+func (h *PrivateAgentHandler) List(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleViewer)
+	if !ok {
+		return nil
+	}
+	items, err := h.service.ListPrivateAgents(c.UserContext(), project.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list private agents"})
+	}
+	return c.JSON(fiber.Map{"items": items})
+}
+
+func (h *PrivateAgentHandler) Create(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	var req privateAgentRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	issued, err := h.service.CreatePrivateAgent(c.UserContext(), project.ID, currentUserID(c), application.CreatePrivateAgentInput{Name: req.Name, EnvironmentID: req.EnvironmentID})
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.Status(fiber.StatusCreated).JSON(issued)
+}
+
+func (h *PrivateAgentHandler) Revoke(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	agentID, err := strconv.ParseInt(c.Params("agentId"), 10, 64)
+	if err != nil || agentID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid agent id"})
+	}
+	if err = h.service.RevokePrivateAgent(c.UserContext(), project.ID, agentID); errors.Is(err, application.ErrPrivateAgentNotFound) {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "private agent not found"})
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to revoke private agent"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
 func RegisterPrivateAgentRoutes(app fiber.Router, h *PrivateAgentHandler) {
 	app.Post("/agent/heartbeat", h.Heartbeat)
+}
+
+func RegisterPrivateAgentManagementRoutes(app fiber.Router, h *PrivateAgentHandler, guards ...fiber.Handler) {
+	app.Get("/agent/catalog/:projectId", guarded(guards, h.List)...)
+	app.Post("/agent/catalog/:projectId", guarded(guards, h.Create)...)
+	app.Post("/agent/revoke/:projectId/:agentId", guarded(guards, h.Revoke)...)
 }
