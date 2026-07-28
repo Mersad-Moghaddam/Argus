@@ -202,6 +202,50 @@ func TestSessionInventoryAndRevokeOthers(t *testing.T) {
 	}
 }
 
+func TestChangePasswordRevokesOtherSessions(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	registered, err := h.service.Register(ctx, "password-change@example.com", "longenoughpassword", "")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	second, err := h.service.Login(ctx, "password-change@example.com", "longenoughpassword")
+	if err != nil {
+		t.Fatalf("second login: %v", err)
+	}
+
+	if err := h.service.ChangePassword(ctx, registered.User.ID, second.Token, "longenoughpassword", "new-long-password"); err != nil {
+		t.Fatalf("change password: %v", err)
+	}
+	if _, err := h.service.Authenticate(ctx, registered.Token); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("other session must be revoked, got %v", err)
+	}
+	if _, err := h.service.Authenticate(ctx, second.Token); err != nil {
+		t.Fatalf("current session must remain valid: %v", err)
+	}
+	if _, err := h.service.Login(ctx, "password-change@example.com", "longenoughpassword"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("old password must fail, got %v", err)
+	}
+	if _, err := h.service.Login(ctx, "password-change@example.com", "new-long-password"); err != nil {
+		t.Fatalf("new password must work: %v", err)
+	}
+}
+
+func TestChangePasswordRequiresCurrentAndStrongPassword(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	registered, err := h.service.Register(ctx, "password-rules@example.com", "longenoughpassword", "")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	if err := h.service.ChangePassword(ctx, registered.User.ID, registered.Token, "wrong-password", "new-long-password"); !errors.Is(err, ErrCurrentPassword) {
+		t.Fatalf("wrong current password = %v, want %v", err, ErrCurrentPassword)
+	}
+	if err := h.service.ChangePassword(ctx, registered.User.ID, registered.Token, "longenoughpassword", "short"); !errors.Is(err, ErrWeakPassword) {
+		t.Fatalf("short password = %v, want %v", err, ErrWeakPassword)
+	}
+}
+
 // TestRegisterDefaultsNameToEmail documents the fallback so the UI always has
 // something to show.
 func TestRegisterDefaultsNameToEmail(t *testing.T) {

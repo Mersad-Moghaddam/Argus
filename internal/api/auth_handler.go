@@ -35,6 +35,7 @@ func RegisterAuthRoutes(app fiber.Router, h *AuthHandler, guards ...fiber.Handle
 	app.Get("/auth/me", guarded(guards[:1], h.Me)...)
 	app.Get("/auth/sessions", guarded(guards[:1], h.ListSessions)...)
 	app.Post("/auth/sessions/revoke-others", guarded(guards, h.RevokeOtherSessions)...)
+	app.Post("/auth/password", guarded(guards, h.ChangePassword)...)
 }
 
 type registerRequest struct {
@@ -45,6 +46,10 @@ type registerRequest struct {
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+type changePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
 }
 
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
@@ -102,6 +107,25 @@ func (h *AuthHandler) RevokeOtherSessions(c *fiber.Ctx) error {
 	userID, _ := c.Locals(adapterhttp.UserContextKey).(int64)
 	if err := h.service.RevokeOtherSessions(c.UserContext(), userID, currentRawToken(c)); err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid or expired session"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *AuthHandler) ChangePassword(c *fiber.Ctx) error {
+	var req changePasswordRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	userID, _ := c.Locals(adapterhttp.UserContextKey).(int64)
+	if err := h.service.ChangePassword(c.UserContext(), userID, currentRawToken(c), req.CurrentPassword, req.NewPassword); err != nil {
+		switch {
+		case errors.Is(err, application.ErrWeakPassword), errors.Is(err, application.ErrCurrentPassword):
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		case errors.Is(err, application.ErrInvalidToken):
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid or expired session"})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "password could not be changed"})
+		}
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }

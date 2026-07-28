@@ -12,7 +12,7 @@
 
 | Area | Current behavior | Required v2 change | Evidence | Status |
 | --- | --- | --- | --- | --- |
-| Identity | Token-based project auth; legacy API key can fail open | Cookie sessions, CSRF, expiry, revocation, secure defaults | `internal/application/auth.go`, `internal/adapters/inbound/http/middleware.go`, `frontend/projects.js` | In progress — cookie sessions and global, routable account access landed; recovery and password change remain |
+| Identity | Token-based project auth; legacy API key can fail open | Cookie sessions, CSRF, expiry, revocation, secure defaults | `internal/application/auth.go`, `internal/adapters/inbound/http/middleware.go`, `frontend/projects.js` | In progress — cookie sessions, global routable account access, password change, and session revocation landed; recovery remains |
 | Product shell | Guest and project controls can coexist | Separate public, identity, and authenticated shells | `frontend/index.html`, `frontend/app.js`, `frontend/projects.js` | In progress — global account route and isolated project shell landed; authenticated navigation/onboarding remain |
 | Route monitoring | Imported routes can be evaluated as recurring requests | Catalog-only import; explicit budgeted synthetics | `internal/application/imports.go`, `internal/worker/route_processor.go` | Planned |
 | URL handling | Validation is split and partly deferred | One canonical backend pipeline and preview API | `internal/domain/endpoint.go`, route/import services, worker composer | In progress — core canonical pipeline and authenticated preview endpoint complete; environment/hash migration remains |
@@ -41,6 +41,7 @@
 | 1b | Account session inventory and revoke-other-sessions controls | Complete | Pending |
 | 1c | HTTP timeout, browser-header, and authentication-abuse baseline | Complete | Pending |
 | 1d | Global account actions, routable identity flow, and safe project return | Complete | Pending |
+| 1e | Password change with sibling-session revocation | Complete | Pending |
 | 1 | Identity, authorization, secure global shell | In progress | — |
 | 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | Pending |
 | 2b | Canonical endpoint pipeline and preview API | Complete | Pending |
@@ -76,3 +77,4 @@
 | 2026-07-28 | 1b | Added authenticated session inventory and revoke-other-sessions controls. Only the current-session marker is returned; token hashes remain server-only. Revocation removes every sibling session while retaining the session used for the request. Application and API tests passed. | Complete |
 | 2026-07-28 | 1c | Added explicit Fiber read/write/idle timeouts, strict CSP and companion browser headers, a 256 KiB authentication/control payload guard, and per-IP authentication throttling with `429` responses. Platform, application, and HTTP API tests passed. | Complete |
 | 2026-07-28 | 1d | Moved registration/login out of the private Projects tab into dedicated `#/register` and `#/login` routes, with Register as the primary global guest action. Guest project navigation redirects to login and only accepts a constrained same-origin `#/projects/...` return target; header actions reflect the cookie-authenticated session. JavaScript syntax, diff checks, and focused domain/API tests passed. | Complete |
+| 2026-07-28 | 1e | Added CSRF-protected `POST /api/auth/password`. It verifies the current password, writes a bcrypt hash, retains the current session, and revokes sibling sessions. Focused application, API, and HTTP-platform tests passed. | Complete |

@@ -12,6 +12,7 @@ type UserStore interface {
 	CreateUser(ctx context.Context, user models.User) (int64, error)
 	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
 	GetUserByID(ctx context.Context, id int64) (*models.User, error)
+	UpdateUserPassword(ctx context.Context, id int64, passwordHash string) error
 }
 
 // AuthTokenStore persists opaque bearer session tokens.

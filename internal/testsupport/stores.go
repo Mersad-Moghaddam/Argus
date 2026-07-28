@@ -103,6 +103,22 @@ func (f *UserStore) GetUserByID(_ context.Context, id int64) (*models.User, erro
 	return nil, nil
 }
 
+func (f *UserStore) UpdateUserPassword(_ context.Context, id int64, passwordHash string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Err != nil {
+		return f.Err
+	}
+	user, ok := f.byID[id]
+	if !ok {
+		return nil
+	}
+	user.PasswordHash = passwordHash
+	user.UpdatedAt = time.Now().UTC()
+	f.byID[id] = user
+	return nil
+}
+
 // ---------------------------------------------------------------- tokens
 
 type AuthTokenStore struct {

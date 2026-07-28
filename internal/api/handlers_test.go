@@ -175,6 +175,28 @@ func TestAuthEndpoints(t *testing.T) {
 			t.Fatalf("a revoked token must be rejected, got %d", resp.StatusCode)
 		}
 	})
+
+	t.Run("change password keeps current session and invalidates old credentials", func(t *testing.T) {
+		_, token := a.register(t, "change-password@example.com")
+		resp := a.do(t, http.MethodPost, "/api/auth/password", token, map[string]string{
+			"currentPassword": "longenoughpassword",
+			"newPassword":     "new-long-password",
+		})
+		if resp.StatusCode != fiber.StatusNoContent {
+			t.Fatalf("expected 204, got %d (%s)", resp.StatusCode, bodyString(t, resp))
+		}
+		_ = resp.Body.Close()
+		if resp := a.do(t, http.MethodGet, "/api/auth/me", token, nil); resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("current session must remain valid, got %d", resp.StatusCode)
+		} else {
+			_ = resp.Body.Close()
+		}
+		if resp := a.do(t, http.MethodPost, "/api/auth/login", "", map[string]string{"email": "change-password@example.com", "password": "longenoughpassword"}); resp.StatusCode != fiber.StatusUnauthorized {
+			t.Fatalf("old password must fail, got %d", resp.StatusCode)
+		} else {
+			_ = resp.Body.Close()
+		}
+	})
 }
 
 func TestBrowserSessionUsesHttpOnlyCookieAndCSRF(t *testing.T) {

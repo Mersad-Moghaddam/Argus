@@ -22,6 +22,7 @@ var (
 	ErrInvalidEmail       = errors.New("invalid email address")
 	ErrWeakPassword       = errors.New("password must be at least 8 characters")
 	ErrInvalidToken       = errors.New("invalid or expired session token")
+	ErrCurrentPassword    = errors.New("current password is incorrect")
 )
 
 var emailPattern = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
@@ -117,6 +118,33 @@ func (s *Service) ListSessions(ctx context.Context, userID int64, currentRawToke
 func (s *Service) RevokeOtherSessions(ctx context.Context, userID int64, currentRawToken string) error {
 	if strings.TrimSpace(currentRawToken) == "" {
 		return ErrInvalidToken
+	}
+	return s.tokens.DeleteTokensByUserExcept(ctx, userID, hashToken(currentRawToken))
+}
+
+// ChangePassword verifies the active account credential before writing a new
+// bcrypt hash. Other sessions are revoked so a leaked older session cannot
+// continue after a password change; the current cookie session remains valid.
+func (s *Service) ChangePassword(ctx context.Context, userID int64, currentRawToken, currentPassword, newPassword string) error {
+	if strings.TrimSpace(currentRawToken) == "" {
+		return ErrInvalidToken
+	}
+	if len(newPassword) < 8 {
+		return ErrWeakPassword
+	}
+	user, err := s.users.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if user == nil || bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)) != nil {
+		return ErrCurrentPassword
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	if err := s.users.UpdateUserPassword(ctx, userID, string(hash)); err != nil {
+		return err
 	}
 	return s.tokens.DeleteTokensByUserExcept(ctx, userID, hashToken(currentRawToken))
 }

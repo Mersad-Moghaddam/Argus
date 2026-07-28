@@ -36,6 +36,11 @@ func (r *Store) GetUserByID(ctx context.Context, id int64) (*models.User, error)
 	return &u, err
 }
 
+func (r *Store) UpdateUserPassword(ctx context.Context, id int64, passwordHash string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE users SET password_hash=? WHERE id=?`, passwordHash, id)
+	return err
+}
+
 func (r *Store) CreateToken(ctx context.Context, token models.AuthToken) (int64, error) {
 	res, err := r.db.ExecContext(ctx, `INSERT INTO auth_tokens (user_id, token_hash, name, expires_at) VALUES (?, ?, ?, ?)`, token.UserID, token.TokenHash, token.Name, token.ExpiresAt)
 	if err != nil {
