@@ -101,8 +101,13 @@ type RouteIncident struct {
 	ID                int64      `json:"id"`
 	RouteID           int64      `json:"routeId"`
 	ProjectID         int64      `json:"projectId"`
-	State             string     `json:"state"` // open | resolved
+	State             string     `json:"state"` // open | acknowledged | resolved
+	Source            string     `json:"source"`
+	SourceKey         string     `json:"sourceKey"`
+	Evidence          string     `json:"evidence,omitempty"`
 	StartedAt         time.Time  `json:"startedAt"`
+	AcknowledgedAt    *time.Time `json:"acknowledgedAt,omitempty"`
+	AcknowledgedByID  *int64     `json:"acknowledgedByUserId,omitempty"`
 	ResolvedAt        *time.Time `json:"resolvedAt,omitempty"`
 	FailureCount      int        `json:"failureCount"`
 	LastFailureReason string     `json:"lastFailureReason,omitempty"`

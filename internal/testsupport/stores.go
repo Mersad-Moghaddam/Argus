@@ -1180,7 +1180,7 @@ func (f *RouteIncidentStore) GetOpenRouteIncident(_ context.Context, routeID int
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, inc := range f.byID {
-		if inc.RouteID == routeID && inc.State == "open" {
+		if inc.RouteID == routeID && (inc.State == "open" || inc.State == "acknowledged") {
 			copied := inc
 			return &copied, nil
 		}
@@ -1188,16 +1188,40 @@ func (f *RouteIncidentStore) GetOpenRouteIncident(_ context.Context, routeID int
 	return nil, nil
 }
 
-func (f *RouteIncidentStore) CreateRouteIncident(_ context.Context, routeID, projectID int64, reason string, startedAt time.Time) (int64, error) {
+func (f *RouteIncidentStore) CreateRouteIncident(_ context.Context, routeID, projectID int64, source, sourceKey, reason, evidence string, startedAt time.Time) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.nextID++
 	f.Openings++
 	f.byID[f.nextID] = models.RouteIncident{
-		ID: f.nextID, RouteID: routeID, ProjectID: projectID, State: "open",
-		StartedAt: startedAt, LastFailureReason: reason, FailureCount: 1,
+		ID: f.nextID, RouteID: routeID, ProjectID: projectID, State: "open", Source: source, SourceKey: sourceKey,
+		StartedAt: startedAt, LastFailureReason: reason, Evidence: evidence, FailureCount: 1,
 	}
 	return f.nextID, nil
+}
+
+func (f *RouteIncidentStore) GetRouteIncident(_ context.Context, projectID, incidentID int64) (*models.RouteIncident, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	incident, ok := f.byID[incidentID]
+	if !ok || incident.ProjectID != projectID {
+		return nil, nil
+	}
+	copy := incident
+	return &copy, nil
+}
+
+func (f *RouteIncidentStore) AcknowledgeRouteIncident(_ context.Context, incidentID, userID int64, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	incident, ok := f.byID[incidentID]
+	if !ok || incident.State != "open" {
+		return nil
+	}
+	incident.State, incident.AcknowledgedAt = "acknowledged", &at
+	incident.AcknowledgedByID = &userID
+	f.byID[incidentID] = incident
+	return nil
 }
 
 func (f *RouteIncidentStore) ResolveRouteIncident(_ context.Context, incidentID int64, resolvedAt time.Time) error {
@@ -1241,7 +1265,7 @@ func (f *RouteIncidentStore) OpenCount() int {
 	defer f.mu.Unlock()
 	n := 0
 	for _, inc := range f.byID {
-		if inc.State == "open" {
+		if inc.State == "open" || inc.State == "acknowledged" {
 			n++
 		}
 	}

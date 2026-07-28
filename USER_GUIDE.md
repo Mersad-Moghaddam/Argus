@@ -320,6 +320,10 @@ What re-importing guarantees:
   metadata. The dashboard exposes healthy, late, missing, and revoked states. Reusing a key is
   accepted as a retry but cannot extend the monitor's last-seen time; revoking the monitor rejects
   its token immediately.
+- **Incidents** — every synthetic-route incident records its source and bounded evaluation
+  evidence. Editors can choose **Acknowledge** to show that a person is responding; this never
+  hides the incident or changes the recovery rule. A healthy check resolves the acknowledged
+  incident, while viewers can still inspect its source, timing, and failure reason.
 
 ### 9.6 Route health states
 

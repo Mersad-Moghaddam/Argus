@@ -1136,7 +1136,7 @@
 
       <section class="card">
         <div class="card-header"><h2>Incidents</h2></div>
-        ${incidentsListHtml(state.project.incidents, state.project.id)}
+        ${incidentsListHtml(state.project.incidents, state.project.id, canEdit)}
       </section>
 
       <section class="card">
@@ -1270,7 +1270,7 @@
       </tr>`;
   }
 
-  function incidentsListHtml(incidents, projectId) {
+  function incidentsListHtml(incidents, projectId, canEdit = false) {
     if (!incidents.length) {
       return emptyPanel(ICON.incident, 'No incidents recorded', 'An incident opens automatically after a route fails the configured number of consecutive checks.');
     }
@@ -1287,9 +1287,10 @@
                 &middot; ${resolved ? `resolved ${escapeHtml(relativeTime(i.resolvedAt))}` : 'ongoing'}
                 &middot; ${escapeHtml(duration)}
                 ${i.lastFailureReason ? `&middot; ${escapeHtml(i.lastFailureReason)}` : ''}
+                ${i.source ? `&middot; source ${escapeHtml(i.source)}` : ''}
               </span>
             </div>
-            <span class="badge status-${resolved ? 'resolved' : 'open'}"><span class="lamp"></span>${escapeHtml(i.state)}</span>
+            <div class="row-actions"><span class="badge status-${resolved ? 'resolved' : 'open'}"><span class="lamp"></span>${escapeHtml(i.state)}</span>${canEdit && i.state === 'open' ? `<button class="secondary sm" type="button" data-action="acknowledge-incident" data-id="${i.id}">Acknowledge</button>` : ''}</div>
           </li>`;
       })
       .join('')}</ul>`;
@@ -1552,7 +1553,7 @@
 
       <section class="card">
         <div class="card-header"><h2>Incidents for this route</h2></div>
-        ${incidentsListHtml(state.routeDetail.incidents, state.routeDetail.projectId)}
+        ${incidentsListHtml(state.routeDetail.incidents, state.routeDetail.projectId, canEdit)}
       </section>`;
 
     drawSeriesCharts('routeUptimeChart', 'routeLatencyChart', state.routeDetail.series);
@@ -2879,6 +2880,12 @@
             await apiProjects(`/heartbeat/revoke/${state.project.id}/${id}`, { method: 'POST' });
             showToast('Heartbeat token revoked.', 'success'); loadProjectDetail({ silent: true });
           });
+          break;
+        case 'acknowledge-incident':
+          await apiProjects(`/route/acknowledge/${state.project.id}/${id}`, { method: 'POST' });
+          showToast('Incident acknowledged.', 'success');
+          if (state.route.name === 'route') loadRouteDetail({ silent: true });
+          else loadProjectDetail({ silent: true });
           break;
         case 'edit-route': {
           const route = state.project.routes.find((r) => r.id === id) || (state.routeDetail.route && state.routeDetail.route.id === id ? state.routeDetail.route : null);

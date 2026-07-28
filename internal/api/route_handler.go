@@ -31,6 +31,7 @@ func RegisterRouteRoutes(app fiber.Router, h *RouteHandler, guards ...fiber.Hand
 	app.Delete("/route/catalog/:projectId/:routeId", guarded(guards, h.DeleteRoute)...)
 	app.Get("/route/checks/:projectId/:routeId", guarded(guards, h.ListRouteChecks)...)
 	app.Get("/route/incidents/:projectId", guarded(guards, h.ListIncidents)...)
+	app.Post("/route/acknowledge/:projectId/:incidentId", guarded(guards, h.AcknowledgeIncident)...)
 	app.Get("/route/metrics/:projectId", guarded(guards, h.ListMetricsTimeseries)...)
 }
 
@@ -339,6 +340,23 @@ func (h *RouteHandler) ListIncidents(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list incidents"})
 	}
 	return c.JSON(incidents)
+}
+
+func (h *RouteHandler) AcknowledgeIncident(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	incidentID, err := parseIDParam(c, "incidentId")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if err = h.service.AcknowledgeRouteIncident(c.UserContext(), project.ID, incidentID, currentUserID(c)); errors.Is(err, domain.ErrProjectNotFound) {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "incident not found"})
+	} else if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // ListMetricsTimeseries serves the bucketed data behind the dashboard's

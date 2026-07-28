@@ -307,6 +307,20 @@ func (s *Service) ListRouteIncidents(ctx context.Context, projectID int64, route
 	return s.routeIncidents.ListRouteIncidents(ctx, projectID, routeID, state, limit, offset)
 }
 
+func (s *Service) AcknowledgeRouteIncident(ctx context.Context, projectID, incidentID, userID int64) error {
+	incident, err := s.routeIncidents.GetRouteIncident(ctx, projectID, incidentID)
+	if err != nil {
+		return err
+	}
+	if incident == nil {
+		return domain.ErrProjectNotFound
+	}
+	if incident.State == "resolved" {
+		return domain.ErrInvalidInput
+	}
+	return s.routeIncidents.AcknowledgeRouteIncident(ctx, incidentID, userID, time.Now().UTC())
+}
+
 // timeseriesRanges are the only windows the API will serve. Fixing the set
 // (rather than accepting an arbitrary since/bucket pair) keeps every chart
 // query bounded and index-friendly, and keeps the bucket count small enough
@@ -397,7 +411,8 @@ func (s *Service) ProcessRouteCheckResult(ctx context.Context, route models.APIR
 
 	bucket := checkedAt.UTC().Truncate(time.Minute).Format(time.RFC3339)
 	if transition.ShouldOpen {
-		incidentID, createErr := s.routeIncidents.CreateRouteIncident(ctx, route.ID, route.ProjectID, failureReason, checkedAt)
+		evidence, _ := json.Marshal(map[string]any{"statusCode": statusCode, "attempts": attempts, "outcome": status})
+		incidentID, createErr := s.routeIncidents.CreateRouteIncident(ctx, route.ID, route.ProjectID, "synthetic", fmt.Sprintf("route:%d", route.ID), failureReason, string(evidence), checkedAt)
 		if createErr != nil {
 			return createErr
 		}

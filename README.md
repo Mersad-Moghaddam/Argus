@@ -287,6 +287,17 @@ The dashboard reports `healthy`, `late`, `missing`, or `revoked` from the
 configured expected interval and grace period. Revocation immediately rejects
 the old job token.
 
+### Project incident evidence
+
+Synthetic-route incidents now record their source (`synthetic`), stable source
+key, and bounded evaluation evidence alongside the failure reason. Project
+editors can acknowledge an open incident at
+`POST /route/acknowledge/:projectId/:incidentId`; acknowledgement identifies
+human attention but does not suppress recovery or resolve the incident. A
+subsequent healthy evaluation resolves it normally. The source/evidence model
+is additive and is the compatibility bridge for SLO, heartbeat, agent, and
+pipeline incident producers.
+
 ## Architecture
 
 Argus follows a ports-and-adapters layout: business rules point inward, while HTTP, MySQL, Redis/Asynq, and outbound notifications remain replaceable edge concerns.

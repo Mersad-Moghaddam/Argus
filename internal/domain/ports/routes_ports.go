@@ -139,7 +139,9 @@ type RouteStore interface {
 // RouteIncidentStore persists route-level incidents.
 type RouteIncidentStore interface {
 	GetOpenRouteIncident(ctx context.Context, routeID int64) (*models.RouteIncident, error)
-	CreateRouteIncident(ctx context.Context, routeID, projectID int64, reason string, startedAt time.Time) (int64, error)
+	CreateRouteIncident(ctx context.Context, routeID, projectID int64, source, sourceKey, reason, evidence string, startedAt time.Time) (int64, error)
+	GetRouteIncident(ctx context.Context, projectID, incidentID int64) (*models.RouteIncident, error)
+	AcknowledgeRouteIncident(ctx context.Context, incidentID, userID int64, acknowledgedAt time.Time) error
 	ResolveRouteIncident(ctx context.Context, incidentID int64, resolvedAt time.Time) error
 	ListRouteIncidents(ctx context.Context, projectID int64, routeID *int64, state string, limit, offset int) ([]models.RouteIncident, error)
 }

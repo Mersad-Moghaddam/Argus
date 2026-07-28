@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -358,6 +359,36 @@ func TestProcessRouteCheckResultUpdatesMetrics(t *testing.T) {
 	}
 	if len(checks) != 1 || checks[0].Status != "up" || checks[0].StatusCode != 200 {
 		t.Fatalf("expected one persisted time-series row, got %+v", checks)
+	}
+}
+
+func TestRouteIncidentAcknowledgementPreservesEvidenceAndAllowsResolution(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	project := seedProject(t, h)
+	route, err := h.service.CreateRoute(ctx, project, RouteInput{Method: "GET", Path: "/incident-evidence", BaseURL: "https://a.example", FailureThreshold: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	processChecks(t, h, route.ID, "down")
+	open, err := h.service.ListRouteIncidents(ctx, project.ID, &route.ID, "open", 10, 0)
+	if err != nil || len(open) != 1 {
+		t.Fatalf("open incident: %v %+v", err, open)
+	}
+	if open[0].Source != "synthetic" || open[0].SourceKey != "route:"+strconv.FormatInt(route.ID, 10) || !strings.Contains(open[0].Evidence, `"statusCode":500`) {
+		t.Fatalf("missing source/evidence: %+v", open[0])
+	}
+	if err = h.service.AcknowledgeRouteIncident(ctx, project.ID, open[0].ID, 99); err != nil {
+		t.Fatalf("acknowledge: %v", err)
+	}
+	acknowledged, err := h.service.ListRouteIncidents(ctx, project.ID, &route.ID, "acknowledged", 10, 0)
+	if err != nil || len(acknowledged) != 1 || acknowledged[0].AcknowledgedByID == nil || *acknowledged[0].AcknowledgedByID != 99 {
+		t.Fatalf("acknowledged incident: %v %+v", err, acknowledged)
+	}
+	processChecks(t, h, route.ID, "up")
+	resolved, err := h.service.ListRouteIncidents(ctx, project.ID, &route.ID, "resolved", 10, 0)
+	if err != nil || len(resolved) != 1 || resolved[0].ResolvedAt == nil {
+		t.Fatalf("resolved acknowledged incident: %v %+v", err, resolved)
 	}
 }
 
