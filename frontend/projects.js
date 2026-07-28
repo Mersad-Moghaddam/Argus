@@ -18,6 +18,11 @@
   const pel = {
     tab: document.getElementById('tab-projects'),
     panel: document.getElementById('panel-projects'),
+    globalAuthPanel: document.getElementById('globalAuthPanel'),
+    guestActions: document.getElementById('accountGuestActions'),
+    signedInActions: document.getElementById('accountSignedInActions'),
+    globalUserLabel: document.getElementById('globalUserLabel'),
+    globalSignOut: document.getElementById('globalSignOut'),
     authGate: document.getElementById('projAuthGate'),
     authForm: document.getElementById('projAuthForm'),
     authTitle: document.getElementById('projAuthTitle'),
@@ -72,6 +77,7 @@
   const state = {
     route: { name: 'list' },
     authMode: 'login',
+    authReturnTo: null,
     sessionUser: null,
     sessionResolved: false,
     // Projects list view.
@@ -112,11 +118,20 @@
   function setSession(user) {
     state.sessionUser = user || null;
     state.sessionResolved = true;
+    syncAccountChrome();
   }
 
   function clearSession() {
     state.sessionUser = null;
     state.sessionResolved = true;
+    syncAccountChrome();
+  }
+
+  function syncAccountChrome() {
+    const user = getUser();
+    pel.guestActions.classList.toggle('hidden', Boolean(user));
+    pel.signedInActions.classList.toggle('hidden', !user);
+    pel.globalUserLabel.textContent = user ? (user.email || user.name || 'Signed in') : '';
   }
 
   function csrfToken() {
@@ -153,7 +168,7 @@
 
     if (res.status === 401) {
       clearSession();
-      renderAuthGate();
+      navigate(authHash('login', window.location.hash));
       throw new SessionExpired();
     }
     if (res.status === 204) return null;
@@ -259,7 +274,15 @@
 
   function parseHash() {
     const hash = window.location.hash.replace(/^#/, '');
-    const parts = hash.split('/').filter(Boolean);
+    const [path, query = ''] = hash.split('?', 2);
+    const parts = path.split('/').filter(Boolean);
+    if (parts.length === 1 && (parts[0] === 'login' || parts[0] === 'register')) {
+      return {
+        name: 'auth',
+        mode: parts[0] === 'register' ? 'register' : 'login',
+        returnTo: validatedReturnTo(new URLSearchParams(query).get('returnTo')),
+      };
+    }
     if (parts[0] !== 'projects') return null;
     if (parts.length === 1) return { name: 'list' };
     const projectId = Number(parts[1]);
@@ -271,6 +294,21 @@
       if (Number.isInteger(routeId) && routeId > 0) return { name: 'route', projectId, routeId };
     }
     return { name: 'project', projectId };
+  }
+
+  function validatedReturnTo(value) {
+    if (typeof value !== 'string' || !value.startsWith('#/projects')) return null;
+    const parsed = value.slice(1).split('?', 1)[0].split('/').filter(Boolean);
+    if (parsed[0] !== 'projects') return null;
+    if (parsed.length > 4 || (parsed[1] && (!/^\d+$/.test(parsed[1]) || Number(parsed[1]) <= 0))) return null;
+    if (parsed[2] && parsed[2] !== 'routes' && parsed[2] !== 'import') return null;
+    if (parsed[2] === 'routes' && (!parsed[3] || !/^\d+$/.test(parsed[3]) || Number(parsed[3]) <= 0)) return null;
+    return value;
+  }
+
+  function authHash(mode, returnTo = null) {
+    const safeReturnTo = validatedReturnTo(returnTo);
+    return `#/${mode}${safeReturnTo ? `?returnTo=${encodeURIComponent(safeReturnTo)}` : ''}`;
   }
 
   function navigate(hash) {
@@ -320,6 +358,16 @@
     const parsed = parseHash();
     if (!parsed) return; // Not our hash; leave the other tabs alone.
 
+    if (parsed.name === 'auth') {
+      renderAuthGate(parsed.mode, parsed.returnTo);
+      if (getUser()) navigate(parsed.returnTo || '#/projects');
+      else if (!state.sessionResolved) restoreSession();
+      return;
+    }
+
+    document.body.classList.remove('auth-route');
+    pel.globalAuthPanel.classList.add('hidden');
+
     if (pel.tab && !pel.tab.classList.contains('active') && typeof activateTab === 'function') {
       activateTab(pel.tab);
     }
@@ -328,10 +376,9 @@
 
     if (!getUser()) {
       if (!state.sessionResolved) restoreSession();
-      renderAuthGate();
+      navigate(authHash('login', window.location.hash));
       return;
     }
-    pel.authGate.classList.add('hidden');
     pel.shell.classList.remove('hidden');
     pel.userLabel.textContent = (getUser() && (getUser().email || getUser().name)) || '';
 
@@ -395,20 +442,23 @@
 
   /* ------------------------------------------------------------- auth gate */
 
-  function renderAuthGate() {
+  function renderAuthGate(mode = 'login', returnTo = null) {
     stopAutoRefresh();
     pel.shell.classList.add('hidden');
+    state.authReturnTo = validatedReturnTo(returnTo);
+    document.body.classList.add('auth-route');
+    pel.globalAuthPanel.classList.remove('hidden');
     pel.authGate.classList.remove('hidden');
-    setAuthMode(state.authMode);
+    setAuthMode(mode);
   }
 
   function setAuthMode(mode) {
     state.authMode = mode;
     const registering = mode === 'register';
-    pel.authTitle.textContent = registering ? 'Create an API Projects account' : 'Sign in to API Projects';
+    pel.authTitle.textContent = registering ? 'Create your Argus account' : 'Sign in to Argus';
     pel.authIntro.textContent = registering
-      ? 'Your account owns the projects you create and is separate from the uptime dashboard API key.'
-      : "API route monitoring uses its own account, separate from the uptime dashboard's API key.";
+      ? 'Your account owns the private monitoring projects you create.'
+      : 'Sign in to create and manage private monitoring projects.';
     pel.authNameField.hidden = !registering;
     pel.authSubmit.textContent = registering ? 'Create account' : 'Sign in';
     pel.authPassword.autocomplete = registering ? 'new-password' : 'current-password';
@@ -427,7 +477,9 @@
     node.classList.add('hidden');
   }
 
-  pel.authSwitch.addEventListener('click', () => setAuthMode(state.authMode === 'login' ? 'register' : 'login'));
+  pel.authSwitch.addEventListener('click', () => {
+    navigate(authHash(state.authMode === 'login' ? 'register' : 'login', state.authReturnTo));
+  });
 
   pel.authForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -460,8 +512,7 @@
       setSession(payload.user);
       pel.authPassword.value = '';
       showToast(registering ? 'Account created. Welcome to API Projects.' : 'Signed in.', 'success');
-      navigate('#/projects');
-      handleRoute();
+      navigate(state.authReturnTo || '#/projects');
     } catch (err) {
       showFormError(pel.authError, `Network error: ${err.message}`);
     } finally {
@@ -469,7 +520,7 @@
     }
   });
 
-  pel.signOut.addEventListener('click', async () => {
+  async function signOut() {
     try {
       await apiProjects('/auth/logout', { method: 'POST' });
     } catch {
@@ -477,8 +528,11 @@
     }
     clearSession();
     showToast('Signed out of API Projects.', 'info');
-    renderAuthGate();
-  });
+    navigate(authHash('login'));
+  }
+
+  pel.signOut.addEventListener('click', signOut);
+  pel.globalSignOut.addEventListener('click', signOut);
 
   async function restoreSession() {
     if (state.sessionResolved) return;
@@ -2205,7 +2259,7 @@
   if (pel.tab) {
     pel.tab.addEventListener('click', () => {
       const parsed = parseHash();
-      if (!parsed) navigate('#/projects');
+      if (!parsed || parsed.name === 'auth') navigate('#/projects');
       else handleRoute();
     });
   }
@@ -2215,14 +2269,9 @@
   if (parseHash()) {
     handleRoute();
   } else {
-    setAuthMode('login');
-    if (!getUser()) {
-      pel.authGate.classList.remove('hidden');
-      pel.shell.classList.add('hidden');
-    } else {
-      pel.shell.classList.remove('hidden');
-      pel.authGate.classList.add('hidden');
-    }
+    syncAccountChrome();
+    pel.globalAuthPanel.classList.add('hidden');
+    pel.shell.classList.add('hidden');
   }
   restoreSession();
 })();

@@ -250,6 +250,48 @@ hr {
   flex-wrap: wrap;
 }
 
+.account-actions,
+.account-action-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-user {
+  max-width: 14rem;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 35px;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.account-login { background: transparent; }
+
+.account-register {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: #07111f;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .account-login:hover { background: var(--ink-raised-2); color: var(--text); }
+  .account-register:hover { filter: brightness(1.08); }
+}
+
 .api-key-field {
   position: relative;
   display: flex;
@@ -1199,6 +1241,9 @@ footer.app-footer {
   .top-actions {
     width: 100%;
   }
+  .account-actions {
+    margin-right: auto;
+  }
   .api-key-field {
     flex: 1;
   }
@@ -1237,6 +1282,22 @@ footer.app-footer {
   display: flex;
   justify-content: center;
   padding: 18px 0 8px;
+}
+
+.global-auth-panel {
+  padding: 24px 0;
+}
+
+body.auth-route .status-banner,
+body.auth-route .status-rail,
+body.auth-route .tabs,
+body.auth-route .tab-panel,
+body.auth-route .app-footer,
+body.auth-route .refresh-indicator,
+body.auth-route .api-key-field,
+body.auth-route #saveKeyBtn,
+body.auth-route #refreshBtn {
+  display: none !important;
 }
 
 .proj-auth-card {

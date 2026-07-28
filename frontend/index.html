@@ -28,6 +28,16 @@
         </div>
       </div>
       <div class="top-actions">
+        <div class="account-actions" aria-label="Account">
+          <div id="accountGuestActions" class="account-action-group">
+            <a class="account-action account-login" id="globalLogin" href="#/login">Log in</a>
+            <a class="account-action account-register" id="globalRegister" href="#/register">Register</a>
+          </div>
+          <div id="accountSignedInActions" class="account-action-group hidden">
+            <span class="account-user" id="globalUserLabel"></span>
+            <button class="ghost sm" id="globalSignOut" type="button">Sign out</button>
+          </div>
+        </div>
         <div class="refresh-indicator" id="refreshIndicator" title="Auto-refreshes every 30s">
           <span class="refresh-dot" id="refreshDot"></span>
           <span id="refreshCountdown">auto-refresh 30s</span>
@@ -73,6 +83,37 @@
         <div class="status-cell tick-warn">
           <span class="status-value" id="statIncidents">&ndash;</span>
           <span class="status-label">Open incidents</span>
+        </div>
+      </section>
+
+      <section id="globalAuthPanel" class="global-auth-panel hidden" aria-labelledby="projAuthTitle">
+        <div id="projAuthGate" class="proj-auth-gate">
+          <section class="card proj-auth-card">
+            <div class="card-header">
+              <h2 id="projAuthTitle">Sign in to Argus</h2>
+            </div>
+            <p class="card-subtitle" id="projAuthIntro">Sign in to create and manage private monitoring projects.</p>
+            <form id="projAuthForm" class="stack" autocomplete="on">
+              <div class="field" id="projAuthNameField" hidden>
+                <label for="projAuthName">Display name</label>
+                <input id="projAuthName" autocomplete="name" placeholder="Ada Lovelace" />
+              </div>
+              <div class="field">
+                <label for="projAuthEmail">Email</label>
+                <input id="projAuthEmail" type="email" autocomplete="email" placeholder="you@example.com" required />
+              </div>
+              <div class="field">
+                <label for="projAuthPassword">Password</label>
+                <input id="projAuthPassword" type="password" autocomplete="current-password" placeholder="At least 8 characters" required minlength="8" />
+              </div>
+              <p class="proj-form-error hidden" id="projAuthError" role="alert"></p>
+              <button type="submit" id="projAuthSubmit">Sign in</button>
+              <p class="hint">
+                <span id="projAuthSwitchPrompt">No account yet?</span>
+                <button type="button" class="link-btn" id="projAuthSwitch">Create one</button>
+              </p>
+            </form>
+          </section>
         </div>
       </section>
 
@@ -287,39 +328,6 @@
 
       <!-- API Projects: project-based API route monitoring -->
       <section class="tab-panel" id="panel-projects" role="tabpanel" aria-labelledby="tab-projects" tabindex="0">
-        <!-- Sign-in gate. The project API uses its own bearer-token accounts,
-             independent from the legacy X-API-Key above. -->
-        <div id="projAuthGate" class="proj-auth-gate hidden">
-          <section class="card proj-auth-card">
-            <div class="card-header">
-              <h2 id="projAuthTitle">Sign in to API Projects</h2>
-            </div>
-            <p class="card-subtitle" id="projAuthIntro">
-              API route monitoring uses its own account, separate from the uptime dashboard's API key.
-            </p>
-            <form id="projAuthForm" class="stack" autocomplete="on">
-              <div class="field" id="projAuthNameField" hidden>
-                <label for="projAuthName">Display name</label>
-                <input id="projAuthName" autocomplete="name" placeholder="Ada Lovelace" />
-              </div>
-              <div class="field">
-                <label for="projAuthEmail">Email</label>
-                <input id="projAuthEmail" type="email" autocomplete="email" placeholder="you@example.com" required />
-              </div>
-              <div class="field">
-                <label for="projAuthPassword">Password</label>
-                <input id="projAuthPassword" type="password" autocomplete="current-password" placeholder="At least 8 characters" required minlength="8" />
-              </div>
-              <p class="proj-form-error hidden" id="projAuthError" role="alert"></p>
-              <button type="submit" id="projAuthSubmit">Sign in</button>
-              <p class="hint">
-                <span id="projAuthSwitchPrompt">No account yet?</span>
-                <button type="button" class="link-btn" id="projAuthSwitch">Create one</button>
-              </p>
-            </form>
-          </section>
-        </div>
-
         <!-- Authenticated shell. Views are swapped by the hash sub-router. -->
         <div id="projShell" class="hidden">
           <div class="proj-topline">

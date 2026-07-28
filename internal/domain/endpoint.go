@@ -389,6 +389,15 @@ func ValidationCode(err error) string {
 	if errors.As(err, &validation) {
 		return validation.Code
 	}
+	if errors.Is(err, ErrDuplicateRoute) {
+		return "duplicate_route"
+	}
+	if errors.Is(err, ErrUnsafeSynthetic) {
+		return "unsafe_synthetic"
+	}
+	if errors.Is(err, ErrInvalidInput) {
+		return "invalid_input"
+	}
 	return "invalid_route"
 }
 
@@ -398,6 +407,9 @@ func ValidationMessage(err error) string {
 	var validation *ValidationError
 	if errors.As(err, &validation) {
 		return validation.Message
+	}
+	if errors.Is(err, ErrDuplicateRoute) || errors.Is(err, ErrUnsafeSynthetic) || errors.Is(err, ErrInvalidInput) {
+		return err.Error()
 	}
 	return fmt.Sprintf("%s", ErrInvalidRoute)
 }

@@ -72,3 +72,26 @@ func TestNormalizeRouteTemplatePreservesRepeatedAndUnifiesTrailingSlashes(t *tes
 		t.Fatalf("path = %q, want %q", got, want)
 	}
 }
+
+func TestValidationCodeAndMessageForRoutePolicyErrors(t *testing.T) {
+	tests := []struct {
+		err     error
+		code    string
+		message string
+	}{
+		{ErrDuplicateRoute, "duplicate_route", ErrDuplicateRoute.Error()},
+		{ErrUnsafeSynthetic, "unsafe_synthetic", ErrUnsafeSynthetic.Error()},
+		{ErrInvalidInput, "invalid_input", ErrInvalidInput.Error()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.code, func(t *testing.T) {
+			if got := ValidationCode(tt.err); got != tt.code {
+				t.Fatalf("ValidationCode() = %q, want %q", got, tt.code)
+			}
+			if got := ValidationMessage(tt.err); got != tt.message {
+				t.Fatalf("ValidationMessage() = %q, want %q", got, tt.message)
+			}
+		})
+	}
+}
