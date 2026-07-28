@@ -38,7 +38,7 @@ func newTestAPI(t *testing.T) *testAPI {
 	t.Helper()
 	s := testsupport.NewStores()
 	service := application.NewService(s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Outbox,
-		observability.NewLogStore(100), s.Users, s.Tokens, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings)
+		observability.NewLogStore(100), s.Users, s.Tokens, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings, s.SLOs)
 	return &testAPI{
 		app:     httpserver.NewFiberApp(service, observability.NewLogStore(100), legacyAPIKey),
 		service: service,
@@ -126,6 +126,41 @@ func (a *testAPI) createProject(t *testing.T, token, name string) models.Project
 	var project models.Project
 	decode(t, resp, &project)
 	return project
+}
+
+func TestSLODefinitionEndpointsEnforceProjectRoles(t *testing.T) {
+	a := newTestAPI(t)
+	viewerID, viewerToken := a.register(t, "slo-viewer@example.com")
+	_, ownerToken := a.register(t, "slo-owner@example.com")
+	project := a.createProject(t, ownerToken, "SLO API")
+	if err := a.stores.Projects.AddProjectMember(context.Background(), models.ProjectMember{ProjectID: project.ID, UserID: viewerID, Role: models.ProjectRoleViewer}); err != nil {
+		t.Fatal(err)
+	}
+	payload := map[string]any{"name": "Availability", "sliKind": "availability", "targetPercent": 99.9, "minEvents": 20}
+	if response := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/slos", project.ID), viewerToken, payload); response.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("viewer must not create SLO, got %d (%s)", response.StatusCode, bodyString(t, response))
+	} else {
+		_ = response.Body.Close()
+	}
+	response := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/slos", project.ID), ownerToken, payload)
+	if response.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create SLO: %d (%s)", response.StatusCode, bodyString(t, response))
+	}
+	var definition models.SLODefinition
+	decode(t, response, &definition)
+	if definition.Version != 1 || definition.ID == 0 {
+		t.Fatalf("unexpected SLO response: %+v", definition)
+	}
+	if response = a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d/slos", project.ID), viewerToken, nil); response.StatusCode != fiber.StatusOK {
+		t.Fatalf("viewer must list SLOs: %d", response.StatusCode)
+	} else {
+		_ = response.Body.Close()
+	}
+	if response = a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d/slos/%d/evaluations", project.ID, definition.ID), viewerToken, nil); response.StatusCode != fiber.StatusOK {
+		t.Fatalf("viewer must list SLO evaluations: %d", response.StatusCode)
+	} else {
+		_ = response.Body.Close()
+	}
 }
 
 // ------------------------------------------------------------ authentication

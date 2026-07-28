@@ -40,6 +40,7 @@ type Stores struct {
 	TelemetryCredentials *TelemetryCredentialStore
 	TelemetryIngress     *TelemetryIngressStore
 	TelemetryMappings    *TelemetryMappingStore
+	SLOs                 *SLOStore
 	Outbox               *OutboxStore
 	Legacy               LegacyStore
 }
@@ -56,6 +57,7 @@ func NewStores() *Stores {
 		TelemetryCredentials: NewTelemetryCredentialStore(),
 		TelemetryIngress:     NewTelemetryIngressStore(),
 		TelemetryMappings:    NewTelemetryMappingStore(),
+		SLOs:                 NewSLOStore(),
 		Outbox:               &OutboxStore{},
 	}
 }
@@ -195,6 +197,74 @@ func (f *TelemetryMappingStore) DeleteTelemetryRouteMapping(_ context.Context, p
 	}
 	f.items = out
 	return nil
+}
+
+type SLOStore struct {
+	mu          sync.Mutex
+	nextID      int64
+	nextEvalID  int64
+	definitions map[int64]models.SLODefinition
+	evaluations []models.SLOEvaluation
+}
+
+func NewSLOStore() *SLOStore { return &SLOStore{definitions: map[int64]models.SLODefinition{}} }
+func (f *SLOStore) CreateSLODefinition(_ context.Context, definition models.SLODefinition) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, existing := range f.definitions {
+		if existing.ProjectID == definition.ProjectID && existing.Name == definition.Name {
+			return 0, domain.ErrInvalidInput
+		}
+	}
+	f.nextID++
+	definition.ID, definition.Version = f.nextID, 1
+	definition.CreatedAt = time.Now().UTC()
+	definition.UpdatedAt = definition.CreatedAt
+	f.definitions[definition.ID] = definition
+	return definition.ID, nil
+}
+func (f *SLOStore) GetSLODefinition(_ context.Context, projectID, id int64) (*models.SLODefinition, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	item, ok := f.definitions[id]
+	if !ok || item.ProjectID != projectID {
+		return nil, nil
+	}
+	return &item, nil
+}
+func (f *SLOStore) ListSLODefinitions(_ context.Context, projectID int64) ([]models.SLODefinition, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := []models.SLODefinition{}
+	for _, item := range f.definitions {
+		if item.ProjectID == projectID {
+			items = append(items, item)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID > items[j].ID })
+	return items, nil
+}
+func (f *SLOStore) RecordSLOEvaluation(_ context.Context, evaluation models.SLOEvaluation) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextEvalID++
+	evaluation.ID = f.nextEvalID
+	f.evaluations = append(f.evaluations, evaluation)
+	return evaluation.ID, nil
+}
+func (f *SLOStore) ListSLOEvaluations(_ context.Context, projectID, sloID int64, limit int) ([]models.SLOEvaluation, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	items := []models.SLOEvaluation{}
+	for i := len(f.evaluations) - 1; i >= 0 && len(items) < limit; i-- {
+		if item := f.evaluations[i]; item.ProjectID == projectID && item.SLOID == sloID {
+			items = append(items, item)
+		}
+	}
+	return items, nil
 }
 
 func NewTelemetryIngressStore() *TelemetryIngressStore { return &TelemetryIngressStore{} }

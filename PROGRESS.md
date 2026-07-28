@@ -62,6 +62,7 @@
 | 3h | Safe OTLP HTTP RED-metric export to VictoriaMetrics | Complete | Current checkpoint |
 | 3i | Tenant-safe manual telemetry-to-route mappings | Complete | Current checkpoint |
 | 3j | Explicit SLO evaluation and burn-rate policy | Complete | Current checkpoint |
+| 3k | Versioned SLO definitions and evaluation evidence | Complete | Current checkpoint |
 | 4a | Hidden-state contract and motion-plan implementation | Complete | `3a326a1` |
 | 2 | Environments, endpoint canonicalization, safe synthetic migration | Planned | — |
 | 3 | Telemetry ingestion, metric storage, mapping, SLO and incidents | Planned | — |
@@ -106,6 +107,7 @@
 | 2026-07-28 | 3h | Added a tested OTLP histogram bridge to the internal VictoriaMetrics JSON import API. Only recognized HTTP server-duration histograms are exported, with fixed project/environment/service/deployment/method/template/status labels and bounded bucket expansion; malformed histograms and unsafe dynamic numeric routes do not create series. Focused API and adapter HTTP tests passed. | Complete |
 | 2026-07-28 | 3i | Added a project-scoped manual mapping control plane that binds an environment, service/deployment identity, and one catalog route. Foreign-project routes and environments are rejected before persistence; mappings snapshot the route method/template and are exposed through viewer/editor-scoped project APIs. Full Go tests passed. | Complete |
 | 2026-07-28 | 3j | Added a pure, tested SLO policy that distinguishes healthy, unhealthy, no-data, stale, paused, maintenance, and configuration-error outcomes. It calculates observed performance, remaining error budget, burn rate, and a two-window burn alert without treating missing telemetry as healthy. Domain tests passed. | Complete |
+| 2026-07-28 | 3k | Added project-scoped, version-one SLO definitions, immutable JSON definition snapshots, and bounded aggregate evaluation history. Viewer/editor APIs enforce project roles; availability and latency inputs, rolling/burn windows, low-traffic minimums, and provenance are validated. Full Go regression tests passed. | Complete |
 | 2026-07-28 | 1b | Added authenticated session inventory and revoke-other-sessions controls. Only the current-session marker is returned; token hashes remain server-only. Revocation removes every sibling session while retaining the session used for the request. Application and API tests passed. | Complete |
 | 2026-07-28 | 1c | Added explicit Fiber read/write/idle timeouts, strict CSP and companion browser headers, a 256 KiB authentication/control payload guard, and per-IP authentication throttling with `429` responses. Platform, application, and HTTP API tests passed. | Complete |
 | 2026-07-28 | 1d | Moved registration/login out of the private Projects tab into dedicated `#/register` and `#/login` routes, with Register as the primary global guest action. Guest project navigation redirects to login and only accepts a constrained same-origin `#/projects/...` return target; header actions reflect the cookie-authenticated session. JavaScript syntax, diff checks, and focused domain/API tests passed. | Complete |

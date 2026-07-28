@@ -64,6 +64,16 @@ type TelemetryMappingStore interface {
 	DeleteTelemetryRouteMapping(ctx context.Context, projectID, id int64) error
 }
 
+// SLOStore persists versioned SLO policy and the bounded aggregate evidence
+// used to explain every evaluation to project members.
+type SLOStore interface {
+	CreateSLODefinition(ctx context.Context, definition models.SLODefinition) (int64, error)
+	GetSLODefinition(ctx context.Context, projectID, id int64) (*models.SLODefinition, error)
+	ListSLODefinitions(ctx context.Context, projectID int64) ([]models.SLODefinition, error)
+	RecordSLOEvaluation(ctx context.Context, evaluation models.SLOEvaluation) (int64, error)
+	ListSLOEvaluations(ctx context.Context, projectID, sloID int64, limit int) ([]models.SLOEvaluation, error)
+}
+
 // RouteStore persists monitored API routes.
 type RouteStore interface {
 	CreateRoute(ctx context.Context, route models.APIRoute) (int64, error)

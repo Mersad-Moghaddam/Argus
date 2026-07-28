@@ -33,9 +33,73 @@ func RegisterProjectRoutes(app fiber.Router, h *ProjectHandler, guards ...fiber.
 	app.Get("/projects/:projectId/telemetry-mappings", guarded(guards, h.ListTelemetryMappings)...)
 	app.Post("/projects/:projectId/telemetry-mappings", guarded(guards, h.CreateTelemetryMapping)...)
 	app.Delete("/projects/:projectId/telemetry-mappings/:mappingId", guarded(guards, h.DeleteTelemetryMapping)...)
+	app.Get("/projects/:projectId/slos", guarded(guards, h.ListSLODefinitions)...)
+	app.Post("/projects/:projectId/slos", guarded(guards, h.CreateSLODefinition)...)
+	app.Get("/projects/:projectId/slos/:sloId/evaluations", guarded(guards, h.ListSLOEvaluations)...)
 	app.Post("/projects/:projectId/telemetry-credentials", guarded(guards, h.CreateTelemetryCredential)...)
 	app.Post("/projects/:projectId/telemetry-credentials/:credentialId/rotate", guarded(guards, h.RotateTelemetryCredential)...)
 	app.Post("/projects/:projectId/telemetry-credentials/:credentialId/revoke", guarded(guards, h.RevokeTelemetryCredential)...)
+}
+
+type sloDefinitionRequest struct {
+	Name               string  `json:"name"`
+	SLIKind            string  `json:"sliKind"`
+	TargetPercent      float64 `json:"targetPercent"`
+	WindowSeconds      int     `json:"windowSeconds"`
+	LatencyThresholdMS int     `json:"latencyThresholdMs"`
+	MinEvents          int     `json:"minEvents"`
+	ShortWindowSeconds int     `json:"shortWindowSeconds"`
+	ShortBurnRate      float64 `json:"shortBurnRate"`
+	LongWindowSeconds  int     `json:"longWindowSeconds"`
+	LongBurnRate       float64 `json:"longBurnRate"`
+}
+
+func (h *ProjectHandler) ListSLODefinitions(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleViewer)
+	if !ok {
+		return nil
+	}
+	items, err := h.service.ListSLODefinitions(c.UserContext(), project.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list SLO definitions"})
+	}
+	return c.JSON(fiber.Map{"items": items})
+}
+
+func (h *ProjectHandler) CreateSLODefinition(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	var req sloDefinitionRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	item, err := h.service.CreateSLODefinition(c.UserContext(), project.ID, currentUserID(c), application.CreateSLODefinitionInput{Name: req.Name, SLIKind: req.SLIKind, TargetPercent: req.TargetPercent, WindowSeconds: req.WindowSeconds, LatencyThresholdMS: req.LatencyThresholdMS, MinEvents: req.MinEvents, ShortWindowSeconds: req.ShortWindowSeconds, ShortBurnRate: req.ShortBurnRate, LongWindowSeconds: req.LongWindowSeconds, LongBurnRate: req.LongBurnRate})
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.Status(fiber.StatusCreated).JSON(item)
+}
+
+func (h *ProjectHandler) ListSLOEvaluations(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleViewer)
+	if !ok {
+		return nil
+	}
+	sloID, err := parseIDParam(c, "sloId")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	limit, _ := strconv.Atoi(c.Query("limit", "50"))
+	items, err := h.service.ListSLOEvaluations(c.UserContext(), project.ID, sloID, limit)
+	if errors.Is(err, application.ErrSLODefinitionNotFound) {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "SLO not found"})
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list SLO evaluations"})
+	}
+	return c.JSON(fiber.Map{"items": items})
 }
 
 type environmentRequest struct {
