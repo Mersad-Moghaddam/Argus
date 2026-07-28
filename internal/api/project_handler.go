@@ -29,6 +29,7 @@ func RegisterProjectRoutes(app fiber.Router, h *ProjectHandler, guards ...fiber.
 	app.Get("/projects/:projectId/environments", guarded(guards, h.ListEnvironments)...)
 	app.Post("/projects/:projectId/environments", guarded(guards, h.CreateEnvironment)...)
 	app.Get("/projects/:projectId/telemetry-credentials", guarded(guards, h.ListTelemetryCredentials)...)
+	app.Get("/projects/:projectId/telemetry-ingress", guarded(guards, h.ListTelemetryIngress)...)
 	app.Post("/projects/:projectId/telemetry-credentials", guarded(guards, h.CreateTelemetryCredential)...)
 	app.Post("/projects/:projectId/telemetry-credentials/:credentialId/rotate", guarded(guards, h.RotateTelemetryCredential)...)
 	app.Post("/projects/:projectId/telemetry-credentials/:credentialId/revoke", guarded(guards, h.RevokeTelemetryCredential)...)
@@ -91,6 +92,19 @@ func (h *ProjectHandler) ListTelemetryCredentials(c *fiber.Ctx) error {
 	items, err := h.service.ListTelemetryCredentials(c.UserContext(), project.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list telemetry credentials"})
+	}
+	return c.JSON(fiber.Map{"items": items})
+}
+
+func (h *ProjectHandler) ListTelemetryIngress(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleViewer)
+	if !ok {
+		return nil
+	}
+	limit, _ := strconv.Atoi(c.Query("limit", "20"))
+	items, err := h.service.ListTelemetryIngress(c.UserContext(), project.ID, limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list telemetry diagnostics"})
 	}
 	return c.JSON(fiber.Map{"items": items})
 }

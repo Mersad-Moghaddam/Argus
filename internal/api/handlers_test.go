@@ -284,6 +284,7 @@ func TestProjectRoutesRequireBearerToken(t *testing.T) {
 		{http.MethodGet, fmt.Sprintf("/api/projects/%d/incidents", project.ID)},
 		{http.MethodPost, fmt.Sprintf("/api/projects/%d/imports/validate", project.ID)},
 		{http.MethodGet, fmt.Sprintf("/api/projects/%d/telemetry-credentials", project.ID)},
+		{http.MethodGet, fmt.Sprintf("/api/projects/%d/telemetry-ingress", project.ID)},
 		{http.MethodPost, fmt.Sprintf("/api/projects/%d/telemetry-credentials", project.ID)},
 	}
 
@@ -335,6 +336,11 @@ func TestTelemetryCredentialEndpoints(t *testing.T) {
 	}
 	if _, err := a.service.AuthenticateTelemetryCredential(context.Background(), issued.Token); err != nil {
 		t.Fatalf("created secret must authenticate: %v", err)
+	}
+	if resp := a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d/telemetry-ingress", project.ID), viewerToken, nil); resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("viewer diagnostics: expected 200, got %d", resp.StatusCode)
+	} else {
+		_ = resp.Body.Close()
 	}
 
 	if resp := a.do(t, http.MethodPost, base, viewerToken, map[string]any{"name": "no", "environmentId": environments[0].ID}); resp.StatusCode != fiber.StatusForbidden {

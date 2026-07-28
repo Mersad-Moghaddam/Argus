@@ -222,7 +222,7 @@ curl http://localhost:8080/api/projects \
 | --- | --- |
 | Auth | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
 | Projects | `GET/POST /api/projects`, `GET/PUT/DELETE /api/projects/:projectId`, archive and unarchive actions |
-| Telemetry credentials | Editor-only `GET/POST /api/projects/:projectId/telemetry-credentials`, plus credential `rotate` and `revoke` actions. Create and rotate responses show the opaque secret exactly once. |
+| Telemetry | Editor-only `GET/POST /api/projects/:projectId/telemetry-credentials`, plus credential `rotate` and `revoke` actions. Create and rotate responses show the opaque secret exactly once. Any project viewer can read bounded freshness/mapping diagnostics at `GET /api/projects/:projectId/telemetry-ingress`. |
 | Routes | Project-scoped list, create, update, delete, enable/disable, bulk create/delete, check history, and incidents |
 | Imports | Validate, preview, and commit OpenAPI 3.x or Swagger 2.0 JSON/YAML documents up to 10 MiB |
 

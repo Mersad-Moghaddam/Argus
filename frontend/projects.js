@@ -108,6 +108,7 @@
       series: null,
       incidents: [],
       environments: [],
+	  telemetryIngress: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -444,6 +445,7 @@
       series: null,
       incidents: [],
       environments: [],
+	  telemetryIngress: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -838,12 +840,13 @@
     }
     try {
       const p = state.project;
-      const [project, series, incidents, routes, environments] = await Promise.all([
+      const [project, series, incidents, routes, environments, telemetryIngress] = await Promise.all([
         apiProjects(`/projects/${id}`),
         apiProjects(`/projects/${id}/metrics/timeseries${qs({ range: p.range })}`),
         apiProjects(`/projects/${id}/incidents${qs({ limit: 15 })}`),
         apiProjects(`/projects/${id}/routes${routeQuery(p)}`),
         apiProjects(`/projects/${id}/environments`),
+		apiProjects(`/projects/${id}/telemetry-ingress${qs({ limit: 20 })}`),
       ]);
       state.project.project = project;
       state.project.series = series;
@@ -851,6 +854,7 @@
       state.project.routes = routes.items || [];
       state.project.routesTotal = routes.total || 0;
       state.project.environments = environments.items || [];
+	  state.project.telemetryIngress = telemetryIngress.items || [];
       renderCrumbs();
       renderProjectDetail();
     } catch (err) {
@@ -936,6 +940,12 @@
       <section class="card">
         <div class="card-header"><h2>Environments</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-environment">Add environment</button>' : ''}</div>
         ${state.project.environments.length ? `<div class="list">${state.project.environments.map((env) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(env.name)}</span><span class="list-item-meta">${escapeHtml(env.canonicalBaseUrl || 'Base URL not configured')}</span></div>${env.isDefault ? '<span class="badge status-up">default</span>' : ''}</div>`).join('')}</div>` : '<div class="empty-state"><span>No environments configured.</span></div>'}
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Telemetry signals</h2></div>
+        <p class="hint">Recent accepted OTLP resource groups. Only safe service and deployment labels are shown; raw telemetry is not displayed here.</p>
+        ${telemetryIngressHtml(state.project.telemetryIngress)}
       </section>
 
       <section class="card">
@@ -1113,6 +1123,20 @@
           </li>`;
       })
       .join('')}</ul>`;
+  }
+
+  function telemetryIngressHtml(records) {
+    if (!records.length) {
+      return emptyPanel(ICON.route, 'No telemetry received yet', 'Create a telemetry credential and point an OpenTelemetry exporter at this Argus instance.');
+    }
+    return `<ul class="list">${records.map((record) => `
+      <li class="list-item">
+        <div class="list-item-main">
+          <span class="list-item-title">${escapeHtml(record.serviceName || 'Unnamed service')}</span>
+          <span class="list-item-meta">${escapeHtml(record.deploymentEnvironment || 'Deployment not declared')} &middot; ${num(record.itemCount, '0')} item${record.itemCount === 1 ? '' : 's'} &middot; ${record.receivedAt ? escapeHtml(relativeTime(record.receivedAt)) : 'time unavailable'}</span>
+        </div>
+        <span class="badge ${record.signalType === 'traces' ? 'route-unknown' : 'status-up'}">${escapeHtml(record.signalType || 'signal')}</span>
+      </li>`).join('')}</ul>`;
   }
 
   function formatDuration(msTotal) {
