@@ -30,16 +30,20 @@ type Application struct {
 	workerRt    *workerplatform.Runtime
 	asynqClient *asynq.Client
 	logger      *observability.LogStore
+	telemetry   *observability.Telemetry
 }
 
 func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	logger := observability.NewLogStore(1000)
+	telemetry := observability.NewTelemetry("argus", "v2")
 	db, err := storage.OpenMySQL(ctx, cfg.MySQLDSN, storage.DBConfig{MaxOpenConns: cfg.DBMaxOpenConns, MaxIdleConns: cfg.DBMaxIdleConns, ConnMaxLifetime: cfg.DBConnMaxLifetime})
 	if err != nil {
+		_ = telemetry.Shutdown(ctx)
 		return nil, err
 	}
 	if err = storage.ApplyMigrations(ctx, db, "db/migrations"); err != nil {
 		_ = db.Close()
+		_ = telemetry.Shutdown(ctx)
 		return nil, fmt.Errorf("apply migrations: %w", err)
 	}
 	store := mysql.NewStore(db)
@@ -63,9 +67,10 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	if err != nil {
 		_ = asynqClient.Close()
 		_ = db.Close()
+		_ = telemetry.Shutdown(ctx)
 		return nil, err
 	}
-	return &Application{cfg: cfg, db: db, httpApp: httpApp, workerRt: workerRt, asynqClient: asynqClient, logger: logger}, nil
+	return &Application{cfg: cfg, db: db, httpApp: httpApp, workerRt: workerRt, asynqClient: asynqClient, logger: logger, telemetry: telemetry}, nil
 }
 
 func (a *Application) Start() error {
@@ -85,6 +90,7 @@ func (a *Application) Shutdown(ctx context.Context) error {
 	a.workerRt.Shutdown()
 	_ = a.asynqClient.Close()
 	_ = a.db.Close()
+	_ = a.telemetry.Shutdown(ctx)
 	if shutdownErr != nil {
 		return fmt.Errorf("shutdown http app: %w", shutdownErr)
 	}
