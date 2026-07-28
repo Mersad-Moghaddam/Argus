@@ -237,6 +237,9 @@ environment. Resource metadata is treated as untrusted: only a bounded
 mapping/freshness; raw attributes, URLs, measurements, span names, trace IDs,
 and payloads are not written to MySQL. Each credential has a configured expiry
 and per-minute request ceiling; requests above the ceiling receive `429`.
+Project editors can create the credential from the **Telemetry signals** card;
+the secret dialog is intentionally one-time and clears its displayed value when
+it is dismissed.
 
 OpenAPI imports resolve only local `$ref` pointers—Argus does not fetch external references. Import commits preserve user-owned monitoring configuration and disable, rather than delete, explicitly selected routes that disappeared from a specification.
 

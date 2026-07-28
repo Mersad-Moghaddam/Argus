@@ -459,6 +459,49 @@
       </div>
     </div>
 
+    <!-- Telemetry credential create and one-time secret reveal -->
+    <div class="modal-overlay hidden" id="projTelemetryCredentialModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projTelemetryCredentialModalTitle" tabindex="-1">
+        <h3 id="projTelemetryCredentialModalTitle">Create telemetry credential</h3>
+        <form id="projTelemetryCredentialForm" class="stack">
+          <div class="field">
+            <label for="projTelemetryCredentialName">Credential name</label>
+            <input id="projTelemetryCredentialName" autocomplete="off" placeholder="Production collector" required maxlength="120" />
+          </div>
+          <div class="field">
+            <label for="projTelemetryCredentialEnvironment">Environment</label>
+            <select id="projTelemetryCredentialEnvironment" required></select>
+          </div>
+          <div class="field">
+            <label for="projTelemetryCredentialExpiry">Expires after (days)</label>
+            <input id="projTelemetryCredentialExpiry" type="number" min="1" max="365" value="90" required />
+          </div>
+          <p class="hint">This credential can write metrics and traces only for the selected environment. The secret is shown once and cannot be recovered.</p>
+          <p class="proj-form-error hidden" id="projTelemetryCredentialFormError" role="alert"></p>
+          <div class="modal-actions">
+            <button class="secondary" type="button" id="projTelemetryCredentialCancel">Cancel</button>
+            <button type="submit" id="projTelemetryCredentialSubmit">Create credential</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="projTelemetrySecretModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projTelemetrySecretModalTitle" tabindex="-1">
+        <h3 id="projTelemetrySecretModalTitle">Save this telemetry secret</h3>
+        <p class="hint">Copy it now. Argus stores only a hash and cannot show this secret again.</p>
+        <div class="field">
+          <label for="projTelemetrySecretValue">OTLP bearer credential</label>
+          <input id="projTelemetrySecretValue" class="mono" readonly spellcheck="false" aria-describedby="projTelemetrySecretWarning" />
+        </div>
+        <p id="projTelemetrySecretWarning" class="proj-form-error inline" role="alert">Treat this value like a password. Do not put it in source control or browser storage.</p>
+        <div class="modal-actions">
+          <button class="secondary" type="button" id="projTelemetrySecretCopy">Copy secret</button>
+          <button type="button" id="projTelemetrySecretClose">I saved it</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Route create/edit -->
     <div class="modal-overlay hidden" id="projRouteModal">
       <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="projRouteModalTitle" tabindex="-1">

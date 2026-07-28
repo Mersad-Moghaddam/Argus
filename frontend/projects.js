@@ -68,6 +68,19 @@
     environmentCancel: document.getElementById('projEnvironmentCancel'),
     environmentSubmit: document.getElementById('projEnvironmentSubmit'),
 
+    telemetryCredentialModal: document.getElementById('projTelemetryCredentialModal'),
+    telemetryCredentialForm: document.getElementById('projTelemetryCredentialForm'),
+    telemetryCredentialName: document.getElementById('projTelemetryCredentialName'),
+    telemetryCredentialEnvironment: document.getElementById('projTelemetryCredentialEnvironment'),
+    telemetryCredentialExpiry: document.getElementById('projTelemetryCredentialExpiry'),
+    telemetryCredentialFormError: document.getElementById('projTelemetryCredentialFormError'),
+    telemetryCredentialCancel: document.getElementById('projTelemetryCredentialCancel'),
+    telemetryCredentialSubmit: document.getElementById('projTelemetryCredentialSubmit'),
+    telemetrySecretModal: document.getElementById('projTelemetrySecretModal'),
+    telemetrySecretValue: document.getElementById('projTelemetrySecretValue'),
+    telemetrySecretCopy: document.getElementById('projTelemetrySecretCopy'),
+    telemetrySecretClose: document.getElementById('projTelemetrySecretClose'),
+
     routeModal: document.getElementById('projRouteModal'),
     routeForm: document.getElementById('projRouteForm'),
     routeModalTitle: document.getElementById('projRouteModalTitle'),
@@ -943,7 +956,7 @@
       </section>
 
       <section class="card">
-        <div class="card-header"><h2>Telemetry signals</h2></div>
+        <div class="card-header"><h2>Telemetry signals</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-telemetry-credential">Create OTLP credential</button>' : ''}</div>
         <p class="hint">Recent accepted OTLP resource groups. Only safe service and deployment labels are shown; raw telemetry is not displayed here.</p>
         ${telemetryIngressHtml(state.project.telemetryIngress)}
       </section>
@@ -1834,16 +1847,20 @@
     modalReturnFocus = null;
   }
 
-  [pel.projectModal, pel.environmentModal, pel.routeModal, pel.bulkModal, pel.confirmModal].forEach((overlay) => {
+  [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.routeModal, pel.bulkModal, pel.confirmModal].forEach((overlay) => {
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) closeModal(overlay);
+      if (e.target !== overlay) return;
+      if (overlay === pel.telemetrySecretModal) closeTelemetrySecret();
+      else closeModal(overlay);
     });
   });
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    [pel.projectModal, pel.environmentModal, pel.routeModal, pel.bulkModal, pel.confirmModal].forEach((overlay) => {
-      if (!overlay.classList.contains('hidden')) closeModal(overlay);
+    [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.routeModal, pel.bulkModal, pel.confirmModal].forEach((overlay) => {
+      if (overlay.classList.contains('hidden')) return;
+      if (overlay === pel.telemetrySecretModal) closeTelemetrySecret();
+      else closeModal(overlay);
     });
   });
 
@@ -1919,6 +1936,74 @@
       setButtonLoading(pel.environmentSubmit, false);
     }
   });
+
+  function openTelemetryCredentialModal() {
+    const environments = state.project.environments || [];
+    pel.telemetryCredentialForm.reset();
+    pel.telemetryCredentialExpiry.value = '90';
+    pel.telemetryCredentialEnvironment.replaceChildren();
+    environments.forEach((environment) => {
+      const option = document.createElement('option');
+      option.value = String(environment.id);
+      option.textContent = environment.isDefault ? `${environment.name} (default)` : environment.name;
+      pel.telemetryCredentialEnvironment.append(option);
+    });
+    pel.telemetryCredentialSubmit.disabled = environments.length === 0;
+    hideFormError(pel.telemetryCredentialFormError);
+    if (!environments.length) showFormError(pel.telemetryCredentialFormError, 'Create an environment before issuing a telemetry credential.');
+    openModal(pel.telemetryCredentialModal);
+  }
+
+  function closeTelemetrySecret() {
+    closeModal(pel.telemetrySecretModal);
+    pel.telemetrySecretValue.value = '';
+  }
+
+  pel.telemetryCredentialCancel.addEventListener('click', () => closeModal(pel.telemetryCredentialModal));
+  pel.telemetryCredentialForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.telemetryCredentialFormError);
+    const expiresInDays = Number(pel.telemetryCredentialExpiry.value);
+    if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365) {
+      showFormError(pel.telemetryCredentialFormError, 'Expiry must be a whole number from 1 to 365 days.');
+      return;
+    }
+    setButtonLoading(pel.telemetryCredentialSubmit, true, 'Creating...');
+    try {
+      const issued = await apiProjects(`/projects/${state.project.id}/telemetry-credentials`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: pel.telemetryCredentialName.value.trim(),
+          environmentId: Number(pel.telemetryCredentialEnvironment.value),
+          expiresInDays,
+        }),
+      });
+      if (!issued || !issued.token) throw new Error('The server did not return a telemetry secret.');
+      closeModal(pel.telemetryCredentialModal);
+      pel.telemetrySecretValue.value = issued.token;
+      openModal(pel.telemetrySecretModal);
+      showToast('Telemetry credential created. Save the secret before closing this dialog.', 'success');
+    } catch (err) {
+      if (!(err instanceof SessionExpired)) showFormError(pel.telemetryCredentialFormError, err.message);
+    } finally {
+      setButtonLoading(pel.telemetryCredentialSubmit, false);
+    }
+  });
+
+  pel.telemetrySecretCopy.addEventListener('click', async () => {
+    const secret = pel.telemetrySecretValue.value;
+    if (!secret) return;
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard access is unavailable');
+      await navigator.clipboard.writeText(secret);
+      showToast('Telemetry secret copied. Keep it out of source control.', 'success');
+    } catch (err) {
+      pel.telemetrySecretValue.focus();
+      pel.telemetrySecretValue.select();
+      showToast('Select and copy the secret manually; browser clipboard access was unavailable.', 'info');
+    }
+  });
+  pel.telemetrySecretClose.addEventListener('click', closeTelemetrySecret);
 
   pel.projectCancel.addEventListener('click', () => closeModal(pel.projectModal));
 
@@ -2269,6 +2354,9 @@
           openEnvironmentModal();
           break;
         }
+        case 'create-telemetry-credential':
+          openTelemetryCredentialModal();
+          break;
         case 'edit-route': {
           const route = state.project.routes.find((r) => r.id === id) || (state.routeDetail.route && state.routeDetail.route.id === id ? state.routeDetail.route : null);
           openRouteModal(route || (await apiProjects(`/projects/${state.project.id}/routes/${id}`)));
