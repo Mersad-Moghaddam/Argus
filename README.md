@@ -168,6 +168,8 @@ Argus reads environment variables and automatically loads a local `.env` file wh
 | `DB_CONN_MAX_LIFETIME` | `5m` | Maximum lifetime of a pooled connection. |
 | `METRICS_BACKEND_URL` | `http://localhost:8428` | Internal VictoriaMetrics base URL for sanitized OTLP samples and future SLO queries. |
 | `METRICS_BACKEND_TIMEOUT` | `5s` | Timeout for the VictoriaMetrics import request. |
+| `SLO_EVALUATION_INTERVAL` | `1m` | How often the worker evaluates stored SLO definitions from the internal metrics backend. |
+| `SLO_STALE_AFTER` | `10m` | Age after which the most recent telemetry sample produces a stale SLO result. |
 
 Example production-oriented `.env`:
 

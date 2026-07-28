@@ -70,8 +70,15 @@ type SLOStore interface {
 	CreateSLODefinition(ctx context.Context, definition models.SLODefinition) (int64, error)
 	GetSLODefinition(ctx context.Context, projectID, id int64) (*models.SLODefinition, error)
 	ListSLODefinitions(ctx context.Context, projectID int64) ([]models.SLODefinition, error)
+	ListSLODefinitionsForEvaluation(ctx context.Context, limit, afterID int64) ([]models.SLODefinition, error)
 	RecordSLOEvaluation(ctx context.Context, evaluation models.SLOEvaluation) (int64, error)
 	ListSLOEvaluations(ctx context.Context, projectID, sloID int64, limit int) ([]models.SLOEvaluation, error)
+}
+
+// SLOMetricsReader supplies the bounded aggregate evidence required for an
+// SLO evaluation. It cannot execute arbitrary caller-supplied queries.
+type SLOMetricsReader interface {
+	AggregateSLO(ctx context.Context, definition models.SLODefinition, now time.Time) (models.SLOMetricAggregate, error)
 }
 
 // RouteStore persists monitored API routes.

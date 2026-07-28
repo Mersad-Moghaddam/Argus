@@ -29,6 +29,7 @@ type SLOInput struct {
 	TargetPercent       float64
 	LatencyThresholdMS  float64
 	Good, Total         int64
+	MinEvents           int64
 	ObservedAt          time.Time
 	Now                 time.Time
 	StaleAfter          time.Duration
@@ -48,10 +49,13 @@ func EvaluateSLO(in SLOInput) SLOResult {
 	if in.Maintenance {
 		return SLOResult{Status: SLOMaintenance}
 	}
-	if in.Kind != SLIAvailability && in.Kind != SLILatency || in.TargetPercent <= 0 || in.TargetPercent >= 100 || in.Total < 0 || in.Good < 0 || in.Good > in.Total || in.StaleAfter <= 0 {
+	if in.Kind != SLIAvailability && in.Kind != SLILatency || in.TargetPercent <= 0 || in.TargetPercent >= 100 || in.Total < 0 || in.Good < 0 || in.Good > in.Total || in.MinEvents < 0 || in.StaleAfter <= 0 {
 		return SLOResult{Status: SLOConfigurationError}
 	}
 	if in.Total == 0 || in.ObservedAt.IsZero() {
+		return SLOResult{Status: SLONoData}
+	}
+	if in.Total < in.MinEvents {
 		return SLOResult{Status: SLONoData}
 	}
 	if in.Now.Sub(in.ObservedAt) > in.StaleAfter {

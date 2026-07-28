@@ -21,6 +21,12 @@ func TestEvaluateSLOExplicitStatesAndBudgets(t *testing.T) {
 		t.Fatalf("no data=%+v", got)
 	}
 	base.Total = 100
+	base.MinEvents = 101
+	base.ObservedAt = now
+	if got := EvaluateSLO(base); got.Status != SLONoData {
+		t.Fatalf("low traffic=%+v", got)
+	}
+	base.MinEvents = 0
 	base.ObservedAt = now.Add(-2 * time.Minute)
 	if got := EvaluateSLO(base); got.Status != SLOStale {
 		t.Fatalf("stale=%+v", got)

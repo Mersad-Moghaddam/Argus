@@ -43,6 +43,9 @@ func NewRuntime(cfg config.Config, processor *appworker.Processor, logger *obser
 	if _, err := scheduler.Register("@every 24h", appworker.NewPruneRouteChecksTask(), asynq.Queue("default")); err != nil {
 		return nil, err
 	}
+	if _, err := scheduler.Register(fmt.Sprintf("@every %s", cfg.SLOEvaluationInterval), appworker.NewEvaluateSLOsTask(), asynq.Queue("default")); err != nil {
+		return nil, err
+	}
 	mux := asynq.NewServeMux()
 	processor.Register(mux)
 	go func() { _ = server.Run(mux) }()

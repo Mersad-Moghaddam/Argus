@@ -17,6 +17,7 @@ const (
 	TypeCheckRoute            = "route:check"
 	TypeAggregateRouteMetrics = "route:aggregate_metrics"
 	TypePruneRouteChecks      = "route:prune_checks"
+	TypeEvaluateSLOs          = "slo:evaluate"
 )
 
 type CheckWebsitePayload struct {
@@ -45,6 +46,7 @@ func NewAggregateRouteMetricsTask() *asynq.Task {
 	return asynq.NewTask(TypeAggregateRouteMetrics, nil)
 }
 func NewPruneRouteChecksTask() *asynq.Task { return asynq.NewTask(TypePruneRouteChecks, nil) }
+func NewEvaluateSLOsTask() *asynq.Task     { return asynq.NewTask(TypeEvaluateSLOs, nil) }
 
 func NewCheckWebsiteTask(payload CheckWebsitePayload) (*asynq.Task, error) {
 	body, err := json.Marshal(payload)

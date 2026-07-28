@@ -63,6 +63,26 @@ func (r *Store) ListSLODefinitions(ctx context.Context, projectID int64) ([]mode
 	return items, rows.Err()
 }
 
+func (r *Store) ListSLODefinitionsForEvaluation(ctx context.Context, limit, afterID int64) ([]models.SLODefinition, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	rows, err := r.db.QueryContext(ctx, sloDefinitionSelect+` WHERE id>? ORDER BY id ASC LIMIT ?`, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []models.SLODefinition{}
+	for rows.Next() {
+		item, err := scanSLODefinition(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, *item)
+	}
+	return items, rows.Err()
+}
+
 const sloDefinitionSelect = `SELECT id,project_id,created_by_user_id,name,sli_kind,target_percent,window_seconds,latency_threshold_ms,min_events,short_window_seconds,short_burn_rate,long_window_seconds,long_burn_rate,paused,version,created_at,updated_at FROM slo_definitions`
 
 type scanner interface{ Scan(...any) error }

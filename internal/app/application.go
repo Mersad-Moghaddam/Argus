@@ -55,6 +55,12 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 		_ = telemetry.Shutdown(ctx)
 		return nil, fmt.Errorf("configure metrics backend: %w", err)
 	}
+	metricReader, err := victoriametrics.NewReader(cfg.MetricsBackendURL, cfg.MetricsBackendTimeout)
+	if err != nil {
+		_ = db.Close()
+		_ = telemetry.Shutdown(ctx)
+		return nil, fmt.Errorf("configure metrics reader: %w", err)
+	}
 	httpApp := httpserver.NewFiberAppWithMetricSink(appService, logger, cfg.APIKey, metricSink, cfg.AuthCookieSecure)
 	asynqClient := asynq.NewClient(workerplatform.RedisClientOptions(cfg))
 	routeEvaluator := worker.NewRouteEvaluator(worker.EvaluatorConfig{
@@ -70,6 +76,7 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 		AggregationWindow: cfg.RouteAggregateWindow,
 	}
 	processor := worker.NewProcessor(store, store, store, appService, asynqClient, notifier.NewHTTPNotifier(), logger, store, routeEvaluator, routeMonitorCfg)
+	processor.SetSLOEvaluator(worker.NewSLOEvaluator(store, metricReader, cfg.SLOStaleAfter))
 	workerRt, err := workerplatform.NewRuntime(cfg, processor, logger)
 	if err != nil {
 		_ = asynqClient.Close()

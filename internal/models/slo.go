@@ -43,3 +43,13 @@ type SLOEvaluation struct {
 	Provenance           string     `json:"provenance"`
 	EvaluatedAt          time.Time  `json:"evaluatedAt"`
 }
+
+// SLOMetricAggregate is the only evidence an evaluator needs from the metrics
+// backend. It intentionally contains counts and a freshness timestamp, never
+// raw telemetry labels, URLs, traces, or individual request data.
+type SLOMetricAggregate struct {
+	GoodEvents  int64
+	TotalEvents int64
+	ObservedAt  *time.Time
+	Provenance  string
+}

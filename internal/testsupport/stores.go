@@ -244,6 +244,24 @@ func (f *SLOStore) ListSLODefinitions(_ context.Context, projectID int64) ([]mod
 	sort.Slice(items, func(i, j int) bool { return items[i].ID > items[j].ID })
 	return items, nil
 }
+func (f *SLOStore) ListSLODefinitionsForEvaluation(_ context.Context, limit, afterID int64) ([]models.SLODefinition, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	items := []models.SLODefinition{}
+	for _, item := range f.definitions {
+		if item.ID > afterID {
+			items = append(items, item)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	if int64(len(items)) > limit {
+		items = items[:int(limit)]
+	}
+	return items, nil
+}
 func (f *SLOStore) RecordSLOEvaluation(_ context.Context, evaluation models.SLOEvaluation) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
