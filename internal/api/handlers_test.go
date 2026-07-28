@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -37,7 +38,7 @@ func newTestAPI(t *testing.T) *testAPI {
 	t.Helper()
 	s := testsupport.NewStores()
 	service := application.NewService(s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Outbox,
-		observability.NewLogStore(100), s.Users, s.Tokens, s.Projects, s.Routes, s.Incidents, s.Imports)
+		observability.NewLogStore(100), s.Users, s.Tokens, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials)
 	return &testAPI{
 		app:     httpserver.NewFiberApp(service, observability.NewLogStore(100), legacyAPIKey),
 		service: service,
@@ -282,6 +283,8 @@ func TestProjectRoutesRequireBearerToken(t *testing.T) {
 		{http.MethodPost, fmt.Sprintf("/api/projects/%d/routes/bulk-delete", project.ID)},
 		{http.MethodGet, fmt.Sprintf("/api/projects/%d/incidents", project.ID)},
 		{http.MethodPost, fmt.Sprintf("/api/projects/%d/imports/validate", project.ID)},
+		{http.MethodGet, fmt.Sprintf("/api/projects/%d/telemetry-credentials", project.ID)},
+		{http.MethodPost, fmt.Sprintf("/api/projects/%d/telemetry-credentials", project.ID)},
 	}
 
 	for _, tc := range protected {
@@ -301,6 +304,69 @@ func TestProjectRoutesRequireBearerToken(t *testing.T) {
 				_ = resp.Body.Close()
 			}
 		})
+	}
+}
+
+func TestTelemetryCredentialEndpoints(t *testing.T) {
+	a := newTestAPI(t)
+	ownerID, ownerToken := a.register(t, "telemetry-owner@example.com")
+	viewerID, viewerToken := a.register(t, "telemetry-viewer@example.com")
+	_ = ownerID
+	project := a.createProject(t, ownerToken, "Telemetry")
+	if err := a.stores.Projects.AddProjectMember(context.Background(), models.ProjectMember{ProjectID: project.ID, UserID: viewerID, Role: models.ProjectRoleViewer}); err != nil {
+		t.Fatalf("add viewer: %v", err)
+	}
+
+	environments, err := a.stores.Projects.ListProjectEnvironments(context.Background(), project.ID)
+	if err != nil || len(environments) != 1 {
+		t.Fatalf("default environment: %v %+v", err, environments)
+	}
+	base := fmt.Sprintf("/api/projects/%d/telemetry-credentials", project.ID)
+	created := a.do(t, http.MethodPost, base, ownerToken, map[string]any{
+		"name": "production collector", "environmentId": environments[0].ID, "expiresInDays": 30,
+	})
+	if created.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create credential: %d (%s)", created.StatusCode, bodyString(t, created))
+	}
+	var issued models.IssuedTelemetryCredential
+	decode(t, created, &issued)
+	if !strings.HasPrefix(issued.Token, "argus_otlp_") || issued.Credential.TokenPrefix == "" || len(issued.Credential.TokenHash) != 0 {
+		t.Fatalf("expected a one-time token without hash leakage: %+v", issued)
+	}
+	if _, err := a.service.AuthenticateTelemetryCredential(context.Background(), issued.Token); err != nil {
+		t.Fatalf("created secret must authenticate: %v", err)
+	}
+
+	if resp := a.do(t, http.MethodPost, base, viewerToken, map[string]any{"name": "no", "environmentId": environments[0].ID}); resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("viewer create: expected 403, got %d", resp.StatusCode)
+	} else {
+		_ = resp.Body.Close()
+	}
+	listed := a.do(t, http.MethodGet, base, viewerToken, nil)
+	if listed.StatusCode != fiber.StatusOK {
+		t.Fatalf("viewer list: expected 200, got %d", listed.StatusCode)
+	}
+	if body := bodyString(t, listed); strings.Contains(body, issued.Token) || strings.Contains(body, "tokenHash") {
+		t.Fatalf("credential listing leaked secret material: %s", body)
+	}
+
+	rotated := a.do(t, http.MethodPost, fmt.Sprintf("%s/%d/rotate", base, issued.Credential.ID), ownerToken, map[string]any{})
+	if rotated.StatusCode != fiber.StatusCreated {
+		t.Fatalf("rotate: %d (%s)", rotated.StatusCode, bodyString(t, rotated))
+	}
+	var replacement models.IssuedTelemetryCredential
+	decode(t, rotated, &replacement)
+	if _, err := a.service.AuthenticateTelemetryCredential(context.Background(), issued.Token); !errors.Is(err, application.ErrTelemetryCredentialNotFound) {
+		t.Fatalf("old token must not authenticate after rotation: %v", err)
+	}
+
+	revoked := a.do(t, http.MethodPost, fmt.Sprintf("%s/%d/revoke", base, replacement.Credential.ID), ownerToken, nil)
+	if revoked.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("revoke: expected 204, got %d (%s)", revoked.StatusCode, bodyString(t, revoked))
+	}
+	_ = revoked.Body.Close()
+	if _, err := a.service.AuthenticateTelemetryCredential(context.Background(), replacement.Token); !errors.Is(err, application.ErrTelemetryCredentialNotFound) {
+		t.Fatalf("revoked token must not authenticate: %v", err)
 	}
 }
 

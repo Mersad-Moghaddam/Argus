@@ -27,18 +27,19 @@ type Service struct {
 	logger      *observability.LogStore
 
 	// Project-based API route monitoring dependencies.
-	users          ports.UserStore
-	tokens         ports.AuthTokenStore
-	projects       ports.ProjectStore
-	routes         ports.RouteStore
-	routeIncidents ports.RouteIncidentStore
-	imports        ports.ImportStore
+	users                ports.UserStore
+	tokens               ports.AuthTokenStore
+	projects             ports.ProjectStore
+	routes               ports.RouteStore
+	routeIncidents       ports.RouteIncidentStore
+	imports              ports.ImportStore
+	telemetryCredentials ports.TelemetryCredentialStore
 }
 
 func NewService(monitors ports.MonitorStore, incidents ports.IncidentStore, maintenance ports.MaintenanceStore, statusPages ports.StatusPageStore, alerts ports.AlertChannelStore, outbox ports.OutboxStore, logger *observability.LogStore,
-	users ports.UserStore, tokens ports.AuthTokenStore, projects ports.ProjectStore, routes ports.RouteStore, routeIncidents ports.RouteIncidentStore, imports ports.ImportStore) *Service {
+	users ports.UserStore, tokens ports.AuthTokenStore, projects ports.ProjectStore, routes ports.RouteStore, routeIncidents ports.RouteIncidentStore, imports ports.ImportStore, telemetryCredentials ports.TelemetryCredentialStore) *Service {
 	return &Service{monitors: monitors, incidents: incidents, maintenance: maintenance, statusPages: statusPages, alerts: alerts, outbox: outbox, logger: logger,
-		users: users, tokens: tokens, projects: projects, routes: routes, routeIncidents: routeIncidents, imports: imports}
+		users: users, tokens: tokens, projects: projects, routes: routes, routeIncidents: routeIncidents, imports: imports, telemetryCredentials: telemetryCredentials}
 }
 
 type CreateMonitorInput struct {

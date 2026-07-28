@@ -22,7 +22,7 @@ func newTestHarness() *testHarness {
 	s := testsupport.NewStores()
 	return &testHarness{
 		service: NewService(s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Outbox, observability.NewLogStore(100),
-			s.Users, s.Tokens, s.Projects, s.Routes, s.Incidents, s.Imports),
+			s.Users, s.Tokens, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials),
 		users:     s.Users,
 		tokens:    s.Tokens,
 		projects:  s.Projects,

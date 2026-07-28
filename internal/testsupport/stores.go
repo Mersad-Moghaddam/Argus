@@ -31,27 +31,119 @@ import (
 // Stores bundles one instance of every fake so a test can seed and assert on
 // them while handing the same values to application.NewService.
 type Stores struct {
-	Users     *UserStore
-	Tokens    *AuthTokenStore
-	Projects  *ProjectStore
-	Routes    *RouteStore
-	Incidents *RouteIncidentStore
-	Imports   *ImportStore
-	Outbox    *OutboxStore
-	Legacy    LegacyStore
+	Users                *UserStore
+	Tokens               *AuthTokenStore
+	Projects             *ProjectStore
+	Routes               *RouteStore
+	Incidents            *RouteIncidentStore
+	Imports              *ImportStore
+	TelemetryCredentials *TelemetryCredentialStore
+	Outbox               *OutboxStore
+	Legacy               LegacyStore
 }
 
 // NewStores returns a fresh, empty set of fakes.
 func NewStores() *Stores {
 	return &Stores{
-		Users:     NewUserStore(),
-		Tokens:    NewAuthTokenStore(),
-		Projects:  NewProjectStore(),
-		Routes:    NewRouteStore(),
-		Incidents: NewRouteIncidentStore(),
-		Imports:   NewImportStore(),
-		Outbox:    &OutboxStore{},
+		Users:                NewUserStore(),
+		Tokens:               NewAuthTokenStore(),
+		Projects:             NewProjectStore(),
+		Routes:               NewRouteStore(),
+		Incidents:            NewRouteIncidentStore(),
+		Imports:              NewImportStore(),
+		TelemetryCredentials: NewTelemetryCredentialStore(),
+		Outbox:               &OutboxStore{},
 	}
+}
+
+// ---------------------------------------------------------------- telemetry credentials
+
+type TelemetryCredentialStore struct {
+	mu     sync.Mutex
+	nextID int64
+	byID   map[int64]models.TelemetryCredential
+}
+
+func NewTelemetryCredentialStore() *TelemetryCredentialStore {
+	return &TelemetryCredentialStore{byID: map[int64]models.TelemetryCredential{}}
+}
+
+func (f *TelemetryCredentialStore) CreateTelemetryCredential(_ context.Context, credential models.TelemetryCredential) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	credential.ID = f.nextID
+	credential.CreatedAt = time.Now().UTC()
+	credential.UpdatedAt = credential.CreatedAt
+	f.byID[credential.ID] = credential
+	return credential.ID, nil
+}
+
+func (f *TelemetryCredentialStore) ListTelemetryCredentials(_ context.Context, projectID int64) ([]models.TelemetryCredential, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := make([]models.TelemetryCredential, 0)
+	for _, credential := range f.byID {
+		if credential.ProjectID == projectID {
+			items = append(items, copyTelemetryCredential(credential))
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID > items[j].ID })
+	return items, nil
+}
+
+func (f *TelemetryCredentialStore) GetTelemetryCredentialByID(_ context.Context, id int64) (*models.TelemetryCredential, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	credential, ok := f.byID[id]
+	if !ok {
+		return nil, nil
+	}
+	copied := copyTelemetryCredential(credential)
+	return &copied, nil
+}
+
+func (f *TelemetryCredentialStore) GetTelemetryCredentialByHash(_ context.Context, tokenHash []byte) (*models.TelemetryCredential, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, credential := range f.byID {
+		if string(credential.TokenHash) == string(tokenHash) {
+			copied := copyTelemetryCredential(credential)
+			return &copied, nil
+		}
+	}
+	return nil, nil
+}
+
+func (f *TelemetryCredentialStore) RevokeTelemetryCredential(_ context.Context, id int64, revokedAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	credential, ok := f.byID[id]
+	if !ok || credential.RevokedAt != nil {
+		return nil
+	}
+	credential.RevokedAt = &revokedAt
+	credential.UpdatedAt = revokedAt
+	f.byID[id] = credential
+	return nil
+}
+
+func (f *TelemetryCredentialStore) TouchTelemetryCredential(_ context.Context, id int64, usedAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	credential, ok := f.byID[id]
+	if !ok || credential.RevokedAt != nil {
+		return nil
+	}
+	credential.LastUsedAt = &usedAt
+	credential.UpdatedAt = usedAt
+	f.byID[id] = credential
+	return nil
+}
+
+func copyTelemetryCredential(in models.TelemetryCredential) models.TelemetryCredential {
+	in.TokenHash = append([]byte(nil), in.TokenHash...)
+	return in
 }
 
 // ---------------------------------------------------------------- users

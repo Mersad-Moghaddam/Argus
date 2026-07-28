@@ -1,7 +1,9 @@
 package api
 
 import (
+	"errors"
 	"strconv"
+	"time"
 
 	"argus/internal/application"
 	"argus/internal/domain"
@@ -26,6 +28,10 @@ func RegisterProjectRoutes(app fiber.Router, h *ProjectHandler, guards ...fiber.
 	app.Delete("/projects/:projectId", guarded(guards, h.DeleteProject)...)
 	app.Get("/projects/:projectId/environments", guarded(guards, h.ListEnvironments)...)
 	app.Post("/projects/:projectId/environments", guarded(guards, h.CreateEnvironment)...)
+	app.Get("/projects/:projectId/telemetry-credentials", guarded(guards, h.ListTelemetryCredentials)...)
+	app.Post("/projects/:projectId/telemetry-credentials", guarded(guards, h.CreateTelemetryCredential)...)
+	app.Post("/projects/:projectId/telemetry-credentials/:credentialId/rotate", guarded(guards, h.RotateTelemetryCredential)...)
+	app.Post("/projects/:projectId/telemetry-credentials/:credentialId/revoke", guarded(guards, h.RevokeTelemetryCredential)...)
 }
 
 type environmentRequest struct {
@@ -58,6 +64,101 @@ func (h *ProjectHandler) CreateEnvironment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.Status(fiber.StatusCreated).JSON(env)
+}
+
+type telemetryCredentialRequest struct {
+	Name               string `json:"name"`
+	EnvironmentID      int64  `json:"environmentId"`
+	ExpiresInDays      int    `json:"expiresInDays"`
+	RateLimitPerMinute int    `json:"rateLimitPerMinute"`
+}
+
+func telemetryCredentialInput(req telemetryCredentialRequest) (application.CreateTelemetryCredentialInput, error) {
+	if req.ExpiresInDays < 0 || req.ExpiresInDays > 365 {
+		return application.CreateTelemetryCredentialInput{}, domain.ErrInvalidInput
+	}
+	return application.CreateTelemetryCredentialInput{
+		Name: req.Name, EnvironmentID: req.EnvironmentID, ExpiresIn: time.Duration(req.ExpiresInDays) * 24 * time.Hour,
+		RateLimitPerMinute: req.RateLimitPerMinute,
+	}, nil
+}
+
+func (h *ProjectHandler) ListTelemetryCredentials(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleViewer)
+	if !ok {
+		return nil
+	}
+	items, err := h.service.ListTelemetryCredentials(c.UserContext(), project.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list telemetry credentials"})
+	}
+	return c.JSON(fiber.Map{"items": items})
+}
+
+func (h *ProjectHandler) CreateTelemetryCredential(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	var req telemetryCredentialRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	input, err := telemetryCredentialInput(req)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	issued, err := h.service.CreateTelemetryCredential(c.UserContext(), project.ID, currentUserID(c), input)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.Status(fiber.StatusCreated).JSON(issued)
+}
+
+func (h *ProjectHandler) RotateTelemetryCredential(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	credentialID, err := parseIDParam(c, "credentialId")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	var req telemetryCredentialRequest
+	if err = c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	input, err := telemetryCredentialInput(req)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	issued, err := h.service.RotateTelemetryCredential(c.UserContext(), project.ID, currentUserID(c), credentialID, input)
+	if errors.Is(err, application.ErrTelemetryCredentialNotFound) {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "telemetry credential not found"})
+	}
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.Status(fiber.StatusCreated).JSON(issued)
+}
+
+func (h *ProjectHandler) RevokeTelemetryCredential(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	credentialID, err := parseIDParam(c, "credentialId")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	err = h.service.RevokeTelemetryCredential(c.UserContext(), project.ID, credentialID)
+	if errors.Is(err, application.ErrTelemetryCredentialNotFound) {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "telemetry credential not found"})
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to revoke telemetry credential"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 type projectRequest struct {

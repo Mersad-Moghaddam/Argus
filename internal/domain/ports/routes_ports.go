@@ -39,6 +39,18 @@ type ProjectStore interface {
 	CreateProjectEnvironment(ctx context.Context, environment models.ProjectEnvironment) (int64, error)
 }
 
+// TelemetryCredentialStore persists server-side OTLP ingestion credentials.
+// Project and environment attribution is read from this store rather than
+// trusted from inbound telemetry resource attributes.
+type TelemetryCredentialStore interface {
+	CreateTelemetryCredential(ctx context.Context, credential models.TelemetryCredential) (int64, error)
+	ListTelemetryCredentials(ctx context.Context, projectID int64) ([]models.TelemetryCredential, error)
+	GetTelemetryCredentialByID(ctx context.Context, id int64) (*models.TelemetryCredential, error)
+	GetTelemetryCredentialByHash(ctx context.Context, tokenHash []byte) (*models.TelemetryCredential, error)
+	RevokeTelemetryCredential(ctx context.Context, id int64, revokedAt time.Time) error
+	TouchTelemetryCredential(ctx context.Context, id int64, usedAt time.Time) error
+}
+
 // RouteStore persists monitored API routes.
 type RouteStore interface {
 	CreateRoute(ctx context.Context, route models.APIRoute) (int64, error)
