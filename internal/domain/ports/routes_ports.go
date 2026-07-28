@@ -35,6 +35,8 @@ type ProjectStore interface {
 	ListProjects(ctx context.Context, userID int64, filter models.ProjectFilter) ([]models.Project, int, error)
 	GetProjectMember(ctx context.Context, projectID, userID int64) (*models.ProjectMember, error)
 	AddProjectMember(ctx context.Context, member models.ProjectMember) error
+	ListProjectEnvironments(ctx context.Context, projectID int64) ([]models.ProjectEnvironment, error)
+	CreateProjectEnvironment(ctx context.Context, environment models.ProjectEnvironment) (int64, error)
 }
 
 // RouteStore persists monitored API routes.

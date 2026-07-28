@@ -213,14 +213,15 @@ func (f *AuthTokenStore) Count() int {
 // ---------------------------------------------------------------- projects
 
 type ProjectStore struct {
-	mu      sync.Mutex
-	nextID  int64
-	byID    map[int64]models.Project
-	members map[string]models.ProjectMember // "projectID:userID"
+	mu           sync.Mutex
+	nextID       int64
+	byID         map[int64]models.Project
+	members      map[string]models.ProjectMember // "projectID:userID"
+	environments map[int64][]models.ProjectEnvironment
 }
 
 func NewProjectStore() *ProjectStore {
-	return &ProjectStore{byID: map[int64]models.Project{}, members: map[string]models.ProjectMember{}}
+	return &ProjectStore{byID: map[int64]models.Project{}, members: map[string]models.ProjectMember{}, environments: map[int64][]models.ProjectEnvironment{}}
 }
 
 func memberKey(projectID, userID int64) string {
@@ -236,7 +237,23 @@ func (f *ProjectStore) CreateProject(_ context.Context, project models.Project, 
 	project.CreatedAt = time.Now().UTC()
 	f.byID[project.ID] = project
 	f.members[memberKey(project.ID, ownerUserID)] = models.ProjectMember{ProjectID: project.ID, UserID: ownerUserID, Role: models.ProjectRoleOwner}
+	f.environments[project.ID] = []models.ProjectEnvironment{{ID: 1, ProjectID: project.ID, Name: "production", IsDefault: true}}
 	return project.ID, nil
+}
+
+func (f *ProjectStore) ListProjectEnvironments(_ context.Context, projectID int64) ([]models.ProjectEnvironment, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]models.ProjectEnvironment(nil), f.environments[projectID]...), nil
+}
+
+func (f *ProjectStore) CreateProjectEnvironment(_ context.Context, env models.ProjectEnvironment) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := f.environments[env.ProjectID]
+	env.ID = int64(len(items) + 1)
+	f.environments[env.ProjectID] = append(items, env)
+	return env.ID, nil
 }
 
 func (f *ProjectStore) UpdateProject(_ context.Context, project models.Project) error {

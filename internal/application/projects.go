@@ -13,6 +13,30 @@ import (
 	"argus/internal/models"
 )
 
+type CreateEnvironmentInput struct{ Name, BaseURL string }
+
+func (s *Service) ListProjectEnvironments(ctx context.Context, projectID int64) ([]models.ProjectEnvironment, error) {
+	return s.projects.ListProjectEnvironments(ctx, projectID)
+}
+
+func (s *Service) CreateProjectEnvironment(ctx context.Context, projectID int64, input CreateEnvironmentInput) (models.ProjectEnvironment, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return models.ProjectEnvironment{}, domain.ErrInvalidInput
+	}
+	base, _, err := domain.NormalizeBaseURL(input.BaseURL)
+	if err != nil && strings.TrimSpace(input.BaseURL) != "" {
+		return models.ProjectEnvironment{}, err
+	}
+	env := models.ProjectEnvironment{ProjectID: projectID, Name: name, CanonicalBaseURL: base}
+	id, err := s.projects.CreateProjectEnvironment(ctx, env)
+	if err != nil {
+		return models.ProjectEnvironment{}, err
+	}
+	env.ID = id
+	return env, nil
+}
+
 var (
 	ErrProjectNameRequired = errors.New("project name is required")
 	ErrInsufficientRole    = errors.New("insufficient permissions for this action")

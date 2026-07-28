@@ -24,6 +24,40 @@ func RegisterProjectRoutes(app fiber.Router, h *ProjectHandler, guards ...fiber.
 	app.Post("/projects/:projectId/archive", guarded(guards, h.ArchiveProject)...)
 	app.Post("/projects/:projectId/unarchive", guarded(guards, h.UnarchiveProject)...)
 	app.Delete("/projects/:projectId", guarded(guards, h.DeleteProject)...)
+	app.Get("/projects/:projectId/environments", guarded(guards, h.ListEnvironments)...)
+	app.Post("/projects/:projectId/environments", guarded(guards, h.CreateEnvironment)...)
+}
+
+type environmentRequest struct {
+	Name    string `json:"name"`
+	BaseURL string `json:"baseUrl"`
+}
+
+func (h *ProjectHandler) ListEnvironments(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleViewer)
+	if !ok {
+		return nil
+	}
+	items, err := h.service.ListProjectEnvironments(c.UserContext(), project.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list environments"})
+	}
+	return c.JSON(fiber.Map{"items": items})
+}
+func (h *ProjectHandler) CreateEnvironment(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	var req environmentRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	env, err := h.service.CreateProjectEnvironment(c.UserContext(), project.ID, application.CreateEnvironmentInput{Name: req.Name, BaseURL: req.BaseURL})
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.Status(fiber.StatusCreated).JSON(env)
 }
 
 type projectRequest struct {
