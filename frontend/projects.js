@@ -99,6 +99,7 @@
       range: '24h',
       series: null,
       incidents: [],
+      environments: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -434,6 +435,7 @@
       project: null,
       series: null,
       incidents: [],
+      environments: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -828,17 +830,19 @@
     }
     try {
       const p = state.project;
-      const [project, series, incidents, routes] = await Promise.all([
+      const [project, series, incidents, routes, environments] = await Promise.all([
         apiProjects(`/projects/${id}`),
         apiProjects(`/projects/${id}/metrics/timeseries${qs({ range: p.range })}`),
         apiProjects(`/projects/${id}/incidents${qs({ limit: 15 })}`),
         apiProjects(`/projects/${id}/routes${routeQuery(p)}`),
+        apiProjects(`/projects/${id}/environments`),
       ]);
       state.project.project = project;
       state.project.series = series;
       state.project.incidents = incidents || [];
       state.project.routes = routes.items || [];
       state.project.routesTotal = routes.total || 0;
+      state.project.environments = environments.items || [];
       renderCrumbs();
       renderProjectDetail();
     } catch (err) {
@@ -919,6 +923,11 @@
         <p class="hint">Defaults for new routes: every ${num(p.defaultIntervalSeconds)}s, ${num(p.defaultTimeoutMs)}ms timeout,
           ${num(p.defaultRetries)} retries, incident after ${num(p.failureThreshold)} consecutive failures,
           resolved after ${num(p.recoverySuccessThreshold)} successes.</p>
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Environments</h2></div>
+        ${state.project.environments.length ? `<div class="list">${state.project.environments.map((env) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(env.name)}</span><span class="list-item-meta">${escapeHtml(env.canonicalBaseUrl || 'Base URL not configured')}</span></div>${env.isDefault ? '<span class="badge status-up">default</span>' : ''}</div>`).join('')}</div>` : '<div class="empty-state"><span>No environments configured.</span></div>'}
       </section>
 
       <section class="card">
