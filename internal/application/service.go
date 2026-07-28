@@ -35,12 +35,13 @@ type Service struct {
 	imports              ports.ImportStore
 	telemetryCredentials ports.TelemetryCredentialStore
 	telemetryIngress     ports.TelemetryIngressStore
+	telemetryMappings    ports.TelemetryMappingStore
 }
 
 func NewService(monitors ports.MonitorStore, incidents ports.IncidentStore, maintenance ports.MaintenanceStore, statusPages ports.StatusPageStore, alerts ports.AlertChannelStore, outbox ports.OutboxStore, logger *observability.LogStore,
-	users ports.UserStore, tokens ports.AuthTokenStore, projects ports.ProjectStore, routes ports.RouteStore, routeIncidents ports.RouteIncidentStore, imports ports.ImportStore, telemetryCredentials ports.TelemetryCredentialStore, telemetryIngress ports.TelemetryIngressStore) *Service {
+	users ports.UserStore, tokens ports.AuthTokenStore, projects ports.ProjectStore, routes ports.RouteStore, routeIncidents ports.RouteIncidentStore, imports ports.ImportStore, telemetryCredentials ports.TelemetryCredentialStore, telemetryIngress ports.TelemetryIngressStore, telemetryMappings ports.TelemetryMappingStore) *Service {
 	return &Service{monitors: monitors, incidents: incidents, maintenance: maintenance, statusPages: statusPages, alerts: alerts, outbox: outbox, logger: logger,
-		users: users, tokens: tokens, projects: projects, routes: routes, routeIncidents: routeIncidents, imports: imports, telemetryCredentials: telemetryCredentials, telemetryIngress: telemetryIngress}
+		users: users, tokens: tokens, projects: projects, routes: routes, routeIncidents: routeIncidents, imports: imports, telemetryCredentials: telemetryCredentials, telemetryIngress: telemetryIngress, telemetryMappings: telemetryMappings}
 }
 
 type CreateMonitorInput struct {

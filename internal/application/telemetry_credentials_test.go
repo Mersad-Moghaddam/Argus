@@ -140,3 +140,32 @@ func TestTelemetryIngressRecordsOnlyBoundedDiagnostics(t *testing.T) {
 		}
 	}
 }
+
+func TestTelemetryRouteMappingIsProjectScoped(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	project, err := h.service.CreateProject(ctx, 1, CreateProjectInput{Name: "Mapped"})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	environments, _ := h.service.ListProjectEnvironments(ctx, project.ID)
+	route, err := h.service.CreateRoute(ctx, project, RouteInput{Method: "GET", Path: "/orders/{id}", BaseURL: "https://api.example.com"})
+	if err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+	mapping, err := h.service.CreateTelemetryRouteMapping(ctx, project.ID, CreateTelemetryRouteMappingInput{EnvironmentID: environments[0].ID, RouteID: route.ID, ServiceName: "checkout", DeploymentEnvironment: "production"})
+	if err != nil {
+		t.Fatalf("create mapping: %v", err)
+	}
+	if mapping.HTTPMethod != "GET" || mapping.RouteTemplate != "/orders/{id}" || mapping.Source != "manual" {
+		t.Fatalf("unexpected mapping: %+v", mapping)
+	}
+	items, _ := h.service.ListTelemetryRouteMappings(ctx, project.ID)
+	if len(items) != 1 || items[0].RouteID != route.ID {
+		t.Fatalf("list mappings: %+v", items)
+	}
+	other, _ := h.service.CreateProject(ctx, 2, CreateProjectInput{Name: "Other"})
+	if _, err = h.service.CreateTelemetryRouteMapping(ctx, other.ID, CreateTelemetryRouteMappingInput{EnvironmentID: 1, RouteID: route.ID, ServiceName: "checkout"}); !errors.Is(err, ErrTelemetryCredentialNotFound) {
+		t.Fatalf("cross-project route must be rejected, got %v", err)
+	}
+}

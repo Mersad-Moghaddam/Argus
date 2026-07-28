@@ -44,3 +44,20 @@ type TelemetryIngressRecord struct {
 	ItemCount             int       `json:"itemCount"`
 	ReceivedAt            time.Time `json:"receivedAt"`
 }
+
+// TelemetryRouteMapping binds a low-cardinality telemetry identity to one
+// catalog route. It is always project-scoped and is never inferred from an
+// untrusted project or environment attribute supplied by an exporter.
+type TelemetryRouteMapping struct {
+	ID                    int64     `json:"id"`
+	ProjectID             int64     `json:"projectId"`
+	EnvironmentID         int64     `json:"environmentId"`
+	RouteID               int64     `json:"routeId"`
+	ServiceName           string    `json:"serviceName"`
+	DeploymentEnvironment string    `json:"deploymentEnvironment,omitempty"`
+	HTTPMethod            string    `json:"httpMethod"`
+	RouteTemplate         string    `json:"routeTemplate"`
+	Source                string    `json:"source"`
+	CreatedAt             time.Time `json:"createdAt"`
+	UpdatedAt             time.Time `json:"updatedAt"`
+}

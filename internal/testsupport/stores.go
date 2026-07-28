@@ -39,6 +39,7 @@ type Stores struct {
 	Imports              *ImportStore
 	TelemetryCredentials *TelemetryCredentialStore
 	TelemetryIngress     *TelemetryIngressStore
+	TelemetryMappings    *TelemetryMappingStore
 	Outbox               *OutboxStore
 	Legacy               LegacyStore
 }
@@ -54,6 +55,7 @@ func NewStores() *Stores {
 		Imports:              NewImportStore(),
 		TelemetryCredentials: NewTelemetryCredentialStore(),
 		TelemetryIngress:     NewTelemetryIngressStore(),
+		TelemetryMappings:    NewTelemetryMappingStore(),
 		Outbox:               &OutboxStore{},
 	}
 }
@@ -152,6 +154,47 @@ type TelemetryIngressStore struct {
 	mu      sync.Mutex
 	nextID  int64
 	records []models.TelemetryIngressRecord
+}
+
+type TelemetryMappingStore struct {
+	mu     sync.Mutex
+	nextID int64
+	items  []models.TelemetryRouteMapping
+}
+
+func NewTelemetryMappingStore() *TelemetryMappingStore { return &TelemetryMappingStore{} }
+func (f *TelemetryMappingStore) CreateTelemetryRouteMapping(_ context.Context, m models.TelemetryRouteMapping) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	m.ID = f.nextID
+	m.CreatedAt = time.Now().UTC()
+	m.UpdatedAt = m.CreatedAt
+	f.items = append(f.items, m)
+	return m.ID, nil
+}
+func (f *TelemetryMappingStore) ListTelemetryRouteMappings(_ context.Context, pid int64) ([]models.TelemetryRouteMapping, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []models.TelemetryRouteMapping{}
+	for i := len(f.items) - 1; i >= 0; i-- {
+		if f.items[i].ProjectID == pid {
+			out = append(out, f.items[i])
+		}
+	}
+	return out, nil
+}
+func (f *TelemetryMappingStore) DeleteTelemetryRouteMapping(_ context.Context, pid, id int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := f.items[:0]
+	for _, m := range f.items {
+		if m.ID != id || m.ProjectID != pid {
+			out = append(out, m)
+		}
+	}
+	f.items = out
+	return nil
 }
 
 func NewTelemetryIngressStore() *TelemetryIngressStore { return &TelemetryIngressStore{} }

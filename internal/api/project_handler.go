@@ -30,6 +30,9 @@ func RegisterProjectRoutes(app fiber.Router, h *ProjectHandler, guards ...fiber.
 	app.Post("/projects/:projectId/environments", guarded(guards, h.CreateEnvironment)...)
 	app.Get("/projects/:projectId/telemetry-credentials", guarded(guards, h.ListTelemetryCredentials)...)
 	app.Get("/projects/:projectId/telemetry-ingress", guarded(guards, h.ListTelemetryIngress)...)
+	app.Get("/projects/:projectId/telemetry-mappings", guarded(guards, h.ListTelemetryMappings)...)
+	app.Post("/projects/:projectId/telemetry-mappings", guarded(guards, h.CreateTelemetryMapping)...)
+	app.Delete("/projects/:projectId/telemetry-mappings/:mappingId", guarded(guards, h.DeleteTelemetryMapping)...)
 	app.Post("/projects/:projectId/telemetry-credentials", guarded(guards, h.CreateTelemetryCredential)...)
 	app.Post("/projects/:projectId/telemetry-credentials/:credentialId/rotate", guarded(guards, h.RotateTelemetryCredential)...)
 	app.Post("/projects/:projectId/telemetry-credentials/:credentialId/revoke", guarded(guards, h.RevokeTelemetryCredential)...)
@@ -107,6 +110,54 @@ func (h *ProjectHandler) ListTelemetryIngress(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list telemetry diagnostics"})
 	}
 	return c.JSON(fiber.Map{"items": items})
+}
+
+type telemetryMappingRequest struct {
+	EnvironmentID         int64  `json:"environmentId"`
+	RouteID               int64  `json:"routeId"`
+	ServiceName           string `json:"serviceName"`
+	DeploymentEnvironment string `json:"deploymentEnvironment"`
+}
+
+func (h *ProjectHandler) ListTelemetryMappings(c *fiber.Ctx) error {
+	p, ok := authorizeProject(c, h.service, models.ProjectRoleViewer)
+	if !ok {
+		return nil
+	}
+	items, e := h.service.ListTelemetryRouteMappings(c.UserContext(), p.ID)
+	if e != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "failed to list telemetry mappings"})
+	}
+	return c.JSON(fiber.Map{"items": items})
+}
+func (h *ProjectHandler) CreateTelemetryMapping(c *fiber.Ctx) error {
+	p, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	var req telemetryMappingRequest
+	if e := c.BodyParser(&req); e != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	item, e := h.service.CreateTelemetryRouteMapping(c.UserContext(), p.ID, application.CreateTelemetryRouteMappingInput{EnvironmentID: req.EnvironmentID, RouteID: req.RouteID, ServiceName: req.ServiceName, DeploymentEnvironment: req.DeploymentEnvironment})
+	if e != nil {
+		return c.Status(400).JSON(fiber.Map{"error": e.Error()})
+	}
+	return c.Status(201).JSON(item)
+}
+func (h *ProjectHandler) DeleteTelemetryMapping(c *fiber.Ctx) error {
+	p, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	id, e := parseIDParam(c, "mappingId")
+	if e != nil {
+		return c.Status(400).JSON(fiber.Map{"error": e.Error()})
+	}
+	if e = h.service.DeleteTelemetryRouteMapping(c.UserContext(), p.ID, id); e != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "failed to delete telemetry mapping"})
+	}
+	return c.SendStatus(204)
 }
 
 func (h *ProjectHandler) CreateTelemetryCredential(c *fiber.Ctx) error {

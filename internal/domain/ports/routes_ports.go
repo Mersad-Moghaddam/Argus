@@ -58,6 +58,12 @@ type TelemetryIngressStore interface {
 	ListTelemetryIngress(ctx context.Context, projectID int64, limit int) ([]models.TelemetryIngressRecord, error)
 }
 
+type TelemetryMappingStore interface {
+	CreateTelemetryRouteMapping(ctx context.Context, mapping models.TelemetryRouteMapping) (int64, error)
+	ListTelemetryRouteMappings(ctx context.Context, projectID int64) ([]models.TelemetryRouteMapping, error)
+	DeleteTelemetryRouteMapping(ctx context.Context, projectID, id int64) error
+}
+
 // RouteStore persists monitored API routes.
 type RouteStore interface {
 	CreateRoute(ctx context.Context, route models.APIRoute) (int64, error)

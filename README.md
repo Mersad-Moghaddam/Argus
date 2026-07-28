@@ -253,6 +253,12 @@ deployment environment, HTTP method, normalized route template, status code,
 and bucket boundary as labels. Other metrics remain visible only as bounded
 ingestion diagnostics until Argus has an explicit safe translation for them.
 
+Telemetry route mappings are a project-scoped control-plane API at
+`GET/POST /api/projects/:projectId/telemetry-mappings` (and
+`DELETE /api/projects/:projectId/telemetry-mappings/:mappingId`). A mapping
+binds a catalog route to an existing project environment and service identity;
+it cannot reference another project's route or environment.
+
 OpenAPI imports resolve only local `$ref` pointers—Argus does not fetch external references. Import commits preserve user-owned monitoring configuration and disable, rather than delete, explicitly selected routes that disappeared from a specification.
 
 ## Architecture
