@@ -926,7 +926,7 @@
       </section>
 
       <section class="card">
-        <div class="card-header"><h2>Environments</h2></div>
+        <div class="card-header"><h2>Environments</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-environment">Add environment</button>' : ''}</div>
         ${state.project.environments.length ? `<div class="list">${state.project.environments.map((env) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(env.name)}</span><span class="list-item-meta">${escapeHtml(env.canonicalBaseUrl || 'Base URL not configured')}</span></div>${env.isDefault ? '<span class="badge status-up">default</span>' : ''}</div>`).join('')}</div>` : '<div class="empty-state"><span>No environments configured.</span></div>'}
       </section>
 
@@ -2207,6 +2207,16 @@
         case 'open-import':
           navigate(`#/projects/${state.project.id}/import`);
           break;
+        case 'create-environment': {
+          const name = window.prompt('Environment name (for example, staging):');
+          if (name === null) break;
+          const baseUrl = window.prompt('Base URL (optional, for example, https://api.example.com):');
+          if (baseUrl === null) break;
+          await apiProjects(`/projects/${state.project.id}/environments`, { method: 'POST', body: JSON.stringify({ name, baseUrl }) });
+          showToast('Environment created.', 'success');
+          loadProjectDetail({ silent: true });
+          break;
+        }
         case 'edit-route': {
           const route = state.project.routes.find((r) => r.id === id) || (state.routeDetail.route && state.routeDetail.route.id === id ? state.routeDetail.route : null);
           openRouteModal(route || (await apiProjects(`/projects/${state.project.id}/routes/${id}`)));
