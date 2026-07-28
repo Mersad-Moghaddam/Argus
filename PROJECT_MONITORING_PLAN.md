@@ -587,4 +587,193 @@ work.
   `blocked target address` reason and `lastStatusCode = 0`, proving no HTTP
   exchange ever took place.
 
-- **Section 10 (next)** — Final report.
+- **Section 10** — Done. Final report below.
+
+## Final report
+
+### Architecture
+
+The work is additive and follows the existing hexagonal layout exactly. No
+existing package was restructured and no parallel architecture was introduced.
+
+```
+cmd/api                          entrypoint (unchanged)
+internal/domain                  route health states + incident policy (pure functions)
+internal/domain/ports            + UserStore, AuthTokenStore, ProjectStore, RouteStore,
+                                   RouteIncidentStore, ImportStore
+internal/openapi                 OpenAPI 3.x / Swagger 2.0 parser, local-only $ref resolution
+internal/application             + auth, projects, routes, imports, metrics use cases
+internal/adapters/inbound/http   + BearerAuth alongside the untouched APIKeyAuth
+internal/adapters/outbound/mysql + users, projects, routes, route_incidents, imports adapters
+internal/api                     + auth/project/route/import handlers, guards.go, project_authz.go
+internal/worker                  + route_evaluator.go (SSRF-hardened HTTP check),
+                                   route_processor.go (4 asynq handlers)
+internal/platform/httpserver     wires both auth schemes per route
+internal/platform/worker         schedules the new periodic tasks next to the existing ones
+internal/platform/storage        migration runner: pinned connection + quote/comment-aware splitter
+internal/testsupport             in-memory port fakes, imported only from _test.go
+frontend                         + projects.js, "API Projects" tab, new component styles
+```
+
+The two bounded contexts share the process, database and worker runtime but
+have separate tables, separate authentication and separate HTTP route trees.
+The legacy website/heartbeat/TLS monitoring API, its tables and its global
+`X-API-Key` behave exactly as before.
+
+### Schema changes
+
+Additive only. Migrations `0004_auth` and `0005_projects` add seven tables;
+no existing table or column was dropped or retyped.
+
+| Table | Purpose | Key indexes |
+| --- | --- | --- |
+| `users` | Email/password accounts | `UNIQUE(email)` |
+| `auth_tokens` | Opaque bearer sessions (sha256 hash, 30-day TTL) | `UNIQUE(token_hash)`, `(user_id)` |
+| `projects` | Project + per-project monitoring defaults + cached aggregate metrics | `UNIQUE(slug)`, `(owner_user_id)`, `(status)` |
+| `project_members` | owner/editor/viewer authorization | `UNIQUE(project_id, user_id)`, `(user_id)` |
+| `api_routes` | One monitored operation; OpenAPI metadata as JSON, monitoring config, live health | `UNIQUE(project_id, method, path(700))`, `(project_id, status)`, `(project_id, enabled)`, `(next_check_at)` |
+| `route_checks` | Time-series check results | `(route_id, checked_at DESC)`, `(project_id, checked_at DESC)` |
+| `route_incidents` | Open/resolved failure windows | `(route_id, state)`, `(project_id, state)` |
+| `route_import_jobs` | validate → preview → commit lifecycle, parsed items as JSON, final counts | `(project_id, created_at DESC)` |
+
+Three migration corrections were also needed for the schema to build on a
+stock MySQL 8 server (details in Section 9 above): prefix indexes on
+`websites.url` and `api_routes.path` for InnoDB's 3072-byte key limit under
+`utf8mb4`, and a MySQL-compatible rewrite of `0003_compatibility`.
+
+### API surface
+
+New, bearer-authenticated. Legacy `/api/websites|checks|incidents|logs|
+status-pages|alert-channels|maintenance-windows|public/status/:slug` are
+unchanged and still `X-API-Key`-protected.
+
+```
+POST   /api/auth/register | login | logout          GET /api/auth/me
+
+GET    /api/projects?search=&status=&limit=&offset=
+POST   /api/projects
+GET    /api/projects/:projectId
+PUT    /api/projects/:projectId
+POST   /api/projects/:projectId/archive | unarchive
+DELETE /api/projects/:projectId
+
+GET    /api/projects/:projectId/routes?search=&method=&status=&tag=&enabled=
+                                      &deprecated=&sortBy=&sortDir=&limit=&offset=
+POST   /api/projects/:projectId/routes
+POST   /api/projects/:projectId/routes/bulk | bulk-delete
+GET    /api/projects/:projectId/routes/:routeId
+PUT    /api/projects/:projectId/routes/:routeId
+POST   /api/projects/:projectId/routes/:routeId/enable | disable
+DELETE /api/projects/:projectId/routes/:routeId
+GET    /api/projects/:projectId/routes/:routeId/checks?limit=&offset=
+
+GET    /api/projects/:projectId/incidents?routeId=&state=&limit=&offset=
+GET    /api/projects/:projectId/metrics/timeseries?range=1h|6h|24h|7d|30d&routeId=
+
+POST   /api/projects/:projectId/imports/validate     (multipart file, or JSON paste)
+GET    /api/projects/:projectId/imports/:jobId
+POST   /api/projects/:projectId/imports/:jobId/commit
+```
+
+Status codes: `401` missing/invalid token, `404` non-member **and**
+nonexistent project (identical bodies), `403` insufficient role, `400`
+invalid input/duplicate route/malformed spec, `409` commit replay, `413`
+oversized upload.
+
+### Frontend
+
+One new tab, one new script, no new dependency. `frontend/projects.js`
+(2215 lines) reuses `app.js`'s helpers and the existing design tokens.
+
+| View | Hash | Contents |
+| --- | --- | --- |
+| Sign-in gate | — | Login/register, own token key, 401 returns here |
+| Projects dashboard | `#/projects` | Cards with route counts, health chips, uptime, latency, failures, open incidents, last check; search, status filter, create/edit modal, archive/restore/delete, pagination |
+| Project dashboard | `#/projects/:id` | 10 summary tiles, range picker + 2 canvas charts, incidents, route table with search/5 filters/sortable columns/pagination/bulk actions |
+| Route detail | `#/projects/:id/routes/:rid` | Configuration, spec blocks, health, 24h stats, status-code distribution, check log, incidents |
+| Import wizard | `#/projects/:id/import` | Upload or paste → preview with conflict badges, filters and selection → result report |
+
+Every view has empty, loading (skeleton) and error states with a retry path.
+All destructive actions route through a confirmation modal.
+
+### Security protections
+
+- SSRF: address policy in the dialer's connect hook, so it validates the
+  **resolved IP** — immune to DNS rebinding — and is re-applied on every
+  redirect hop. Always blocked: cloud metadata endpoints, IPv6 link-local,
+  `0.0.0.0/8`, CGNAT, `192.0.0.0/24`, benchmark, reserved, documentation,
+  multicast, unspecified. Blocked by default: loopback, RFC1918/ULA, link-local
+  unicast (`ROUTE_ALLOW_PRIVATE_TARGETS=true` opts in; metadata stays blocked).
+- `http`/`https` allow-list; embedded credentials rejected; redirect cap;
+  `Authorization`/`Cookie`/API-key headers stripped on cross-origin redirects.
+- Bounded resources: per-route timeout clamped to a ceiling, bounded retry
+  backoff, no retry for policy-blocked targets, 1 MB response cap, 15 MB
+  request-body limit, 10 MB spec cap, 5000-operation cap, ref-expansion budget,
+  no remote `$ref` fetching, 5000-row bulk cap.
+- AuthZ: one `authorizeProject` helper used by every project-scoped handler;
+  non-member and nonexistent both return `404`; route/import lookups
+  additionally verify the resource's `projectId` matches the URL; bulk delete is
+  scoped by `project_id` in SQL.
+- Secret hygiene: bcrypt passwords, sha256-hashed tokens, constant-time token
+  comparison, password hash never serialized, configured header secrets masked
+  on every read path while storage keeps the real value.
+- Path-parameter substitution URL-escapes values so a crafted spec example
+  cannot inject path segments, a query string or a new authority.
+
+### Tests
+
+109 top-level tests, 273 assertions-groups including subtests, all passing.
+
+| Package | Tests | Coverage focus |
+| --- | --- | --- |
+| `internal/domain` | 6 | Route status policy, incident open/resolve rule, method/path normalization |
+| `internal/openapi` | 9 | OpenAPI 3 + Swagger 2, YAML/JSON, `$ref` resolution, limits, 520-op spec |
+| `internal/application` | 43 | Auth, project lifecycle, authz matrix incl. indistinguishable-denial, route CRUD/bulk partial failures, health progression, configurable thresholds, import validate/commit, re-import safety, 600-route import, timeseries |
+| `internal/api` | 18 | 401/403/404/400/409/413 matrix, cross-project access, bulk scoping, redaction, legacy-vs-bearer isolation, 600-route import over HTTP |
+| `internal/worker` | 29 | SSRF table (14 targets), DNS rebinding, redirect cap/rejection/secret stripping, timeout, retry counting, status ranges, path-param escaping, enqueue filtering/pagination/dedupe, prune batching |
+| `internal/platform/storage` | 4 | Migration pairing/ordering, statement splitter (13 cases), opt-in MySQL up→up→down→up smoke test |
+
+### Commands run
+
+```
+gofmt -l .                                   # clean
+go vet ./...                                 # clean
+go build ./...                               # clean
+go build -trimpath -ldflags="-s -w" ./cmd/api  # production build, 18.9 MB
+go test ./... -count=1                       # all packages ok
+node --check frontend/app.js frontend/projects.js  # clean
+MYSQL_TEST_DSN=... go test ./internal/platform/storage/...  # migration smoke test
+```
+
+Verification evidence for the live run against MySQL 8 + Redis — 600-operation
+import, 450-route selective commit, worker-driven health transitions, exactly
+450 incidents opened at the third consecutive failure with no duplicates over
+2150 checks, the full negative-path matrix, and 16 forbidden targets all
+failing closed with no HTTP exchange — is recorded in the Section 9 entry above.
+
+### Known limitations and follow-up work
+
+- **Membership management has no API yet.** The `project_members` table and the
+  owner/editor/viewer checks are fully implemented and tested, but a project
+  owner cannot yet invite a collaborator over HTTP; rows must be inserted
+  directly. Adding `POST/DELETE /api/projects/:id/members` is the natural next
+  increment.
+- **Incident recovery is proven by test, not by the live run.** The
+  open-after-N/resolve-after-M rule is covered end to end at the service layer
+  (`TestRouteHealthStateProgression`,
+  `TestIncidentThresholdsAreConfigurablePerRoute`), and incident *opening* was
+  additionally observed live. Observing resolution live requires pointing a
+  route at a reachable target, which under the default policy means a public
+  host or setting `ROUTE_ALLOW_PRIVATE_TARGETS=true`.
+- **`route_checks` has no partitioning.** Retention pruning bounds table growth,
+  and every dashboard read is served from cached columns or a bucketed indexed
+  query, but a very large deployment would benefit from range partitioning on
+  `checked_at`.
+- **Prefix uniqueness on `api_routes.path`.** Two paths identical in their first
+  700 characters collide. This is required by InnoDB's key limit and is far
+  beyond realistic API paths.
+- **No end-to-end browser test.** The UI was verified by driving the same HTTP
+  API it consumes, plus syntax checking. A Playwright suite would be the next
+  step for regression-proofing the wizard.
+- **`email` alert channel remains an adapter placeholder**, exactly as before
+  this work; it was out of scope and is unchanged.

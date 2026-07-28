@@ -17,16 +17,22 @@ func TestListMetricsTimeseriesBucketsChecks(t *testing.T) {
 		t.Fatalf("create route: %v", err)
 	}
 
-	// Two checks in one 30-minute bucket (one up, one down) and one in another.
-	now := time.Now().UTC()
+	// Buckets are aligned to absolute 30-minute boundaries, so the timestamps
+	// are anchored to a boundary rather than offset from "now": relative
+	// offsets straddle a boundary depending on the wall clock and make this
+	// test flaky. Truncate(30m) is epoch-aligned, matching the SQL bucketing.
+	const bucket = 30 * time.Minute
+	base := time.Now().UTC().Truncate(bucket).Add(-2 * bucket)
 	seed := []struct {
 		at        time.Time
 		status    string
 		latencyMS int
 	}{
-		{now.Add(-90 * time.Minute), "up", 100},
-		{now.Add(-88 * time.Minute), "down", 300},
-		{now.Add(-10 * time.Minute), "up", 50},
+		// Two checks inside one bucket, one up and one down.
+		{base.Add(time.Minute), "up", 100},
+		{base.Add(2 * time.Minute), "down", 300},
+		// One check in the following bucket.
+		{base.Add(bucket + time.Minute), "up", 50},
 	}
 	for _, s := range seed {
 		if err = h.routes.RecordRouteCheck(ctx, models.RouteCheck{
