@@ -232,6 +232,7 @@ curl http://localhost:8080/project/catalog \
 | Identity | `POST /identity/register`, `POST /identity/login`, `POST /identity/logout`, `GET /identity/profile` |
 | Projects | `GET/POST /project/catalog`, `GET/PUT/DELETE /project/catalog/:projectId`, `/project/archive/:projectId`, and `/project/restore/:projectId` |
 | Telemetry | Editor-only `GET/POST /telemetry/credentials/:projectId`, plus `/telemetry/rotate/:projectId/:credentialId` and `/telemetry/revoke/:projectId/:credentialId`. Any project viewer can read freshness diagnostics at `/telemetry/ingress/:projectId`. |
+| Heartbeats | Viewer-readable `GET /heartbeat/catalog/:projectId`; editors create and revoke monitors with `POST /heartbeat/catalog/:projectId` and `POST /heartbeat/revoke/:projectId/:monitorId`. Jobs send `POST /heartbeat/ping` with the one-time Bearer token and a unique `Idempotency-Key`. |
 | Routes | `/route/catalog/:projectId` for project-scoped list/create; focused family/purpose routes handle mutations, checks, incidents, and metrics. |
 | Imports | `/import/validation/:projectId`, `/import/job/:projectId/:jobId`, and `/import/commit/:projectId/:jobId` support OpenAPI 3.x or Swagger 2.0 JSON/YAML documents up to 10 MiB. |
 
@@ -264,6 +265,27 @@ binds a catalog route to an existing project environment and service identity;
 it cannot reference another project's route or environment.
 
 OpenAPI imports resolve only local `$ref` pointers—Argus does not fetch external references. Import commits preserve user-owned monitoring configuration and disable, rather than delete, explicitly selected routes that disappeared from a specification.
+
+### Project heartbeats
+
+Project editors create a heartbeat for a selected environment and receive an
+opaque `argus_hb_...` token once. Argus stores only its SHA-256 hash. A job
+sends a ping with a fresh idempotency key for each run:
+
+```bash
+curl --request POST http://localhost:8080/heartbeat/ping \
+  --header 'Authorization: Bearer argus_hb_...' \
+  --header 'Idempotency-Key: nightly-backup-2026-07-29T00:00:00Z' \
+  --header 'Content-Type: application/json' \
+  --data '{"outcome":"success"}'
+```
+
+Only the bounded `success` or `failure` outcome is accepted; arbitrary run
+metadata, logs, URLs, and payloads are not persisted. Repeating an idempotency
+key returns an accepted response but deliberately does not refresh liveness.
+The dashboard reports `healthy`, `late`, `missing`, or `revoked` from the
+configured expected interval and grace period. Revocation immediately rejects
+the old job token.
 
 ## Architecture
 

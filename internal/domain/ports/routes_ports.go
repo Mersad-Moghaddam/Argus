@@ -80,6 +80,18 @@ type TelemetryMappingStore interface {
 	DeleteTelemetryRouteMapping(ctx context.Context, projectID, id int64) error
 }
 
+// HeartbeatStore keeps project-scoped heartbeat monitors and only hashed
+// idempotency keys. Recording a receipt must be idempotent per monitor/key.
+type HeartbeatStore interface {
+	CreateHeartbeatMonitor(ctx context.Context, monitor models.HeartbeatMonitor) (int64, error)
+	ListHeartbeatMonitors(ctx context.Context, projectID int64) ([]models.HeartbeatMonitor, error)
+	GetHeartbeatMonitorByID(ctx context.Context, id int64) (*models.HeartbeatMonitor, error)
+	GetHeartbeatMonitorByHash(ctx context.Context, tokenHash []byte) (*models.HeartbeatMonitor, error)
+	RevokeHeartbeatMonitor(ctx context.Context, id int64, revokedAt time.Time) error
+	TouchHeartbeatMonitor(ctx context.Context, id int64, receivedAt time.Time, outcome string) error
+	RecordHeartbeatReceipt(ctx context.Context, receipt models.HeartbeatReceipt) (bool, error)
+}
+
 // SLOStore persists versioned SLO policy and the bounded aggregate evidence
 // used to explain every evaluation to project members.
 type SLOStore interface {

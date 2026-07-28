@@ -38,7 +38,7 @@ func newTestAPI(t *testing.T) *testAPI {
 	t.Helper()
 	s := testsupport.NewStores()
 	service := application.NewService(s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Outbox,
-		observability.NewLogStore(100), s.Users, s.Tokens, s.PasswordRecovery, s.RecoveryDelivery, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings, s.SLOs)
+		observability.NewLogStore(100), s.Users, s.Tokens, s.PasswordRecovery, s.RecoveryDelivery, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings, s.SLOs, s.Heartbeats)
 	return &testAPI{
 		app:     httpserver.NewFiberApp(service, observability.NewLogStore(100), legacyAPIKey),
 		service: service,
@@ -451,6 +451,55 @@ func TestTelemetryCredentialEndpoints(t *testing.T) {
 	_ = revoked.Body.Close()
 	if _, err := a.service.AuthenticateTelemetryCredential(context.Background(), replacement.Token); !errors.Is(err, application.ErrTelemetryCredentialNotFound) {
 		t.Fatalf("revoked token must not authenticate: %v", err)
+	}
+}
+
+func TestHeartbeatEndpointsAreScopedAndDoNotLeakSecrets(t *testing.T) {
+	a := newTestAPI(t)
+	_, ownerToken := a.register(t, "heartbeat-owner@example.com")
+	_, viewerToken := a.register(t, "heartbeat-viewer@example.com")
+	project := a.createProject(t, ownerToken, "Heartbeat project")
+	environments, _ := a.stores.Projects.ListProjectEnvironments(context.Background(), project.ID)
+	created := a.do(t, http.MethodPost, fmt.Sprintf("/heartbeat/catalog/%d", project.ID), ownerToken, map[string]any{"name": "nightly backup", "environmentId": environments[0].ID, "expectedIntervalSeconds": 300, "gracePeriodSeconds": 120})
+	if created.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create heartbeat: %d (%s)", created.StatusCode, bodyString(t, created))
+	}
+	var issued models.IssuedHeartbeatMonitor
+	decode(t, created, &issued)
+	if !strings.HasPrefix(issued.Token, "argus_hb_") || len(issued.Monitor.TokenHash) != 0 {
+		t.Fatalf("unsafe issued heartbeat: %+v", issued)
+	}
+	list := a.do(t, http.MethodGet, fmt.Sprintf("/heartbeat/catalog/%d", project.ID), viewerToken, nil)
+	if list.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("nonmember list: %d (%s)", list.StatusCode, bodyString(t, list))
+	}
+	req := httptest.NewRequest(http.MethodPost, "/heartbeat/ping", strings.NewReader(`{"outcome":"success"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issued.Token)
+	req.Header.Set("Idempotency-Key", "nightly-2026-07-29-0001")
+	resp, err := a.app.Test(req, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusAccepted {
+		t.Fatalf("ping: %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+	_ = resp.Body.Close()
+	requestReplay := httptest.NewRequest(http.MethodPost, "/heartbeat/ping", strings.NewReader(`{"outcome":"success"}`))
+	requestReplay.Header.Set("Content-Type", "application/json")
+	requestReplay.Header.Set("Authorization", "Bearer "+issued.Token)
+	requestReplay.Header.Set("Idempotency-Key", "nightly-2026-07-29-0001")
+	replay, err := a.app.Test(requestReplay, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replay.StatusCode != fiber.StatusAccepted || !strings.Contains(bodyString(t, replay), `"accepted":false`) {
+		t.Fatal("duplicate heartbeat must be accepted without refreshing liveness")
+	}
+	if denied := a.do(t, http.MethodPost, fmt.Sprintf("/heartbeat/revoke/%d/%d", project.ID, issued.Monitor.ID), viewerToken, nil); denied.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("nonmember revoke: %d", denied.StatusCode)
+	} else {
+		_ = denied.Body.Close()
 	}
 }
 

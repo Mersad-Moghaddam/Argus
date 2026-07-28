@@ -94,10 +94,12 @@ func NewFiberAppWithMetricSink(service *application.Service, logStore *observabi
 	routeHandler := api.NewRouteHandler(service)
 	importHandler := api.NewImportHandler(service)
 	telemetryIngestHandler := api.NewTelemetryIngestHandler(service, metricSink)
+	heartbeatHandler := api.NewHeartbeatHandler(service)
 	api.RegisterProjectRoutes(controlGroup, projectHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterRouteRoutes(controlGroup, routeHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterImportRoutes(controlGroup, importHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterTelemetryIngestRoutes(app, telemetryIngestHandler)
+	api.RegisterHeartbeatRoutes(controlGroup, heartbeatHandler, bearerGuard, adapterhttp.CSRFProtect)
 
 	app.Static("/", "./frontend", fiber.Static{
 		Compress:      true,

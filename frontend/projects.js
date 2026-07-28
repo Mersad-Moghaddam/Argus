@@ -97,6 +97,20 @@
     telemetrySecretCopy: document.getElementById('projTelemetrySecretCopy'),
     telemetrySecretClose: document.getElementById('projTelemetrySecretClose'),
 
+    heartbeatModal: document.getElementById('projHeartbeatModal'),
+    heartbeatForm: document.getElementById('projHeartbeatForm'),
+    heartbeatName: document.getElementById('projHeartbeatName'),
+    heartbeatEnvironment: document.getElementById('projHeartbeatEnvironment'),
+    heartbeatInterval: document.getElementById('projHeartbeatInterval'),
+    heartbeatGrace: document.getElementById('projHeartbeatGrace'),
+    heartbeatFormError: document.getElementById('projHeartbeatFormError'),
+    heartbeatCancel: document.getElementById('projHeartbeatCancel'),
+    heartbeatSubmit: document.getElementById('projHeartbeatSubmit'),
+    heartbeatSecretModal: document.getElementById('projHeartbeatSecretModal'),
+    heartbeatSecretValue: document.getElementById('projHeartbeatSecretValue'),
+    heartbeatSecretCopy: document.getElementById('projHeartbeatSecretCopy'),
+    heartbeatSecretClose: document.getElementById('projHeartbeatSecretClose'),
+
     sloModal: document.getElementById('projSLOModal'),
     sloForm: document.getElementById('projSLOForm'),
     sloName: document.getElementById('projSLOName'),
@@ -164,6 +178,7 @@
       telemetryIngress: [],
       telemetryMappings: [],
       slos: [],
+	  heartbeats: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -184,7 +199,7 @@
   let modalReturnFocus = null;
   let confirmAction = null;
   const ONBOARDING_DRAFT_KEY = 'argus_project_onboarding_draft_v1';
-  const projectModals = [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.sloModal, pel.telemetryMappingModal, pel.routeModal, pel.bulkModal, pel.confirmModal];
+  const projectModals = [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.heartbeatModal, pel.heartbeatSecretModal, pel.sloModal, pel.telemetryMappingModal, pel.routeModal, pel.bulkModal, pel.confirmModal];
 
   /* ------------------------------------------------------- auth + api client */
 
@@ -513,7 +528,10 @@
       series: null,
       incidents: [],
       environments: [],
-	  telemetryIngress: [],
+      telemetryIngress: [],
+      telemetryMappings: [],
+      slos: [],
+      heartbeats: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -967,7 +985,7 @@
     }
     try {
       const p = state.project;
-	  const [project, series, incidents, routes, environments, telemetryIngress, telemetryMappings, slos] = await Promise.all([
+	  const [project, series, incidents, routes, environments, telemetryIngress, telemetryMappings, slos, heartbeats] = await Promise.all([
 		apiProjects(`/project/catalog/${id}`),
 		apiProjects(`/route/metrics/${id}${qs({ range: p.range })}`),
 		apiProjects(`/route/incidents/${id}${qs({ limit: 15 })}`),
@@ -976,6 +994,7 @@
 		apiProjects(`/telemetry/ingress/${id}${qs({ limit: 20 })}`),
 		apiProjects(`/telemetry/mappings/${id}`),
 		apiProjects(`/slo/catalog/${id}`),
+		apiProjects(`/heartbeat/catalog/${id}`),
       ]);
       state.project.project = project;
       state.project.series = series;
@@ -986,6 +1005,7 @@
 	  state.project.telemetryIngress = telemetryIngress.items || [];
 	  state.project.telemetryMappings = telemetryMappings.items || [];
 	  state.project.slos = slos.items || [];
+	  state.project.heartbeats = heartbeats.items || [];
       renderCrumbs();
       renderProjectDetail();
     } catch (err) {
@@ -1089,6 +1109,12 @@
         <div class="card-header"><h2>Service-level objectives</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-slo">Create SLO</button>' : ''}</div>
         <p class="hint">Objectives are calculated from project-scoped telemetry. No-data, stale, maintenance, and configuration errors are never presented as healthy.</p>
         ${sloDefinitionsHtml(state.project.slos)}
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Heartbeats</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-heartbeat">Create heartbeat</button>' : ''}</div>
+        <p class="hint">Use a project-bound one-time token for jobs and scheduled workloads. Late and missing runs remain visible; duplicate retries do not refresh liveness.</p>
+        ${heartbeatMonitorsHtml(state.project.heartbeats, canEdit)}
       </section>
 
       <section class="card">
@@ -1301,6 +1327,11 @@
         : 'availability';
       return `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(definition.name)}</span><span class="list-item-meta">${escapeHtml(indicator)} &middot; ${Number(definition.targetPercent).toFixed(3).replace(/\.?(0+)$/, '')}% target &middot; ${windowDays}-day window &middot; ${num(definition.minEvents, '0')} minimum events</span></div><span class="proj-chip is-muted">v${num(definition.version, '1')}</span></div>`;
     }).join('')}</div>`;
+  }
+
+  function heartbeatMonitorsHtml(monitors, canEdit) {
+    if (!monitors.length) return emptyPanel(ICON.route, 'No heartbeat monitors configured', 'Create a heartbeat for a job or scheduled workload, then send its first signed ping.');
+    return `<div class="list">${monitors.map((monitor) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(monitor.name)}</span><span class="list-item-meta">every ${num(Math.round(monitor.expectedIntervalSeconds / 60))} min + ${num(Math.round(monitor.gracePeriodSeconds / 60))} min grace &middot; ${monitor.lastReceivedAt ? `last seen ${escapeHtml(relativeTime(monitor.lastReceivedAt))}` : 'no signal received'}</span></div><div class="row-actions"><span class="badge ${monitor.lastOutcome === 'healthy' ? 'status-up' : monitor.lastOutcome === 'late' ? 'route-degraded' : 'route-unknown'}">${escapeHtml(monitor.lastOutcome || 'missing')}</span>${canEdit && !monitor.revokedAt ? `<button class="danger sm" type="button" data-action="revoke-heartbeat" data-id="${monitor.id}">Revoke</button>` : ''}</div></div>`).join('')}</div>`;
   }
 
   function formatDuration(msTotal) {
@@ -2021,6 +2052,7 @@
     overlay.addEventListener('click', (e) => {
       if (e.target !== overlay) return;
       if (overlay === pel.telemetrySecretModal) closeTelemetrySecret();
+      else if (overlay === pel.heartbeatSecretModal) closeHeartbeatSecret();
       else closeModal(overlay);
     });
   });
@@ -2030,6 +2062,7 @@
     if (!overlay) return;
     if (e.key === 'Escape') {
       if (overlay === pel.telemetrySecretModal) closeTelemetrySecret();
+      else if (overlay === pel.heartbeatSecretModal) closeHeartbeatSecret();
       else closeModal(overlay);
       return;
     }
@@ -2417,6 +2450,40 @@
     }
   });
 
+  function openHeartbeatModal() {
+    pel.heartbeatForm.reset();
+    pel.heartbeatInterval.value = '5';
+    pel.heartbeatGrace.value = '5';
+    pel.heartbeatEnvironment.replaceChildren();
+    state.project.environments.forEach((environment) => {
+      const option = document.createElement('option');
+      option.value = String(environment.id);
+      option.textContent = environment.name;
+      pel.heartbeatEnvironment.append(option);
+    });
+    const unavailable = !state.project.environments.length;
+    pel.heartbeatSubmit.disabled = unavailable;
+    hideFormError(pel.heartbeatFormError);
+    if (unavailable) showFormError(pel.heartbeatFormError, 'Create an environment before creating a heartbeat monitor.');
+    openModal(pel.heartbeatModal);
+  }
+  function closeHeartbeatSecret() { closeModal(pel.heartbeatSecretModal); pel.heartbeatSecretValue.value = ''; }
+  pel.heartbeatCancel.addEventListener('click', () => closeModal(pel.heartbeatModal));
+  pel.heartbeatForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const interval = Number(pel.heartbeatInterval.value); const grace = Number(pel.heartbeatGrace.value);
+    if (!pel.heartbeatName.value.trim() || !Number.isInteger(interval) || interval < 1 || interval > 10080 || !Number.isInteger(grace) || grace < 1 || grace > 10080) {
+      showFormError(pel.heartbeatFormError, 'Provide a name and intervals from 1 minute through 7 days.'); return;
+    }
+    setButtonLoading(pel.heartbeatSubmit, true, 'Creating...'); hideFormError(pel.heartbeatFormError);
+    try {
+      const issued = await apiProjects(`/heartbeat/catalog/${state.project.id}`, { method: 'POST', body: JSON.stringify({ name: pel.heartbeatName.value.trim(), environmentId: Number(pel.heartbeatEnvironment.value), expectedIntervalSeconds: interval * 60, gracePeriodSeconds: grace * 60 }) });
+      closeModal(pel.heartbeatModal); pel.heartbeatSecretValue.value = issued.token; openModal(pel.heartbeatSecretModal); loadProjectDetail({ silent: true });
+    } catch (err) { if (!(err instanceof SessionExpired)) showFormError(pel.heartbeatFormError, err.message); } finally { setButtonLoading(pel.heartbeatSubmit, false); }
+  });
+  pel.heartbeatSecretCopy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(pel.heartbeatSecretValue.value); showToast('Heartbeat token copied.', 'success'); } catch (_) { pel.heartbeatSecretValue.select(); document.execCommand('copy'); showToast('Heartbeat token selected for copying.', 'info'); } });
+  pel.heartbeatSecretClose.addEventListener('click', closeHeartbeatSecret);
+
   pel.projectCancel.addEventListener('click', () => {
     saveOnboardingDraft();
     closeModal(pel.projectModal);
@@ -2803,6 +2870,15 @@
           break;
         case 'create-slo':
           openSLOModal();
+          break;
+        case 'create-heartbeat':
+          openHeartbeatModal();
+          break;
+        case 'revoke-heartbeat':
+          askConfirm({ title: 'Revoke this heartbeat token?', body: 'The job using this token will no longer be able to report runs. Create a replacement heartbeat before changing the job configuration.', confirmLabel: 'Revoke heartbeat' }, async () => {
+            await apiProjects(`/heartbeat/revoke/${state.project.id}/${id}`, { method: 'POST' });
+            showToast('Heartbeat token revoked.', 'success'); loadProjectDetail({ silent: true });
+          });
           break;
         case 'edit-route': {
           const route = state.project.routes.find((r) => r.id === id) || (state.routeDetail.route && state.routeDetail.route.id === id ? state.routeDetail.route : null);

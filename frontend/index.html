@@ -554,6 +554,31 @@
     </div>
 
     <!-- SLO definition create -->
+    <div class="modal-overlay hidden" id="projHeartbeatModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projHeartbeatModalTitle" tabindex="-1">
+        <h3 id="projHeartbeatModalTitle">Create heartbeat monitor</h3>
+        <form id="projHeartbeatForm" class="stack">
+          <div class="field"><label for="projHeartbeatName">Name</label><input id="projHeartbeatName" placeholder="Nightly backup" required maxlength="120" /></div>
+          <div class="field"><label for="projHeartbeatEnvironment">Environment</label><select id="projHeartbeatEnvironment" required></select></div>
+          <div class="field-row"><div class="field"><label for="projHeartbeatInterval">Expected interval (minutes)</label><input id="projHeartbeatInterval" type="number" min="1" max="10080" value="5" required /></div><div class="field"><label for="projHeartbeatGrace">Grace period (minutes)</label><input id="projHeartbeatGrace" type="number" min="1" max="10080" value="5" required /></div></div>
+          <p class="hint">The generated token is shown once. Send it as a Bearer token with a unique Idempotency-Key for each job run; Argus stores no job payload or logs.</p>
+          <p class="proj-form-error hidden" id="projHeartbeatFormError" role="alert"></p>
+          <div class="modal-actions"><button class="secondary" type="button" id="projHeartbeatCancel">Cancel</button><button type="submit" id="projHeartbeatSubmit">Create heartbeat</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="projHeartbeatSecretModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projHeartbeatSecretModalTitle" tabindex="-1">
+        <h3 id="projHeartbeatSecretModalTitle">Save this heartbeat token</h3>
+        <p class="hint">Argus stores only a hash. This token cannot be shown again.</p>
+        <div class="field"><label for="projHeartbeatSecretValue">Bearer token</label><input id="projHeartbeatSecretValue" class="mono" readonly spellcheck="false" /></div>
+        <p class="hint">POST to <code>/heartbeat/ping</code> with this Bearer token and a fresh <code>Idempotency-Key</code> for each run.</p>
+        <div class="modal-actions"><button class="secondary" type="button" id="projHeartbeatSecretCopy">Copy token</button><button type="button" id="projHeartbeatSecretClose">I saved it</button></div>
+      </div>
+    </div>
+
+    <!-- SLO definition create -->
     <div class="modal-overlay hidden" id="projSLOModal">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projSLOModalTitle" tabindex="-1">
         <h3 id="projSLOModalTitle">Create service-level objective</h3>

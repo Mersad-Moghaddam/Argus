@@ -55,7 +55,7 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 		_ = telemetry.Shutdown(ctx)
 		return nil, fmt.Errorf("configure password recovery delivery: %w", err)
 	}
-	appService := application.NewService(store, store, store, store, store, store, logger, store, store, store, recoveryDelivery, store, store, store, store, store, store, store, store)
+	appService := application.NewService(store, store, store, store, store, store, logger, store, store, store, recoveryDelivery, store, store, store, store, store, store, store, store, store)
 	metricSink, err := victoriametrics.NewWriter(cfg.MetricsBackendURL, cfg.MetricsBackendTimeout)
 	if err != nil {
 		_ = db.Close()

@@ -61,3 +61,37 @@ type TelemetryRouteMapping struct {
 	CreatedAt             time.Time `json:"createdAt"`
 	UpdatedAt             time.Time `json:"updatedAt"`
 }
+
+// HeartbeatMonitor is a project-bound push monitor for scheduled workloads.
+// Its opaque token is shown only when it is created or rotated; TokenHash is
+// the sole secret retained by Argus.
+type HeartbeatMonitor struct {
+	ID                      int64      `json:"id"`
+	ProjectID               int64      `json:"projectId"`
+	EnvironmentID           int64      `json:"environmentId"`
+	CreatedByUserID         int64      `json:"createdByUserId"`
+	Name                    string     `json:"name"`
+	TokenPrefix             string     `json:"tokenPrefix"`
+	TokenHash               []byte     `json:"-"`
+	ExpectedIntervalSeconds int        `json:"expectedIntervalSeconds"`
+	GracePeriodSeconds      int        `json:"gracePeriodSeconds"`
+	RevokedAt               *time.Time `json:"revokedAt,omitempty"`
+	LastReceivedAt          *time.Time `json:"lastReceivedAt,omitempty"`
+	LastOutcome             string     `json:"lastOutcome,omitempty"`
+	CreatedAt               time.Time  `json:"createdAt"`
+	UpdatedAt               time.Time  `json:"updatedAt"`
+}
+
+type IssuedHeartbeatMonitor struct {
+	Monitor HeartbeatMonitor `json:"monitor"`
+	Token   string           `json:"token"`
+}
+
+// HeartbeatReceipt is deliberately low-cardinality. Arbitrary job metadata,
+// log text, URLs, and payloads are not persisted by the heartbeat boundary.
+type HeartbeatReceipt struct {
+	MonitorID      int64     `json:"monitorId"`
+	IdempotencyKey string    `json:"-"`
+	Outcome        string    `json:"outcome"`
+	ReceivedAt     time.Time `json:"receivedAt"`
+}

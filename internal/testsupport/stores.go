@@ -43,6 +43,7 @@ type Stores struct {
 	TelemetryIngress     *TelemetryIngressStore
 	TelemetryMappings    *TelemetryMappingStore
 	SLOs                 *SLOStore
+	Heartbeats           *HeartbeatStore
 	Outbox               *OutboxStore
 	Legacy               LegacyStore
 }
@@ -62,8 +63,108 @@ func NewStores() *Stores {
 		TelemetryIngress:     NewTelemetryIngressStore(),
 		TelemetryMappings:    NewTelemetryMappingStore(),
 		SLOs:                 NewSLOStore(),
+		Heartbeats:           NewHeartbeatStore(),
 		Outbox:               &OutboxStore{},
 	}
+}
+
+// ---------------------------------------------------------------- heartbeats
+
+type HeartbeatStore struct {
+	mu       sync.Mutex
+	nextID   int64
+	byID     map[int64]models.HeartbeatMonitor
+	receipts map[int64]map[string]struct{}
+}
+
+func NewHeartbeatStore() *HeartbeatStore {
+	return &HeartbeatStore{byID: map[int64]models.HeartbeatMonitor{}, receipts: map[int64]map[string]struct{}{}}
+}
+func (f *HeartbeatStore) CreateHeartbeatMonitor(_ context.Context, monitor models.HeartbeatMonitor) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	monitor.ID = f.nextID
+	monitor.CreatedAt = time.Now().UTC()
+	monitor.UpdatedAt = monitor.CreatedAt
+	f.byID[monitor.ID] = monitor
+	return monitor.ID, nil
+}
+func (f *HeartbeatStore) ListHeartbeatMonitors(_ context.Context, projectID int64) ([]models.HeartbeatMonitor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := []models.HeartbeatMonitor{}
+	for _, monitor := range f.byID {
+		if monitor.ProjectID == projectID {
+			items = append(items, copyHeartbeatMonitor(monitor))
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID > items[j].ID })
+	return items, nil
+}
+func (f *HeartbeatStore) GetHeartbeatMonitorByID(_ context.Context, id int64) (*models.HeartbeatMonitor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	monitor, ok := f.byID[id]
+	if !ok {
+		return nil, nil
+	}
+	copied := copyHeartbeatMonitor(monitor)
+	return &copied, nil
+}
+func (f *HeartbeatStore) GetHeartbeatMonitorByHash(_ context.Context, hash []byte) (*models.HeartbeatMonitor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, monitor := range f.byID {
+		if string(monitor.TokenHash) == string(hash) {
+			copied := copyHeartbeatMonitor(monitor)
+			return &copied, nil
+		}
+	}
+	return nil, nil
+}
+func (f *HeartbeatStore) RevokeHeartbeatMonitor(_ context.Context, id int64, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	monitor, ok := f.byID[id]
+	if !ok || monitor.RevokedAt != nil {
+		return nil
+	}
+	monitor.RevokedAt = &at
+	monitor.UpdatedAt = at
+	f.byID[id] = monitor
+	return nil
+}
+func (f *HeartbeatStore) TouchHeartbeatMonitor(_ context.Context, id int64, at time.Time, outcome string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	monitor, ok := f.byID[id]
+	if !ok || monitor.RevokedAt != nil {
+		return nil
+	}
+	monitor.LastReceivedAt = &at
+	monitor.LastOutcome = outcome
+	monitor.UpdatedAt = at
+	f.byID[id] = monitor
+	return nil
+}
+func (f *HeartbeatStore) RecordHeartbeatReceipt(_ context.Context, receipt models.HeartbeatReceipt) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	keys := f.receipts[receipt.MonitorID]
+	if keys == nil {
+		keys = map[string]struct{}{}
+		f.receipts[receipt.MonitorID] = keys
+	}
+	if _, exists := keys[receipt.IdempotencyKey]; exists {
+		return false, nil
+	}
+	keys[receipt.IdempotencyKey] = struct{}{}
+	return true, nil
+}
+func copyHeartbeatMonitor(in models.HeartbeatMonitor) models.HeartbeatMonitor {
+	in.TokenHash = append([]byte(nil), in.TokenHash...)
+	return in
 }
 
 // ---------------------------------------------------------------- telemetry credentials

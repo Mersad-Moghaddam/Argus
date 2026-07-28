@@ -313,6 +313,13 @@ What re-importing guarantees:
 - **Telemetry route mappings** — editors can bind a trusted environment and service/deployment
   identity to one catalog route. The mapping never grants a telemetry sender the ability to choose
   a project or route outside the credential's server-side scope.
+- **Heartbeats** — editors create a heartbeat for a selected environment and save the generated
+  `argus_hb_...` token once. Send `POST /heartbeat/ping` with that token in `Authorization: Bearer`
+  and a distinct `Idempotency-Key` for every scheduled run. The optional body only accepts
+  `{ "outcome": "success" }` or `{ "outcome": "failure" }`; Argus never stores arbitrary job
+  metadata. The dashboard exposes healthy, late, missing, and revoked states. Reusing a key is
+  accepted as a retry but cannot extend the monitor's last-seen time; revoking the monitor rejects
+  its token immediately.
 
 ### 9.6 Route health states
 
