@@ -31,6 +31,11 @@ type Config struct {
 	DBMaxIdleConns    int
 	DBConnMaxLifetime time.Duration
 
+	// MetricsBackendURL is internal-only VictoriaMetrics access for sanitized
+	// OTLP samples and server-side SLO queries.
+	MetricsBackendURL     string
+	MetricsBackendTimeout time.Duration
+
 	// Project-based API route monitoring. All values have safe defaults so
 	// no environment changes are required to run the new subsystem.
 	RouteSchedulerInterval time.Duration
@@ -55,6 +60,8 @@ type Config struct {
 func Load() (Config, error) {
 	_ = godotenv.Load()
 	cfg := Config{HTTPAddr: envOrDefault("HTTP_ADDR", ":8080"), MySQLDSN: envOrDefault("MYSQL_DSN", "argus:argus@tcp(localhost:3306)/argus?parseTime=true"), RedisAddr: envOrDefault("REDIS_ADDR", "localhost:6379"), RedisPassword: envOrDefault("REDIS_PASSWORD", ""), SchedulerInterval: mustDuration("SCHEDULER_INTERVAL", 30*time.Second), WorkerConcurrency: mustInt("WORKER_CONCURRENCY", 10), QueueCriticalWeight: mustInt("QUEUE_CRITICAL_WEIGHT", 6), QueueDefaultWeight: mustInt("QUEUE_DEFAULT_WEIGHT", 4), DueCheckBatchSize: mustInt("DUE_CHECK_BATCH_SIZE", 200), APIKey: os.Getenv("API_KEY"), DBMaxOpenConns: mustInt("DB_MAX_OPEN_CONNS", 25), DBMaxIdleConns: mustInt("DB_MAX_IDLE_CONNS", 25), DBConnMaxLifetime: mustDuration("DB_CONN_MAX_LIFETIME", 5*time.Minute)}
+	cfg.MetricsBackendURL = envOrDefault("METRICS_BACKEND_URL", "http://localhost:8428")
+	cfg.MetricsBackendTimeout = mustDuration("METRICS_BACKEND_TIMEOUT", 5*time.Second)
 
 	cfg.RouteSchedulerInterval = mustDuration("ROUTE_SCHEDULER_INTERVAL", 15*time.Second)
 	cfg.RouteBroadPollingEnabled = mustBool("ROUTE_BROAD_POLLING_ENABLED", false)

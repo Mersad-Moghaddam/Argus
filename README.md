@@ -166,6 +166,8 @@ Argus reads environment variables and automatically loads a local `.env` file wh
 | `DB_MAX_OPEN_CONNS` | `25` | Maximum open MySQL connections. |
 | `DB_MAX_IDLE_CONNS` | `25` | Maximum idle MySQL connections. |
 | `DB_CONN_MAX_LIFETIME` | `5m` | Maximum lifetime of a pooled connection. |
+| `METRICS_BACKEND_URL` | `http://localhost:8428` | Internal VictoriaMetrics base URL for sanitized OTLP samples and future SLO queries. |
+| `METRICS_BACKEND_TIMEOUT` | `5s` | Timeout for the VictoriaMetrics import request. |
 
 Example production-oriented `.env`:
 
@@ -243,6 +245,13 @@ and per-minute request ceiling; requests above the ceiling receive `429`.
 Project editors can create the credential from the **Telemetry signals** card;
 the secret dialog is intentionally one-time and clears its displayed value when
 it is dismissed.
+
+Recognized HTTP server-duration histograms are written to VictoriaMetrics as
+the `argus_http_server_request_duration_seconds` histogram family. The bridge
+only allows the server-bound project/environment IDs, service identity,
+deployment environment, HTTP method, normalized route template, status code,
+and bucket boundary as labels. Other metrics remain visible only as bounded
+ingestion diagnostics until Argus has an explicit safe translation for them.
 
 OpenAPI imports resolve only local `$ref` pointers—Argus does not fetch external references. Import commits preserve user-owned monitoring configuration and disable, rather than delete, explicitly selected routes that disappeared from a specification.
 

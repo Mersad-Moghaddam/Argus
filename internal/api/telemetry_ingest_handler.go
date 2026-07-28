@@ -2,14 +2,18 @@ package api
 
 import (
 	"errors"
+	"math"
 	"mime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
 	"argus/internal/application"
+	"argus/internal/domain"
 	"argus/internal/models"
+	"argus/internal/observability"
 
 	"github.com/gofiber/fiber/v2"
 	metricscollector "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
@@ -32,12 +36,17 @@ const (
 // allowlisted receiver diagnostics. It deliberately does not persist raw
 // attributes, measurements, trace identifiers, span names, or payloads.
 type TelemetryIngestHandler struct {
-	service *application.Service
-	limits  *telemetryRateLimiter
+	service    *application.Service
+	limits     *telemetryRateLimiter
+	metricSink observability.MetricSink
 }
 
-func NewTelemetryIngestHandler(service *application.Service) *TelemetryIngestHandler {
-	return &TelemetryIngestHandler{service: service, limits: newTelemetryRateLimiter(4096)}
+func NewTelemetryIngestHandler(service *application.Service, sinks ...observability.MetricSink) *TelemetryIngestHandler {
+	sink := observability.NoopMetricSink()
+	if len(sinks) > 0 && sinks[0] != nil {
+		sink = sinks[0]
+	}
+	return &TelemetryIngestHandler{service: service, limits: newTelemetryRateLimiter(4096), metricSink: sink}
 }
 
 func RegisterTelemetryIngestRoutes(app fiber.Router, h *TelemetryIngestHandler) {
@@ -64,6 +73,13 @@ func (h *TelemetryIngestHandler) ExportMetrics(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
+	samples, err := prometheusHTTPSamples(credential, request.GetResourceMetrics())
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if err = h.metricSink.Write(c.UserContext(), samples); err != nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "telemetry metrics storage is temporarily unavailable"})
+	}
 	if err = h.record(c, credential, records); err != nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "telemetry ingestion is temporarily unavailable"})
 	}
@@ -73,6 +89,198 @@ func (h *TelemetryIngestHandler) ExportMetrics(c *fiber.Ctx) error {
 	}
 	c.Type("application/x-protobuf")
 	return c.Status(fiber.StatusOK).Send(body)
+}
+
+const (
+	argusHTTPDurationMetric        = "argus_http_server_request_duration_seconds"
+	maxPrometheusSamplesPerRequest = 20_000
+)
+
+// prometheusHTTPSamples converts only HTTP server duration histograms into
+// Argus-owned, bounded Prometheus series. Every source label is allowlisted;
+// arbitrary OTLP metric names, attributes and exemplar values are ignored.
+func prometheusHTTPSamples(credential *models.TelemetryCredential, groups []*metricspb.ResourceMetrics) ([]observability.MetricSample, error) {
+	samples := make([]observability.MetricSample, 0)
+	for _, group := range groups {
+		serviceName, deploymentEnvironment := allowedResourceMetadata(group.GetResource())
+		for _, scope := range group.GetScopeMetrics() {
+			for _, metric := range scope.GetMetrics() {
+				if !isHTTPDurationHistogram(metric) {
+					continue
+				}
+				factor, ok := durationUnitFactor(metric.GetUnit())
+				if !ok {
+					continue
+				}
+				for _, point := range metric.GetHistogram().GetDataPoints() {
+					labels, timestamp, ok := safeHTTPMetricLabels(credential, serviceName, deploymentEnvironment, point.GetAttributes(), point.GetTimeUnixNano())
+					if !ok {
+						continue
+					}
+					pointSamples, err := histogramSamples(labels, timestamp, point, factor)
+					if err != nil {
+						return nil, err
+					}
+					samples = append(samples, pointSamples...)
+					if len(samples) > maxPrometheusSamplesPerRequest {
+						return nil, errors.New("too many Prometheus samples after telemetry conversion")
+					}
+				}
+			}
+		}
+	}
+	return samples, nil
+}
+
+func isHTTPDurationHistogram(metric *metricspb.Metric) bool {
+	if metric.GetHistogram() == nil {
+		return false
+	}
+	switch metric.GetName() {
+	case "http.server.request.duration", "http.server.duration", "http.server.request.duration.seconds":
+		return true
+	default:
+		return false
+	}
+}
+
+func durationUnitFactor(unit string) (float64, bool) {
+	switch strings.TrimSpace(unit) {
+	case "", "s", "sec", "seconds":
+		return 1, true
+	case "ms", "millisecond", "milliseconds":
+		return 0.001, true
+	case "us", "µs", "microsecond", "microseconds":
+		return 0.000001, true
+	case "ns", "nanosecond", "nanoseconds":
+		return 0.000000001, true
+	default:
+		return 0, false
+	}
+}
+
+func histogramSamples(labels map[string]string, timestamp time.Time, point *metricspb.HistogramDataPoint, factor float64) ([]observability.MetricSample, error) {
+	if point.GetTimeUnixNano() == 0 || point.GetCount() == 0 || point.GetCount() > math.MaxInt64 {
+		return nil, nil
+	}
+	counts, bounds := point.GetBucketCounts(), point.GetExplicitBounds()
+	if len(counts) != 0 && len(counts) != len(bounds)+1 {
+		return nil, errors.New("invalid OTLP histogram bucket shape")
+	}
+	samples := make([]observability.MetricSample, 0, len(counts)+2)
+	if len(counts) > 0 {
+		var cumulative uint64
+		for index, count := range counts {
+			if math.MaxUint64-cumulative < count {
+				return nil, errors.New("OTLP histogram bucket count overflow")
+			}
+			cumulative += count
+			bucketLabels := copyLabels(labels)
+			if index < len(bounds) {
+				if !finite(bounds[index]) || bounds[index] < 0 {
+					return nil, errors.New("invalid OTLP histogram boundary")
+				}
+				bucketLabels["le"] = strconv.FormatFloat(bounds[index]*factor, 'g', -1, 64)
+			} else {
+				bucketLabels["le"] = "+Inf"
+			}
+			samples = append(samples, observability.MetricSample{Name: argusHTTPDurationMetric + "_bucket", Labels: bucketLabels, Value: float64(cumulative), Timestamp: timestamp})
+		}
+		if cumulative != point.GetCount() {
+			return nil, errors.New("invalid OTLP histogram bucket total")
+		}
+	}
+	samples = append(samples, observability.MetricSample{Name: argusHTTPDurationMetric + "_count", Labels: copyLabels(labels), Value: float64(point.GetCount()), Timestamp: timestamp})
+	if point.Sum != nil && finite(point.GetSum()) && point.GetSum() >= 0 {
+		samples = append(samples, observability.MetricSample{Name: argusHTTPDurationMetric + "_sum", Labels: copyLabels(labels), Value: point.GetSum() * factor, Timestamp: timestamp})
+	}
+	return samples, nil
+}
+
+func safeHTTPMetricLabels(credential *models.TelemetryCredential, serviceName, deploymentEnvironment string, attributes []*commonpb.KeyValue, timeUnixNano uint64) (map[string]string, time.Time, bool) {
+	if timeUnixNano == 0 || timeUnixNano > math.MaxInt64 {
+		return nil, time.Time{}, false
+	}
+	values := map[string]string{}
+	for _, attribute := range attributes {
+		switch attribute.GetKey() {
+		case "http.request.method", "http.method":
+			values["http_method"] = strings.ToUpper(normalizeTelemetryAttribute(attribute.GetValue()))
+		case "http.route":
+			values["http_route"] = safeRouteTemplate(attribute.GetValue())
+		case "http.response.status_code", "http.status_code":
+			values["http_status_code"] = safeStatusCode(attribute.GetValue())
+		}
+	}
+	if values["http_method"] == "" || values["http_route"] == "" || values["http_status_code"] == "" {
+		return nil, time.Time{}, false
+	}
+	labels := map[string]string{
+		"argus_project_id":       strconv.FormatInt(credential.ProjectID, 10),
+		"argus_environment_id":   strconv.FormatInt(credential.EnvironmentID, 10),
+		"service_name":           fallbackTelemetryLabel(serviceName),
+		"deployment_environment": fallbackTelemetryLabel(deploymentEnvironment),
+		"http_method":            values["http_method"], "http_route": values["http_route"], "http_status_code": values["http_status_code"],
+	}
+	return labels, time.Unix(0, int64(timeUnixNano)).UTC(), true
+}
+
+func safeRouteTemplate(value *commonpb.AnyValue) string {
+	raw := strings.TrimSpace(value.GetStringValue())
+	if raw == "" || len(raw) > 1024 || !utf8.ValidString(raw) {
+		return ""
+	}
+	route, err := domain.NormalizeRouteTemplate(raw)
+	if err != nil || route == "" {
+		return ""
+	}
+	for _, segment := range strings.Split(route, "/") {
+		if len(segment) >= 4 {
+			allDigits := true
+			for _, char := range segment {
+				if char < '0' || char > '9' {
+					allDigits = false
+					break
+				}
+			}
+			if allDigits {
+				return ""
+			}
+		}
+	}
+	return route
+}
+
+func safeStatusCode(value *commonpb.AnyValue) string {
+	var status int64
+	if value.GetIntValue() != 0 {
+		status = value.GetIntValue()
+	} else {
+		parsed, err := strconv.ParseInt(normalizeTelemetryAttribute(value), 10, 16)
+		if err != nil {
+			return ""
+		}
+		status = parsed
+	}
+	if status < 100 || status > 599 {
+		return ""
+	}
+	return strconv.FormatInt(status, 10)
+}
+
+func fallbackTelemetryLabel(value string) string {
+	if value == "" {
+		return "unknown"
+	}
+	return value
+}
+func finite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
+func copyLabels(source map[string]string) map[string]string {
+	copy := make(map[string]string, len(source))
+	for key, value := range source {
+		copy[key] = value
+	}
+	return copy
 }
 
 func (h *TelemetryIngestHandler) ExportTraces(c *fiber.Ctx) error {

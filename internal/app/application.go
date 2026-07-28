@@ -10,6 +10,7 @@ import (
 
 	"argus/internal/adapters/outbound/mysql"
 	"argus/internal/adapters/outbound/notifier"
+	"argus/internal/adapters/outbound/victoriametrics"
 	"argus/internal/application"
 	"argus/internal/config"
 	"argus/internal/observability"
@@ -48,7 +49,13 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	}
 	store := mysql.NewStore(db)
 	appService := application.NewService(store, store, store, store, store, store, logger, store, store, store, store, store, store, store, store)
-	httpApp := httpserver.NewFiberApp(appService, logger, cfg.APIKey, cfg.AuthCookieSecure)
+	metricSink, err := victoriametrics.NewWriter(cfg.MetricsBackendURL, cfg.MetricsBackendTimeout)
+	if err != nil {
+		_ = db.Close()
+		_ = telemetry.Shutdown(ctx)
+		return nil, fmt.Errorf("configure metrics backend: %w", err)
+	}
+	httpApp := httpserver.NewFiberAppWithMetricSink(appService, logger, cfg.APIKey, metricSink, cfg.AuthCookieSecure)
 	asynqClient := asynq.NewClient(workerplatform.RedisClientOptions(cfg))
 	routeEvaluator := worker.NewRouteEvaluator(worker.EvaluatorConfig{
 		AllowPrivateTargets: cfg.RouteAllowPrivateTargets,

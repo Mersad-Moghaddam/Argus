@@ -35,6 +35,12 @@ var (
 )
 
 func NewFiberApp(service *application.Service, logStore *observability.LogStore, apiKey string, authCookieSecure ...bool) *fiber.App {
+	return NewFiberAppWithMetricSink(service, logStore, apiKey, observability.NoopMetricSink(), authCookieSecure...)
+}
+
+// NewFiberAppWithMetricSink wires the production telemetry metric sink while
+// keeping tests and non-ingesting callers explicit about their no-op sink.
+func NewFiberAppWithMetricSink(service *application.Service, logStore *observability.LogStore, apiKey string, metricSink observability.MetricSink, authCookieSecure ...bool) *fiber.App {
 	cookieSecure := false
 	if len(authCookieSecure) > 0 {
 		cookieSecure = authCookieSecure[0]
@@ -85,7 +91,7 @@ func NewFiberApp(service *application.Service, logStore *observability.LogStore,
 	projectHandler := api.NewProjectHandler(service)
 	routeHandler := api.NewRouteHandler(service)
 	importHandler := api.NewImportHandler(service)
-	telemetryIngestHandler := api.NewTelemetryIngestHandler(service)
+	telemetryIngestHandler := api.NewTelemetryIngestHandler(service, metricSink)
 	api.RegisterProjectRoutes(apiGroup, projectHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterRouteRoutes(apiGroup, routeHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterImportRoutes(apiGroup, importHandler, bearerGuard, adapterhttp.CSRFProtect)
