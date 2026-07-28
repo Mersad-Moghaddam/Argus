@@ -21,12 +21,18 @@ func TestPrivateAgentLifecycleIsEnvironmentBoundAndRevocable(t *testing.T) {
 	if issued.EnrollmentToken == "" || len(issued.Agent.TokenHash) != 32 {
 		t.Fatalf("unsafe issue: %+v", issued)
 	}
+	if issued.Agent.ExpectedIntervalSeconds != 60 || issued.Agent.Status != "offline" {
+		t.Fatalf("unexpected liveness defaults: %+v", issued.Agent)
+	}
 	if items, err := h.service.ListPrivateAgents(ctx, p.ID); err != nil || len(items) != 1 || items[0].TokenHash != nil {
 		t.Fatalf("list should return one safe agent: %+v %v", items, err)
 	}
 	agent, err := h.service.AuthenticatePrivateAgent(ctx, issued.EnrollmentToken, "1.0.0")
 	if err != nil || agent.ProjectID != p.ID || agent.EnvironmentID != envs[0].ID || agent.LastSeenAt == nil {
 		t.Fatalf("auth: %+v %v", agent, err)
+	}
+	if items, err := h.service.ListPrivateAgents(ctx, p.ID); err != nil || items[0].Status != "healthy" {
+		t.Fatalf("expected healthy agent: %+v %v", items, err)
 	}
 	if err = h.service.RevokePrivateAgent(ctx, p.ID, agent.ID); err != nil {
 		t.Fatal(err)

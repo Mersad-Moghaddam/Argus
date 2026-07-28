@@ -20,8 +20,9 @@ type agentHeartbeatRequest struct {
 }
 
 type privateAgentRequest struct {
-	Name          string `json:"name"`
-	EnvironmentID int64  `json:"environmentId"`
+	Name                    string `json:"name"`
+	EnvironmentID           int64  `json:"environmentId"`
+	ExpectedIntervalSeconds int    `json:"expectedIntervalSeconds"`
 }
 
 func (h *PrivateAgentHandler) Heartbeat(c *fiber.Ctx) error {
@@ -65,7 +66,7 @@ func (h *PrivateAgentHandler) Create(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
 	}
-	issued, err := h.service.CreatePrivateAgent(c.UserContext(), project.ID, currentUserID(c), application.CreatePrivateAgentInput{Name: req.Name, EnvironmentID: req.EnvironmentID})
+	issued, err := h.service.CreatePrivateAgent(c.UserContext(), project.ID, currentUserID(c), application.CreatePrivateAgentInput{Name: req.Name, EnvironmentID: req.EnvironmentID, ExpectedIntervalSeconds: req.ExpectedIntervalSeconds})
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}

@@ -15,9 +15,16 @@ import (
 var ErrPrivateAgentNotFound = errors.New("private agent not found")
 
 type CreatePrivateAgentInput struct {
-	Name          string
-	EnvironmentID int64
+	Name                    string
+	EnvironmentID           int64
+	ExpectedIntervalSeconds int
 }
+
+const (
+	defaultPrivateAgentInterval = time.Minute
+	minPrivateAgentInterval     = 15 * time.Second
+	maxPrivateAgentInterval     = 24 * time.Hour
+)
 
 func (s *Service) CreatePrivateAgent(ctx context.Context, projectID, userID int64, in CreatePrivateAgentInput) (models.IssuedPrivateAgent, error) {
 	if s.privateAgents == nil {
@@ -27,12 +34,19 @@ func (s *Service) CreatePrivateAgent(ctx context.Context, projectID, userID int6
 	if name == "" || len(name) > 120 || in.EnvironmentID <= 0 || !s.projectHasEnvironment(ctx, projectID, in.EnvironmentID) {
 		return models.IssuedPrivateAgent{}, domain.ErrInvalidInput
 	}
+	interval := time.Duration(in.ExpectedIntervalSeconds) * time.Second
+	if interval <= 0 {
+		interval = defaultPrivateAgentInterval
+	}
+	if interval < minPrivateAgentInterval || interval > maxPrivateAgentInterval {
+		return models.IssuedPrivateAgent{}, domain.ErrInvalidInput
+	}
 	raw, err := newPrivateAgentToken()
 	if err != nil {
 		return models.IssuedPrivateAgent{}, err
 	}
 	hash := sha256.Sum256([]byte(raw))
-	a := models.PrivateAgent{ProjectID: projectID, EnvironmentID: in.EnvironmentID, CreatedByUserID: userID, Name: name, TokenPrefix: raw[:18], TokenHash: hash[:]}
+	a := models.PrivateAgent{ProjectID: projectID, EnvironmentID: in.EnvironmentID, CreatedByUserID: userID, Name: name, TokenPrefix: raw[:18], TokenHash: hash[:], ExpectedIntervalSeconds: int(interval.Seconds()), Status: "offline"}
 	id, err := s.privateAgents.CreatePrivateAgent(ctx, a)
 	if err != nil {
 		return models.IssuedPrivateAgent{}, err
@@ -50,8 +64,27 @@ func (s *Service) ListPrivateAgents(ctx context.Context, projectID int64) ([]mod
 		// A hash is not an API credential, but withholding it keeps agent
 		// management responses strictly metadata-only and avoids future misuse.
 		items[i].TokenHash = nil
+		items[i].Status = privateAgentState(items[i], time.Now().UTC())
 	}
 	return items, err
+}
+
+func privateAgentState(agent models.PrivateAgent, now time.Time) string {
+	if agent.RevokedAt != nil {
+		return "revoked"
+	}
+	if agent.LastSeenAt == nil {
+		return "offline"
+	}
+	age := now.Sub(*agent.LastSeenAt)
+	interval := time.Duration(agent.ExpectedIntervalSeconds) * time.Second
+	if age <= interval {
+		return "healthy"
+	}
+	if age <= interval*2 {
+		return "stale"
+	}
+	return "offline"
 }
 
 func (s *Service) RevokePrivateAgent(ctx context.Context, projectID, agentID int64) error {

@@ -8,11 +8,11 @@ import (
 	"argus/internal/models"
 )
 
-const privateAgentColumns = `id,project_id,environment_id,created_by_user_id,name,token_prefix,token_hash,version,last_seen_at,revoked_at,created_at,updated_at`
+const privateAgentColumns = `id,project_id,environment_id,created_by_user_id,name,token_prefix,token_hash,version,expected_interval_seconds,last_seen_at,revoked_at,created_at,updated_at`
 
 func scanPrivateAgent(row interface{ Scan(dest ...any) error }, agent *models.PrivateAgent) error {
 	var seen, revoked sql.NullTime
-	if err := row.Scan(&agent.ID, &agent.ProjectID, &agent.EnvironmentID, &agent.CreatedByUserID, &agent.Name, &agent.TokenPrefix, &agent.TokenHash, &agent.Version, &seen, &revoked, &agent.CreatedAt, &agent.UpdatedAt); err != nil {
+	if err := row.Scan(&agent.ID, &agent.ProjectID, &agent.EnvironmentID, &agent.CreatedByUserID, &agent.Name, &agent.TokenPrefix, &agent.TokenHash, &agent.Version, &agent.ExpectedIntervalSeconds, &seen, &revoked, &agent.CreatedAt, &agent.UpdatedAt); err != nil {
 		return err
 	}
 	if seen.Valid {
@@ -24,7 +24,7 @@ func scanPrivateAgent(row interface{ Scan(dest ...any) error }, agent *models.Pr
 	return nil
 }
 func (r *Store) CreatePrivateAgent(ctx context.Context, agent models.PrivateAgent) (int64, error) {
-	result, err := r.db.ExecContext(ctx, `INSERT INTO private_agents (project_id,environment_id,created_by_user_id,name,token_prefix,token_hash,version) VALUES (?,?,?,?,?,?,?)`, agent.ProjectID, agent.EnvironmentID, agent.CreatedByUserID, agent.Name, agent.TokenPrefix, agent.TokenHash, agent.Version)
+	result, err := r.db.ExecContext(ctx, `INSERT INTO private_agents (project_id,environment_id,created_by_user_id,name,token_prefix,token_hash,version,expected_interval_seconds) VALUES (?,?,?,?,?,?,?,?)`, agent.ProjectID, agent.EnvironmentID, agent.CreatedByUserID, agent.Name, agent.TokenPrefix, agent.TokenHash, agent.Version, agent.ExpectedIntervalSeconds)
 	if err != nil {
 		return 0, err
 	}

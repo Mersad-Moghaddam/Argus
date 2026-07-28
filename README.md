@@ -310,8 +310,11 @@ Project editors manage environment-bound private-agent identities through
 `GET/POST /agent/catalog/:projectId` and
 `POST /agent/revoke/:projectId/:agentId`. Creation returns an opaque
 `argus_agent_...` enrollment token exactly once; Argus persists only its
-SHA-256 hash. Store the raw token in the agent's local secret store and never
-place it in source control or a target URL.
+SHA-256 hash. The creation payload accepts `expectedIntervalSeconds` (default
+60; bounded to 15 seconds through 24 hours). Store the raw token in the
+agent's local secret store and never place it in source control or a target
+URL. Agent listings derive `healthy`, `stale`, `offline`, or `revoked` state
+from that expectation and the most recent successful outbound heartbeat.
 
 An agent reports outbound liveness and its version without exposing its local
 network to the central service:
