@@ -30,7 +30,7 @@
 | SEC-008 | Endpoint limits and server timeouts | HTTP platform | configuration and slow-client tests | Planned | — |
 | Threat model: tenant isolation | Scope every request, job, token, mapping, incident, and export | API, stores, workers | cross-tenant negative tests | Planned | — |
 | Threat model: SSRF | Preserve dial- and redirect-time address validation | worker, synthetic policy | redirect, DNS, IPv4/IPv6 test suite | Planned | — |
-| Migration | Additive, restartable, reversible changes and conflict reporting | migrations, backfill | fresh and legacy migration tests | Planned | — |
+| Migration | Additive, restartable, reversible changes and conflict reporting | migrations, backfill | fresh and legacy migration tests | In progress — additive environment/identity/conflict-ledger schema landed; deterministic backfill and cutover remain | Pending |
 
 ## Delivery roadmap
 
@@ -41,6 +41,7 @@
 | 1 | Identity, authorization, secure global shell | In progress | — |
 | 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | Pending |
 | 2b | Canonical endpoint pipeline and preview API | Complete | Pending |
+| 2c | Additive environment and canonical-identity schema | Complete | Pending |
 | 4a | Hidden-state contract and motion-plan implementation | Complete | Pending |
 | 2 | Environments, endpoint canonicalization, safe synthetic migration | Planned | — |
 | 3 | Telemetry ingestion, metric storage, mapping, SLO and incidents | Planned | — |
@@ -68,3 +69,4 @@
 | 2026-07-28 | 2a | OpenAPI commit now creates disabled catalog entries only. Explicit synthetic activation is restricted to GET/HEAD; POST, PUT, PATCH, DELETE, OPTIONS, and TRACE cannot be enabled. Broad route polling is now opt-in through `ROUTE_BROAD_POLLING_ENABLED`; fresh v2 configuration does not schedule a request per imported operation. Focused application and HTTP API tests passed. | Complete |
 | 2026-07-28 | 4a | Implemented the shared `.hidden`/`[hidden]` rendering contract and all five motion-plan outcomes: static brand mark, instant tab changes, semantic reduced motion, state-driven refresh pulse, and fine-pointer hover behavior for primary controls. Browser accessibility snapshots confirmed that the guest Projects view excludes the hidden authenticated shell and registration-only fields. | Complete |
 | 2026-07-28 | 2b | Added one IDNA-aware structured canonicalizer for manual routes, bulk input, OpenAPI import, updates, and worker fetch-target construction. It returns stable codes/fields, preserves the established trailing-slash identity policy, and is exposed through an editor-only normalization preview endpoint with duplicate, safety, traffic, and daily-request feedback. Domain, application, and API tests passed. | Complete |
+| 2026-07-28 | 2c | Added an ordered, reversible migration for project environments, nullable versioned canonical identity/hash fields, and an operator-visible collision ledger. It retains legacy route fields during the migration window. Storage migration parser tests passed; live MySQL smoke testing remains available through `MYSQL_TEST_DSN`. | Complete |
