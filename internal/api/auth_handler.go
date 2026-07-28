@@ -31,6 +31,8 @@ func NewAuthHandler(service *application.Service, cookieSecure ...bool) *AuthHan
 func RegisterAuthRoutes(app fiber.Router, h *AuthHandler, guards ...fiber.Handler) {
 	app.Post("/identity/register", h.Register)
 	app.Post("/identity/login", h.Login)
+	app.Post("/identity/recovery/request", h.RequestPasswordRecovery)
+	app.Post("/identity/recovery/complete", h.CompletePasswordRecovery)
 	app.Post("/identity/logout", guarded(guards, h.Logout)...)
 	app.Get("/identity/profile", guarded(guards[:1], h.Me)...)
 	app.Get("/identity/sessions", guarded(guards[:1], h.ListSessions)...)
@@ -50,6 +52,13 @@ type loginRequest struct {
 type changePasswordRequest struct {
 	CurrentPassword string `json:"currentPassword"`
 	NewPassword     string `json:"newPassword"`
+}
+type passwordRecoveryRequest struct {
+	Email string `json:"email"`
+}
+type passwordRecoveryCompleteRequest struct {
+	Token       string `json:"token"`
+	NewPassword string `json:"newPassword"`
 }
 
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
@@ -83,6 +92,32 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not start session"})
 	}
 	return c.JSON(fiber.Map{"user": result.User, "token": result.Token})
+}
+
+// RequestPasswordRecovery always returns the same accepted response. This
+// prevents callers from learning whether an email is registered or whether
+// the optional delivery integration is configured.
+func (h *AuthHandler) RequestPasswordRecovery(c *fiber.Ctx) error {
+	var req passwordRecoveryRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	_ = h.service.RequestPasswordRecovery(c.UserContext(), req.Email)
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"message": "If an account is eligible, recovery instructions have been sent."})
+}
+
+func (h *AuthHandler) CompletePasswordRecovery(c *fiber.Ctx) error {
+	var req passwordRecoveryCompleteRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	if err := h.service.CompletePasswordRecovery(c.UserContext(), req.Token, req.NewPassword); err != nil {
+		if errors.Is(err, application.ErrWeakPassword) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid or expired recovery token"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {

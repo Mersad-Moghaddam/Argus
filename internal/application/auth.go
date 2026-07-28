@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,18 +18,20 @@ import (
 )
 
 var (
-	ErrEmailTaken         = errors.New("an account with this email already exists")
-	ErrInvalidCredentials = errors.New("invalid email or password")
-	ErrInvalidEmail       = errors.New("invalid email address")
-	ErrWeakPassword       = errors.New("password must be at least 8 characters")
-	ErrInvalidToken       = errors.New("invalid or expired session token")
-	ErrCurrentPassword    = errors.New("current password is incorrect")
+	ErrEmailTaken           = errors.New("an account with this email already exists")
+	ErrInvalidCredentials   = errors.New("invalid email or password")
+	ErrInvalidEmail         = errors.New("invalid email address")
+	ErrWeakPassword         = errors.New("password must be at least 8 characters")
+	ErrInvalidToken         = errors.New("invalid or expired session token")
+	ErrCurrentPassword      = errors.New("current password is incorrect")
+	ErrInvalidRecoveryToken = errors.New("invalid or expired recovery token")
 )
 
 var emailPattern = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 
 const tokenTTL = 30 * 24 * time.Hour
 const lastUsedWriteInterval = 15 * time.Minute
+const passwordRecoveryTTL = 30 * time.Minute
 
 // AuthResult bundles a user with the freshly-issued bearer token for it.
 type AuthResult struct {
@@ -147,6 +150,72 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, currentRawTo
 		return err
 	}
 	return s.tokens.DeleteTokensByUserExcept(ctx, userID, hashToken(currentRawToken))
+}
+
+// RequestPasswordRecovery is deliberately non-enumerating: it returns nil for
+// unknown addresses and for deployments where delivery is not configured. A
+// configured delivery integration receives the raw one-time token directly;
+// MySQL stores only its hash.
+func (s *Service) RequestPasswordRecovery(ctx context.Context, email string) error {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if !emailPattern.MatchString(email) || s.passwordRecovery == nil || s.recoveryDelivery == nil {
+		return nil
+	}
+	user, err := s.users.GetUserByEmail(ctx, email)
+	if err != nil || user == nil {
+		return err
+	}
+	if err = s.passwordRecovery.DeletePasswordRecoveryTokensByUser(ctx, user.ID); err != nil {
+		return err
+	}
+	raw, err := generateToken()
+	if err != nil {
+		return err
+	}
+	expiresAt := time.Now().UTC().Add(passwordRecoveryTTL)
+	if _, err = s.passwordRecovery.CreatePasswordRecoveryToken(ctx, models.PasswordRecoveryToken{UserID: user.ID, TokenHash: hashToken(raw), ExpiresAt: expiresAt}); err != nil {
+		return err
+	}
+	if err = s.recoveryDelivery.DeliverPasswordRecovery(ctx, user.Email, raw, expiresAt); err != nil {
+		// A failed delivery must not leave a usable credential behind.
+		_ = s.passwordRecovery.DeletePasswordRecoveryTokensByUser(ctx, user.ID)
+		return err
+	}
+	s.logger.Add("info", "auth", "password_recovery_requested", "Password recovery requested", nil, map[string]string{"email": email})
+	return nil
+}
+
+// CompletePasswordRecovery consumes the one-time token before changing the
+// credential, then revokes every browser/API session. Consumption wins races;
+// if the password write fails the caller must request a fresh recovery token.
+func (s *Service) CompletePasswordRecovery(ctx context.Context, rawToken, newPassword string) error {
+	if len(newPassword) < 8 {
+		return ErrWeakPassword
+	}
+	if strings.TrimSpace(rawToken) == "" || s.passwordRecovery == nil {
+		return ErrInvalidRecoveryToken
+	}
+	now := time.Now().UTC()
+	token, err := s.passwordRecovery.ConsumePasswordRecoveryToken(ctx, hashToken(rawToken), now)
+	if err != nil {
+		return err
+	}
+	if token == nil {
+		return ErrInvalidRecoveryToken
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	if err = s.users.UpdateUserPassword(ctx, token.UserID, string(hash)); err != nil {
+		return err
+	}
+	if err = s.tokens.DeleteTokensByUserExcept(ctx, token.UserID, ""); err != nil {
+		return err
+	}
+	_ = s.passwordRecovery.DeletePasswordRecoveryTokensByUser(ctx, token.UserID)
+	s.logger.Add("info", "auth", "password_recovery_completed", "Password recovery completed", nil, map[string]string{"userId": strconv.FormatInt(token.UserID, 10)})
+	return nil
 }
 
 // Authenticate resolves a bearer token to its owning user, rejecting

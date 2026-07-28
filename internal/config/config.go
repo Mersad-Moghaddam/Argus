@@ -26,6 +26,11 @@ type Config struct {
 	// AuthCookieSecure must be enabled behind TLS in production. It remains
 	// configurable so local HTTP development and test clients keep working.
 	AuthCookieSecure bool
+	// RecoveryDeliveryURL is an operator-configured HTTPS webhook that receives
+	// one-time reset tokens for delivery to a verified account address. Empty
+	// disables delivery without exposing a token through the public API.
+	RecoveryDeliveryURL     string
+	RecoveryDeliveryTimeout time.Duration
 
 	DBMaxOpenConns    int
 	DBMaxIdleConns    int
@@ -79,6 +84,8 @@ func Load() (Config, error) {
 	cfg.RouteAllowPrivateTargets = mustBool("ROUTE_ALLOW_PRIVATE_TARGETS", false)
 	cfg.RouteUserAgent = envOrDefault("ROUTE_USER_AGENT", "Argus-Monitor/1.0")
 	cfg.AuthCookieSecure = mustBool("AUTH_COOKIE_SECURE", false)
+	cfg.RecoveryDeliveryURL = os.Getenv("RECOVERY_DELIVERY_URL")
+	cfg.RecoveryDeliveryTimeout = mustDuration("RECOVERY_DELIVERY_TIMEOUT", 5*time.Second)
 
 	dbIndex, err := strconv.Atoi(envOrDefault("REDIS_DB", "0"))
 	if err != nil {

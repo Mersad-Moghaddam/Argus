@@ -101,3 +101,36 @@ func (r *Store) DeleteTokensByUserExcept(ctx context.Context, userID int64, toke
 	_, err := r.db.ExecContext(ctx, `DELETE FROM auth_tokens WHERE user_id=? AND token_hash<>?`, userID, tokenHash)
 	return err
 }
+
+func (r *Store) CreatePasswordRecoveryToken(ctx context.Context, token models.PasswordRecoveryToken) (int64, error) {
+	res, err := r.db.ExecContext(ctx, `INSERT INTO password_recovery_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)`, token.UserID, token.TokenHash, token.ExpiresAt)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (r *Store) ConsumePasswordRecoveryToken(ctx context.Context, tokenHash string, usedAt time.Time) (*models.PasswordRecoveryToken, error) {
+	result, err := r.db.ExecContext(ctx, `UPDATE password_recovery_tokens SET used_at=? WHERE token_hash=? AND used_at IS NULL AND expires_at>?`, usedAt, tokenHash, usedAt)
+	if err != nil {
+		return nil, err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil || changed != 1 {
+		return nil, err
+	}
+	var token models.PasswordRecoveryToken
+	err = r.db.QueryRowContext(ctx, `SELECT id, user_id, token_hash, expires_at, used_at, created_at FROM password_recovery_tokens WHERE token_hash=? LIMIT 1`, tokenHash).Scan(&token.ID, &token.UserID, &token.TokenHash, &token.ExpiresAt, &token.UsedAt, &token.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &token, nil
+}
+
+func (r *Store) DeletePasswordRecoveryTokensByUser(ctx context.Context, userID int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM password_recovery_tokens WHERE user_id=?`, userID)
+	return err
+}

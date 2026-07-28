@@ -38,7 +38,7 @@ func newTestAPI(t *testing.T) *testAPI {
 	t.Helper()
 	s := testsupport.NewStores()
 	service := application.NewService(s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Outbox,
-		observability.NewLogStore(100), s.Users, s.Tokens, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings, s.SLOs)
+		observability.NewLogStore(100), s.Users, s.Tokens, s.PasswordRecovery, s.RecoveryDelivery, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings, s.SLOs)
 	return &testAPI{
 		app:     httpserver.NewFiberApp(service, observability.NewLogStore(100), legacyAPIKey),
 		service: service,
@@ -200,6 +200,33 @@ func TestAuthEndpoints(t *testing.T) {
 		if resp.StatusCode != fiber.StatusUnauthorized {
 			t.Fatalf("expected 401, got %d", resp.StatusCode)
 		}
+	})
+
+	t.Run("password recovery is generic and one time", func(t *testing.T) {
+		a.register(t, "recovery-api@example.com")
+		known := a.do(t, http.MethodPost, "/identity/recovery/request", "", map[string]string{"email": "recovery-api@example.com"})
+		if known.StatusCode != fiber.StatusAccepted {
+			t.Fatalf("known recovery request: %d (%s)", known.StatusCode, bodyString(t, known))
+		}
+		knownBody := bodyString(t, known)
+		unknown := a.do(t, http.MethodPost, "/identity/recovery/request", "", map[string]string{"email": "unknown-recovery@example.com"})
+		if unknown.StatusCode != fiber.StatusAccepted || bodyString(t, unknown) != knownBody {
+			t.Fatal("recovery request must not reveal account existence")
+		}
+		token := a.stores.RecoveryDelivery.Token
+		if token == "" || strings.Contains(knownBody, token) {
+			t.Fatal("recovery token must be delivered out of band only")
+		}
+		complete := a.do(t, http.MethodPost, "/identity/recovery/complete", "", map[string]string{"token": token, "newPassword": "new-recovery-password"})
+		if complete.StatusCode != fiber.StatusNoContent {
+			t.Fatalf("complete recovery: %d (%s)", complete.StatusCode, bodyString(t, complete))
+		}
+		_ = complete.Body.Close()
+		reused := a.do(t, http.MethodPost, "/identity/recovery/complete", "", map[string]string{"token": token, "newPassword": "another-password"})
+		if reused.StatusCode != fiber.StatusBadRequest {
+			t.Fatalf("reused recovery token: %d", reused.StatusCode)
+		}
+		_ = reused.Body.Close()
 	})
 
 	t.Run("logout revokes the token", func(t *testing.T) {

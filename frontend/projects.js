@@ -44,6 +44,17 @@
     authSubmit: document.getElementById('projAuthSubmit'),
     authSwitch: document.getElementById('projAuthSwitch'),
     authSwitchPrompt: document.getElementById('projAuthSwitchPrompt'),
+    forgotPassword: document.getElementById('projForgotPassword'),
+    recoveryGate: document.getElementById('projRecoveryGate'),
+    recoveryRequestForm: document.getElementById('projRecoveryRequestForm'),
+    recoveryEmail: document.getElementById('projRecoveryEmail'),
+    recoveryRequestError: document.getElementById('projRecoveryRequestError'),
+    recoveryRequestSubmit: document.getElementById('projRecoveryRequestSubmit'),
+    recoveryCompleteForm: document.getElementById('projRecoveryCompleteForm'),
+    recoveryToken: document.getElementById('projRecoveryToken'),
+    recoveryNewPassword: document.getElementById('projRecoveryNewPassword'),
+    recoveryCompleteError: document.getElementById('projRecoveryCompleteError'),
+    recoveryCompleteSubmit: document.getElementById('projRecoveryCompleteSubmit'),
     shell: document.getElementById('projShell'),
     crumbs: document.getElementById('projCrumbs'),
     userLabel: document.getElementById('projUserLabel'),
@@ -343,6 +354,7 @@
     const [path, query = ''] = hash.split('?', 2);
     const parts = path.split('/').filter(Boolean);
     if (parts.length === 1 && parts[0] === 'account') return { name: 'account' };
+    if (parts.length === 1 && parts[0] === 'recover') return { name: 'recovery' };
     if (parts.length === 1 && (parts[0] === 'login' || parts[0] === 'register')) {
       return {
         name: 'auth',
@@ -429,6 +441,16 @@
       renderAuthGate(parsed.mode, parsed.returnTo);
       if (getUser()) navigate(parsed.returnTo || '#/projects');
       else if (!state.sessionResolved) restoreSession();
+      return;
+    }
+
+    if (parsed.name === 'recovery') {
+      if (getUser()) {
+        navigate('#/account');
+        return;
+      }
+      renderRecovery();
+      if (!state.sessionResolved) restoreSession();
       return;
     }
 
@@ -530,7 +552,21 @@
     pel.globalAuthPanel.classList.remove('hidden');
     pel.globalAccountPanel.classList.add('hidden');
     pel.authGate.classList.remove('hidden');
+    pel.recoveryGate.classList.add('hidden');
     setAuthMode(mode);
+  }
+
+  function renderRecovery() {
+    stopAutoRefresh();
+    document.body.classList.add('identity-route');
+    pel.globalAuthPanel.classList.remove('hidden');
+    pel.globalAccountPanel.classList.add('hidden');
+    pel.authGate.classList.add('hidden');
+    pel.recoveryGate.classList.remove('hidden');
+    pel.shell.classList.add('hidden');
+    pel.recoveryCompleteForm.classList.add('hidden');
+    hideFormError(pel.recoveryRequestError);
+    hideFormError(pel.recoveryCompleteError);
   }
 
   function setAuthMode(mode) {
@@ -616,6 +652,7 @@
   pel.authSwitch.addEventListener('click', () => {
     navigate(authHash(state.authMode === 'login' ? 'register' : 'login', state.authReturnTo));
   });
+  pel.forgotPassword.addEventListener('click', () => navigate('#/recover'));
 
   pel.authForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -653,6 +690,50 @@
       showFormError(pel.authError, `Network error: ${err.message}`);
     } finally {
       setButtonLoading(pel.authSubmit, false);
+    }
+  });
+
+  pel.recoveryRequestForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.recoveryRequestError);
+    setButtonLoading(pel.recoveryRequestSubmit, true, 'Sending...');
+    try {
+      const response = await fetch('/identity/recovery/request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pel.recoveryEmail.value.trim() }),
+      });
+      if (!response.ok) throw new Error(`Request failed (${response.status})`);
+      pel.recoveryCompleteForm.classList.remove('hidden');
+      pel.recoveryToken.focus();
+      showToast('If recovery is available for that account, instructions have been sent.', 'info');
+    } catch (err) {
+      showFormError(pel.recoveryRequestError, `Network error: ${err.message}`);
+    } finally {
+      setButtonLoading(pel.recoveryRequestSubmit, false);
+    }
+  });
+
+  pel.recoveryCompleteForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.recoveryCompleteError);
+    setButtonLoading(pel.recoveryCompleteSubmit, true, 'Updating...');
+    try {
+      const response = await fetch('/identity/recovery/complete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: pel.recoveryToken.value.trim(), newPassword: pel.recoveryNewPassword.value }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error((payload && payload.error) || `Request failed (${response.status})`);
+      }
+      pel.recoveryToken.value = '';
+      pel.recoveryNewPassword.value = '';
+      showToast('Password updated. Sign in with your new password.', 'success');
+      navigate('#/login');
+    } catch (err) {
+      showFormError(pel.recoveryCompleteError, err.message);
+    } finally {
+      setButtonLoading(pel.recoveryCompleteSubmit, false);
     }
   });
 

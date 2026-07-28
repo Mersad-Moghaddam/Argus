@@ -246,6 +246,50 @@ func TestChangePasswordRequiresCurrentAndStrongPassword(t *testing.T) {
 	}
 }
 
+func TestPasswordRecoveryIsOneTimeAndRevokesSessions(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	registered, err := h.service.Register(ctx, "recover@example.com", "longenoughpassword", "")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	if _, err = h.service.Login(ctx, "recover@example.com", "longenoughpassword"); err != nil {
+		t.Fatalf("second session: %v", err)
+	}
+	if err = h.service.RequestPasswordRecovery(ctx, "recover@example.com"); err != nil {
+		t.Fatalf("request recovery: %v", err)
+	}
+	if h.recovery.Token == "" || h.recovery.Token == "longenoughpassword" {
+		t.Fatal("expected a newly issued opaque recovery token")
+	}
+	if err = h.service.CompletePasswordRecovery(ctx, h.recovery.Token, "new-long-password"); err != nil {
+		t.Fatalf("complete recovery: %v", err)
+	}
+	if _, err = h.service.Authenticate(ctx, registered.Token); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("recovery must revoke prior sessions, got %v", err)
+	}
+	if _, err = h.service.Login(ctx, "recover@example.com", "longenoughpassword"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("old password must fail, got %v", err)
+	}
+	if _, err = h.service.Login(ctx, "recover@example.com", "new-long-password"); err != nil {
+		t.Fatalf("new password must work: %v", err)
+	}
+	if err = h.service.CompletePasswordRecovery(ctx, h.recovery.Token, "another-password"); !errors.Is(err, ErrInvalidRecoveryToken) {
+		t.Fatalf("reused token = %v, want ErrInvalidRecoveryToken", err)
+	}
+}
+
+func TestPasswordRecoveryRequestDoesNotEnumerateAccounts(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	if err := h.service.RequestPasswordRecovery(ctx, "missing@example.com"); err != nil {
+		t.Fatalf("unknown account should receive generic success, got %v", err)
+	}
+	if err := h.service.RequestPasswordRecovery(ctx, "not-an-email"); err != nil {
+		t.Fatalf("invalid address should receive generic success, got %v", err)
+	}
+}
+
 // TestRegisterDefaultsNameToEmail documents the fallback so the UI always has
 // something to show.
 func TestRegisterDefaultsNameToEmail(t *testing.T) {

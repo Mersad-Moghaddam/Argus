@@ -198,7 +198,15 @@ POST /identity/register   { "email": "you@example.com", "password": "at-least-8-
 POST /identity/login      { "email": "you@example.com", "password": "at-least-8-chars" }
 POST /identity/logout     Cookie: argus_session=...; X-CSRF-Token: ...
 GET  /identity/profile    Cookie: argus_session=...
+POST /identity/recovery/request { "email": "you@example.com" }
+POST /identity/recovery/complete { "token": "one-time-token", "newPassword": "new-passphrase" }
 ```
+
+Use **Forgot your password?** from the login page to begin recovery. The request response is
+identical for every address, and Argus stores only a hash of the short-lived, single-use token.
+Recovery delivery is an operator-configured HTTPS webhook (`RECOVERY_DELIVERY_URL`); it must send
+the token to a verified account channel. When no delivery integration is configured, Argus safely
+accepts the request without disclosing whether an account exists, but cannot complete recovery.
 
 Whoever creates a project becomes its **owner**. Roles are `owner` > `editor` > `viewer`:
 

@@ -12,7 +12,7 @@
 
 | Area | Current behavior | Required v2 change | Evidence | Status |
 | --- | --- | --- | --- | --- |
-| Identity | Token-based project auth; legacy API key can fail open | Cookie sessions, CSRF, expiry, revocation, secure defaults | `internal/application/auth.go`, `internal/adapters/inbound/http/middleware.go`, `frontend/projects.js` | In progress — cookie sessions, global routable account access, password change, and session revocation landed; recovery remains |
+| Identity | Token-based project auth; legacy API key can fail open | Cookie sessions, CSRF, expiry, revocation, secure defaults | `internal/application/auth.go`, `internal/adapters/inbound/http/middleware.go`, `frontend/projects.js` | In progress — cookie sessions, global routable account access, password change/session revocation, and secure recovery landed; endpoint-specific limits remain |
 | Product shell | Guest and project controls can coexist | Separate public, identity, and authenticated shells | `frontend/index.html`, `frontend/app.js`, `frontend/projects.js` | In progress — global account, authentication, and isolated project shells landed; authenticated navigation/onboarding remain |
 | Route monitoring | Imported routes can be evaluated as recurring requests | Catalog-only import; explicit budgeted synthetics | `internal/application/imports.go`, `internal/worker/route_processor.go` | Planned |
 | URL handling | Validation is split and partly deferred | One canonical backend pipeline and preview API | `internal/domain/endpoint.go`, route/import services, worker composer | In progress — core canonical pipeline, authenticated preview endpoint, hash migration, and default production environment creation complete; environment management remains |
@@ -43,6 +43,7 @@
 | 1d | Global account actions, routable identity flow, and safe project return | Complete | `507f152` |
 | 1e | Password change with sibling-session revocation | Complete | `88aa6ae` |
 | 1f | Authenticated account screen and session-management UI | Complete | `4332cab` |
+| 1g | Secure password-recovery workflow and delivery boundary | Complete | Current checkpoint |
 | 1 | Identity, authorization, secure global shell | In progress | — |
 | 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | `8ab613a` |
 | 2b | Canonical endpoint pipeline and preview API | Complete | `580e1bb` |
@@ -127,3 +128,4 @@
 | 2026-07-28 | 1d | Moved registration/login out of the private Projects tab into dedicated `#/register` and `#/login` routes, with Register as the primary global guest action. Guest project navigation redirects to login and only accepts a constrained same-origin `#/projects/...` return target; header actions reflect the cookie-authenticated session. JavaScript syntax, diff checks, and focused domain/API tests passed. | Complete |
 | 2026-07-28 | 1e | Added CSRF-protected `POST /api/auth/password`. It verifies the current password, writes a bcrypt hash, retains the current session, and revokes sibling sessions. Focused application, API, and HTTP-platform tests passed. | Complete |
 | 2026-07-28 | 1f | Added authenticated `#/account` with password-change controls, current-session-safe revoke-others action, and an active-session inventory. It uses the cookie/CSRF project client and displays no session token material. JavaScript syntax and diff checks passed. | Complete |
+| 2026-07-29 | 1g | Added a generic password-recovery request/completion flow with 30-minute opaque tokens hashed at rest, atomic single-use consumption, password replacement, and revocation of every existing session. Reset tokens are delivered only through an optional operator-configured HTTPS webhook and never through API responses, browser storage, MySQL plaintext, or logs. Full Go regression tests, API/application recovery tests, JavaScript syntax, and diff checks passed. | Complete |

@@ -33,6 +33,8 @@ import (
 type Stores struct {
 	Users                *UserStore
 	Tokens               *AuthTokenStore
+	PasswordRecovery     *PasswordRecoveryStore
+	RecoveryDelivery     *RecoveryDelivery
 	Projects             *ProjectStore
 	Routes               *RouteStore
 	Incidents            *RouteIncidentStore
@@ -50,6 +52,8 @@ func NewStores() *Stores {
 	return &Stores{
 		Users:                NewUserStore(),
 		Tokens:               NewAuthTokenStore(),
+		PasswordRecovery:     NewPasswordRecoveryStore(),
+		RecoveryDelivery:     &RecoveryDelivery{},
 		Projects:             NewProjectStore(),
 		Routes:               NewRouteStore(),
 		Incidents:            NewRouteIncidentStore(),
@@ -384,6 +388,71 @@ type AuthTokenStore struct {
 	byHash  map[string]models.AuthToken
 	Touched int
 	Deleted []string
+}
+
+// PasswordRecoveryStore is an in-memory atomic consume implementation for
+// recovery workflow tests. It mirrors the MySQL used_at predicate.
+type PasswordRecoveryStore struct {
+	mu     sync.Mutex
+	nextID int64
+	byHash map[string]models.PasswordRecoveryToken
+}
+
+// RecoveryDelivery records reset deliveries without retaining them in a
+// production store. Tests use the raw token to exercise one-time completion.
+type RecoveryDelivery struct {
+	mu        sync.Mutex
+	Email     string
+	Token     string
+	ExpiresAt time.Time
+	Err       error
+}
+
+func (f *RecoveryDelivery) DeliverPasswordRecovery(_ context.Context, email, token string, expiresAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Err != nil {
+		return f.Err
+	}
+	f.Email, f.Token, f.ExpiresAt = email, token, expiresAt
+	return nil
+}
+
+func NewPasswordRecoveryStore() *PasswordRecoveryStore {
+	return &PasswordRecoveryStore{byHash: map[string]models.PasswordRecoveryToken{}}
+}
+
+func (f *PasswordRecoveryStore) CreatePasswordRecoveryToken(_ context.Context, token models.PasswordRecoveryToken) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	token.ID = f.nextID
+	token.CreatedAt = time.Now().UTC()
+	f.byHash[token.TokenHash] = token
+	return token.ID, nil
+}
+
+func (f *PasswordRecoveryStore) ConsumePasswordRecoveryToken(_ context.Context, hash string, usedAt time.Time) (*models.PasswordRecoveryToken, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	token, ok := f.byHash[hash]
+	if !ok || token.UsedAt != nil || !token.ExpiresAt.After(usedAt) {
+		return nil, nil
+	}
+	token.UsedAt = &usedAt
+	f.byHash[hash] = token
+	return &token, nil
+}
+
+func (f *PasswordRecoveryStore) DeletePasswordRecoveryTokensByUser(_ context.Context, userID int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for hash, token := range f.byHash {
+		if token.UserID == userID {
+			delete(f.byHash, hash)
+		}
+	}
+	return nil
 }
 
 func NewAuthTokenStore() *AuthTokenStore {

@@ -25,6 +25,22 @@ type AuthTokenStore interface {
 	DeleteTokensByUserExcept(ctx context.Context, userID int64, tokenHash string) error
 }
 
+// PasswordRecoveryStore persists only hashed, expiry-bound recovery tokens.
+// ConsumePasswordRecoveryToken must be atomic so a token cannot reset an
+// account more than once under concurrent requests.
+type PasswordRecoveryStore interface {
+	CreatePasswordRecoveryToken(ctx context.Context, token models.PasswordRecoveryToken) (int64, error)
+	ConsumePasswordRecoveryToken(ctx context.Context, tokenHash string, usedAt time.Time) (*models.PasswordRecoveryToken, error)
+	DeletePasswordRecoveryTokensByUser(ctx context.Context, userID int64) error
+}
+
+// RecoveryDelivery is deliberately an integration boundary: the application
+// owns one-time-token semantics while deployment owns how a verified account
+// receives its reset link or code.
+type RecoveryDelivery interface {
+	DeliverPasswordRecovery(ctx context.Context, email, token string, expiresAt time.Time) error
+}
+
 // ProjectStore persists projects and their membership/authorization data.
 type ProjectStore interface {
 	CreateProject(ctx context.Context, project models.Project, ownerUserID int64) (int64, error)

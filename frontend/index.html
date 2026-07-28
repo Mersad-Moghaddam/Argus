@@ -113,7 +113,26 @@
                 <span id="projAuthSwitchPrompt">No account yet?</span>
                 <button type="button" class="link-btn" id="projAuthSwitch">Create one</button>
               </p>
+              <button type="button" class="link-btn" id="projForgotPassword">Forgot your password?</button>
             </form>
+          </section>
+        </div>
+        <div id="projRecoveryGate" class="proj-auth-gate hidden">
+          <section class="card proj-auth-card">
+            <div class="card-header"><h2>Recover your account</h2></div>
+            <p class="card-subtitle">Enter your email. If recovery is available for the account, instructions will be delivered securely.</p>
+            <form id="projRecoveryRequestForm" class="stack" autocomplete="on">
+              <div class="field"><label for="projRecoveryEmail">Email</label><input id="projRecoveryEmail" type="email" autocomplete="email" required /></div>
+              <p class="proj-form-error hidden" id="projRecoveryRequestError" role="alert"></p>
+              <button type="submit" id="projRecoveryRequestSubmit">Send recovery instructions</button>
+            </form>
+            <form id="projRecoveryCompleteForm" class="stack hidden" autocomplete="on">
+              <div class="field"><label for="projRecoveryToken">Recovery token</label><input id="projRecoveryToken" autocomplete="one-time-code" required /></div>
+              <div class="field"><label for="projRecoveryNewPassword">New password</label><input id="projRecoveryNewPassword" type="password" autocomplete="new-password" minlength="8" required /></div>
+              <p class="proj-form-error hidden" id="projRecoveryCompleteError" role="alert"></p>
+              <button type="submit" id="projRecoveryCompleteSubmit">Set new password</button>
+            </form>
+            <p class="hint"><a class="btn-link" href="#/login">Back to sign in</a></p>
           </section>
         </div>
       </section>
