@@ -113,12 +113,12 @@ func processRoute(ctx context.Context, db *sql.DB, route legacyRoute, dryRun boo
 		return "invalid", nil
 	}
 	hash := domain.CanonicalHash(normalized.CanonicalIdentity)
-	var conflictingID int64
-	err = db.QueryRowContext(ctx, `SELECT id FROM api_routes WHERE project_id=? AND canonical_hash=? AND canonical_identity=? AND id<>? LIMIT 1`, route.projectID, hash, normalized.CanonicalIdentity, route.id).Scan(&conflictingID)
-	if err != nil && err != sql.ErrNoRows {
-		return "", err
-	}
 	if dryRun {
+		var conflictingID int64
+		err = db.QueryRowContext(ctx, `SELECT id FROM api_routes WHERE project_id=? AND canonical_hash=? AND canonical_identity=? AND id<>? LIMIT 1`, route.projectID, hash, normalized.CanonicalIdentity, route.id).Scan(&conflictingID)
+		if err != nil && err != sql.ErrNoRows {
+			return "", err
+		}
 		if err == nil {
 			return "duplicate", nil
 		}
@@ -130,10 +130,15 @@ func processRoute(ctx context.Context, db *sql.DB, route legacyRoute, dryRun boo
 		return "", err
 	}
 	defer tx.Rollback()
+	var conflictingID int64
+	err = tx.QueryRowContext(ctx, `SELECT id FROM api_routes WHERE project_id=? AND canonical_hash=? AND canonical_identity=? AND id<>? LIMIT 1 FOR UPDATE`, route.projectID, hash, normalized.CanonicalIdentity, route.id).Scan(&conflictingID)
+	if err != nil && err != sql.ErrNoRows {
+		return "", err
+	}
 	if _, err = tx.ExecContext(ctx, `UPDATE api_routes SET canonical_identity=?, canonical_hash=?, canonical_version=1 WHERE id=?`, normalized.CanonicalIdentity, hash, route.id); err != nil {
 		return "", err
 	}
-	if err == nil {
+	if err == sql.ErrNoRows {
 		return "migrated", tx.Commit()
 	}
 	_, err = tx.ExecContext(ctx, `INSERT IGNORE INTO route_canonicalization_conflicts
