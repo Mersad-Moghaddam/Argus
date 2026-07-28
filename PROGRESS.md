@@ -53,6 +53,7 @@
 | 2g | Tenant-scoped project environment API | Complete | `d72bdfd`, `7d6855d`, `f89ea41` |
 | 2h | Project environment visibility in authenticated UI | Complete | `0e04dbe`, `8b945e4`, `f451d18` |
 | 3a | OpenTelemetry provider lifecycle foundation | Complete | Pending |
+| 3b | Low-cardinality HTTP trace instrumentation | Complete | Pending |
 | 4a | Hidden-state contract and motion-plan implementation | Complete | `3a326a1` |
 | 2 | Environments, endpoint canonicalization, safe synthetic migration | Planned | — |
 | 3 | Telemetry ingestion, metric storage, mapping, SLO and incidents | Planned | — |
@@ -88,6 +89,7 @@
 | 2026-07-28 | 2h | The authenticated project view now loads and renders its environment contexts, marking the default and safely showing an unconfigured base URL when appropriate. Editors create environments in an accessible modal with inline validation errors through the secured API. JavaScript syntax and diff checks passed. | Complete |
 | 2026-07-28 | Regression checkpoint | `GOCACHE=/tmp/argus-go-build go test ./...` passed after identity, canonical route, migration, and default-environment changes. | Complete |
 | 2026-07-28 | 3a | Added OpenTelemetry Go API/SDK providers with Argus service resource attributes and deterministic shutdown through the application lifecycle. Exporters and authenticated OTLP ingestion remain subsequent telemetry checkpoints. Focused observability/application/HTTP-platform compilation tests passed. | Complete |
+| 2026-07-28 | 3b | Added Fiber server spans with method, normalized route template, response status, and duration only; raw URLs, query strings, IDs, and user data are not added as telemetry attributes. HTTP-platform and API tests passed. | Complete |
 | 2026-07-28 | 1b | Added authenticated session inventory and revoke-other-sessions controls. Only the current-session marker is returned; token hashes remain server-only. Revocation removes every sibling session while retaining the session used for the request. Application and API tests passed. | Complete |
 | 2026-07-28 | 1c | Added explicit Fiber read/write/idle timeouts, strict CSP and companion browser headers, a 256 KiB authentication/control payload guard, and per-IP authentication throttling with `429` responses. Platform, application, and HTTP API tests passed. | Complete |
 | 2026-07-28 | 1d | Moved registration/login out of the private Projects tab into dedicated `#/register` and `#/login` routes, with Register as the primary global guest action. Guest project navigation redirects to login and only accepts a constrained same-origin `#/projects/...` return target; header actions reflect the cookie-authenticated session. JavaScript syntax, diff checks, and focused domain/API tests passed. | Complete |

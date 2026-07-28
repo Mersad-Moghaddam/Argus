@@ -14,6 +14,9 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/helmet"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // maxUploadBytes bounds request bodies (including multipart OpenAPI/Swagger
@@ -33,6 +36,7 @@ func NewFiberApp(service *application.Service, logStore *observability.LogStore,
 		ReadBufferSize: 8 * 1024,
 	})
 	app.Use(recover.New())
+	app.Use(serverTelemetry)
 	app.Use(helmet.New())
 	app.Use(securityHeaders)
 	app.Use(etag.New())
@@ -87,6 +91,29 @@ func NewFiberApp(service *application.Service, logStore *observability.LogStore,
 		ModifyResponse: requireStaticRevalidation,
 	})
 	return app
+}
+
+func serverTelemetry(c *fiber.Ctx) error {
+	started := time.Now()
+	ctx, span := otel.Tracer("argus/http").Start(c.UserContext(), "HTTP request")
+	c.SetUserContext(ctx)
+	err := c.Next()
+	route := c.Route().Path
+	if route == "" {
+		route = "/unmatched"
+	}
+	status := c.Response().StatusCode()
+	span.SetAttributes(
+		attribute.String("http.request.method", c.Method()),
+		attribute.String("http.route", route),
+		attribute.Int("http.response.status_code", status),
+		attribute.Int64("http.server.duration_ms", time.Since(started).Milliseconds()),
+	)
+	if status >= 500 || err != nil {
+		span.SetStatus(codes.Error, "server request failed")
+	}
+	span.End()
+	return err
 }
 
 func controlBodyLimit(limit int) fiber.Handler {
