@@ -40,6 +40,7 @@ type Service struct {
 	telemetryMappings    ports.TelemetryMappingStore
 	slos                 ports.SLOStore
 	heartbeats           ports.HeartbeatStore
+	privateAgents        ports.PrivateAgentStore
 }
 
 func NewService(monitors ports.MonitorStore, incidents ports.IncidentStore, maintenance ports.MaintenanceStore, statusPages ports.StatusPageStore, alerts ports.AlertChannelStore, outbox ports.OutboxStore, logger *observability.LogStore,
@@ -47,6 +48,8 @@ func NewService(monitors ports.MonitorStore, incidents ports.IncidentStore, main
 	return &Service{monitors: monitors, incidents: incidents, maintenance: maintenance, statusPages: statusPages, alerts: alerts, outbox: outbox, logger: logger,
 		users: users, tokens: tokens, passwordRecovery: passwordRecovery, recoveryDelivery: recoveryDelivery, projects: projects, routes: routes, routeIncidents: routeIncidents, imports: imports, telemetryCredentials: telemetryCredentials, telemetryIngress: telemetryIngress, telemetryMappings: telemetryMappings, slos: slos, heartbeats: heartbeats}
 }
+
+func (s *Service) SetPrivateAgentStore(store ports.PrivateAgentStore) { s.privateAgents = store }
 
 type CreateMonitorInput struct {
 	URL                    string

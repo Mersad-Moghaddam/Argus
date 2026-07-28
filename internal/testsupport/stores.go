@@ -44,6 +44,7 @@ type Stores struct {
 	TelemetryMappings    *TelemetryMappingStore
 	SLOs                 *SLOStore
 	Heartbeats           *HeartbeatStore
+	PrivateAgents        *PrivateAgentStore
 	Outbox               *OutboxStore
 	Legacy               LegacyStore
 }
@@ -64,11 +65,73 @@ func NewStores() *Stores {
 		TelemetryMappings:    NewTelemetryMappingStore(),
 		SLOs:                 NewSLOStore(),
 		Heartbeats:           NewHeartbeatStore(),
+		PrivateAgents:        NewPrivateAgentStore(),
 		Outbox:               &OutboxStore{},
 	}
 }
 
 // ---------------------------------------------------------------- heartbeats
+
+type PrivateAgentStore struct {
+	mu     sync.Mutex
+	nextID int64
+	byID   map[int64]models.PrivateAgent
+}
+
+func NewPrivateAgentStore() *PrivateAgentStore {
+	return &PrivateAgentStore{byID: map[int64]models.PrivateAgent{}}
+}
+func (f *PrivateAgentStore) CreatePrivateAgent(_ context.Context, a models.PrivateAgent) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	a.ID = f.nextID
+	f.byID[a.ID] = a
+	return a.ID, nil
+}
+func (f *PrivateAgentStore) ListPrivateAgents(_ context.Context, pid int64) ([]models.PrivateAgent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []models.PrivateAgent{}
+	for _, a := range f.byID {
+		if a.ProjectID == pid {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+func (f *PrivateAgentStore) GetPrivateAgentByHash(_ context.Context, h []byte) (*models.PrivateAgent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, a := range f.byID {
+		if string(a.TokenHash) == string(h) {
+			x := a
+			return &x, nil
+		}
+	}
+	return nil, nil
+}
+func (f *PrivateAgentStore) RevokePrivateAgent(_ context.Context, id int64, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	a, ok := f.byID[id]
+	if ok && a.RevokedAt == nil {
+		a.RevokedAt = &at
+		f.byID[id] = a
+	}
+	return nil
+}
+func (f *PrivateAgentStore) TouchPrivateAgent(_ context.Context, id int64, v string, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	a, ok := f.byID[id]
+	if ok && a.RevokedAt == nil {
+		a.LastSeenAt = &at
+		a.Version = v
+		f.byID[id] = a
+	}
+	return nil
+}
 
 type HeartbeatStore struct {
 	mu       sync.Mutex

@@ -21,9 +21,10 @@ type testHarness struct {
 
 func newTestHarness() *testHarness {
 	s := testsupport.NewStores()
-	return &testHarness{
-		service: NewService(s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Outbox, observability.NewLogStore(100),
-			s.Users, s.Tokens, s.PasswordRecovery, s.RecoveryDelivery, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings, s.SLOs, s.Heartbeats),
+	service := NewService(s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Outbox, observability.NewLogStore(100),
+		s.Users, s.Tokens, s.PasswordRecovery, s.RecoveryDelivery, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings, s.SLOs, s.Heartbeats)
+	service.SetPrivateAgentStore(s.PrivateAgents)
+	return &testHarness{service: service,
 		users:     s.Users,
 		tokens:    s.Tokens,
 		recovery:  s.RecoveryDelivery,

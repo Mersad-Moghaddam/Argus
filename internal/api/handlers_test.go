@@ -39,6 +39,7 @@ func newTestAPI(t *testing.T) *testAPI {
 	s := testsupport.NewStores()
 	service := application.NewService(s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Outbox,
 		observability.NewLogStore(100), s.Users, s.Tokens, s.PasswordRecovery, s.RecoveryDelivery, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings, s.SLOs, s.Heartbeats)
+	service.SetPrivateAgentStore(s.PrivateAgents)
 	return &testAPI{
 		app:     httpserver.NewFiberApp(service, observability.NewLogStore(100), legacyAPIKey),
 		service: service,
