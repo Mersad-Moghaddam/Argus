@@ -439,6 +439,43 @@ func TestCreateRouteEndpoint(t *testing.T) {
 	})
 }
 
+func TestEndpointNormalizationPreview(t *testing.T) {
+	a := newTestAPI(t)
+	_, token := a.register(t, "normalization-preview@example.com")
+	project := a.createProject(t, token, "Preview")
+	resp := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/endpoint-normalization/preview", project.ID), token, map[string]any{
+		"method": " get ", "baseUrl": "HTTPS://EXAMPLE.COM:443/api/../", "routeTemplate": "v1/%70ets/{petId}", "intervalSeconds": 300,
+	})
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+	var preview struct {
+		Valid     bool                                                      `json:"valid"`
+		Canonical struct{ Method, BaseURL, RouteTemplate, Identity string } `json:"canonical"`
+		Safety    struct {
+			ProbeDefault, Traffic   string
+			EstimatedRequestsPerDay int `json:"estimatedRequestsPerDay"`
+		} `json:"safety"`
+	}
+	decode(t, resp, &preview)
+	if !preview.Valid || preview.Canonical.Method != "GET" || preview.Canonical.BaseURL != "https://example.com" || preview.Canonical.RouteTemplate != "/v1/pets/{petId}" {
+		t.Fatalf("unexpected preview: %+v", preview)
+	}
+	if preview.Safety.ProbeDefault != "disabled" || preview.Safety.Traffic != "catalog_only" || preview.Safety.EstimatedRequestsPerDay != 288 {
+		t.Fatalf("unexpected safety preview: %+v", preview.Safety)
+	}
+
+	bad := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/endpoint-normalization/preview", project.ID), token, map[string]any{"method": "GET", "baseUrl": "example.com", "routeTemplate": "/x"})
+	if bad.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", bad.StatusCode)
+	}
+	var failure struct{ Code, Field string }
+	decode(t, bad, &failure)
+	if failure.Code != "absolute_url_required" || failure.Field != "baseUrl" {
+		t.Fatalf("unexpected validation error: %+v", failure)
+	}
+}
+
 func TestRouteResponsesRedactSecretHeaders(t *testing.T) {
 	a := newTestAPI(t)
 	_, token := a.register(t, "redact@example.com")

@@ -39,9 +39,16 @@ func (s *Service) ValidateImport(ctx context.Context, in ValidateImportInput) (m
 		return models.ImportJob{}, err
 	}
 
-	baseURL := strings.TrimRight(strings.TrimSpace(in.BaseURLOverride), "/")
+	baseURL := strings.TrimSpace(in.BaseURLOverride)
 	if baseURL == "" {
 		baseURL = parsed.BaseURL
+	}
+	if baseURL != "" {
+		var baseErr error
+		baseURL, _, baseErr = domain.NormalizeBaseURL(baseURL)
+		if baseErr != nil {
+			return models.ImportJob{}, baseErr
+		}
 	}
 
 	existingIDs, err := s.routes.ListAllRouteKeys(ctx, in.ProjectID)
@@ -56,8 +63,7 @@ func (s *Service) ValidateImport(ctx context.Context, in ValidateImportInput) (m
 	seenInSpec := map[string]bool{}
 	items := make([]models.ImportRouteItem, 0, len(parsed.Routes))
 	for _, route := range parsed.Routes {
-		method, methodErr := domain.NormalizeMethod(route.Method)
-		path, pathErr := domain.NormalizePath(route.Path)
+		normalized, normalizeErr := domain.NormalizeEndpoint(route.Method, baseURL, route.Path)
 		item := models.ImportRouteItem{
 			Method: route.Method, Path: route.Path, BaseURL: baseURL,
 			OperationID: route.OperationID, Summary: route.Summary, Description: route.Description,
@@ -68,15 +74,15 @@ func (s *Service) ValidateImport(ctx context.Context, in ValidateImportInput) (m
 		item.Responses = marshalOrEmpty(route.Responses)
 		item.Security = marshalOrEmpty(route.Security)
 
-		if methodErr != nil || pathErr != nil {
+		if normalizeErr != nil {
 			item.Action = models.ImportActionSkip
 			item.Conflict = models.ImportConflictNone
 			item.ValidationWarning = "invalid method or path, skipped"
 			items = append(items, item)
 			continue
 		}
-		item.Method, item.Path = method, path
-		item.Key = method + " " + path
+		item.Method, item.Path, item.BaseURL = normalized.Method, normalized.RouteTemplate, normalized.BaseURL
+		item.Key = item.Method + " " + item.Path
 
 		if seenInSpec[item.Key] {
 			item.Action = models.ImportActionSkip

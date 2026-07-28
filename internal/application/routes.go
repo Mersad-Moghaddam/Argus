@@ -103,14 +103,11 @@ func (s *Service) BulkCreateRoutes(ctx context.Context, project models.Project, 
 }
 
 func (s *Service) buildRoute(project models.Project, input RouteInput, source string) (models.APIRoute, error) {
-	method, err := domain.NormalizeMethod(input.Method)
+	normalized, err := domain.NormalizeEndpoint(input.Method, input.BaseURL, input.Path)
 	if err != nil {
 		return models.APIRoute{}, err
 	}
-	path, err := domain.NormalizePath(input.Path)
-	if err != nil {
-		return models.APIRoute{}, err
-	}
+	method, path := normalized.Method, normalized.RouteTemplate
 	// Compatibility callers without an explicit Enabled field retain their
 	// legacy behavior. All v2 browser and import paths send an explicit value;
 	// import is catalog-only and browser defaults are disabled.
@@ -136,7 +133,7 @@ func (s *Service) buildRoute(project models.Project, input RouteInput, source st
 		ProjectID:           project.ID,
 		Method:              method,
 		Path:                path,
-		BaseURL:             strings.TrimRight(strings.TrimSpace(input.BaseURL), "/"),
+		BaseURL:             normalized.BaseURL,
 		Name:                strings.TrimSpace(input.Name),
 		Summary:             strings.TrimSpace(input.Summary),
 		Description:         strings.TrimSpace(input.Description),
@@ -214,7 +211,11 @@ func (s *Service) UpdateRoute(ctx context.Context, existing models.APIRoute, inp
 	}
 	existing.Deprecated = input.Deprecated
 	if input.BaseURL != "" {
-		existing.BaseURL = strings.TrimRight(strings.TrimSpace(input.BaseURL), "/")
+		baseURL, _, err := domain.NormalizeBaseURL(input.BaseURL)
+		if err != nil {
+			return models.APIRoute{}, err
+		}
+		existing.BaseURL = baseURL
 	}
 	if raw := redactUnsafeHeaderKeysNoop(input.Headers); raw != "" || input.Headers == "" {
 		existing.Headers = raw
@@ -278,6 +279,10 @@ func (s *Service) BulkDeleteRoutes(ctx context.Context, projectID int64, ids []i
 
 func (s *Service) GetRoute(ctx context.Context, id int64) (*models.APIRoute, error) {
 	return s.routes.GetRouteByID(ctx, id)
+}
+
+func (s *Service) GetRouteByMethodPath(ctx context.Context, projectID int64, method, path string) (*models.APIRoute, error) {
+	return s.routes.GetRouteByMethodPath(ctx, projectID, method, path)
 }
 
 func (s *Service) ListRoutes(ctx context.Context, filter models.RouteFilter) ([]models.APIRoute, int, error) {

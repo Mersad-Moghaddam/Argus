@@ -15,7 +15,7 @@
 | Identity | Token-based project auth; legacy API key can fail open | Cookie sessions, CSRF, expiry, revocation, secure defaults | `internal/application/auth.go`, `internal/adapters/inbound/http/middleware.go` | Planned |
 | Product shell | Guest and project controls can coexist | Separate public, identity, and authenticated shells | `frontend/index.html`, `frontend/app.js`, `frontend/projects.js` | Planned |
 | Route monitoring | Imported routes can be evaluated as recurring requests | Catalog-only import; explicit budgeted synthetics | `internal/application/imports.go`, `internal/worker/route_processor.go` | Planned |
-| URL handling | Validation is split and partly deferred | One canonical backend pipeline and preview API | `internal/application/routes.go`, `internal/worker/route_evaluator.go` | Planned |
+| URL handling | Validation is split and partly deferred | One canonical backend pipeline and preview API | `internal/domain/endpoint.go`, route/import services, worker composer | In progress — core canonical pipeline and authenticated preview endpoint complete; environment/hash migration remains |
 | Telemetry and SLOs | No telemetry-first pipeline or SLO control plane | Authenticated OTLP, mapping, SLOs, incidents, self-monitoring | New v2 components | Planned |
 | Accessibility and motion | Known hidden-state, dialog, table, refresh, and motion defects | WCAG 2.2 AA and all five motion plans | `animation-plans/`, blueprint §5 | Planned |
 
@@ -25,7 +25,7 @@
 | --- | --- | --- | --- | --- | --- |
 | SEC-001, SEC-003, SEC-004, SEC-009 | Secure sessions; fail-closed auth; abuse limits; coalesced session activity | auth, HTTP middleware, MySQL | lifecycle, CSRF, rate-limit, negative-auth tests | In progress — browser session, CSRF, fail-closed legacy guard, and coalesced last-used writes landed; abuse limits and explicit server limits remain | Pending |
 | SEC-002, SEC-010, SEC-011 | CSP-safe DOM rendering and exclusive accessible UI state | frontend | browser and keyboard tests | Planned | — |
-| SEC-005, SEC-007 | Catalog/synthetic separation and canonical validation | routes, imports, worker | zero-import-traffic and normalization tests | In progress — imports are catalog-only; safe canary method gate and broad-polling migration switch landed; canonical pipeline remains | Pending |
+| SEC-005, SEC-007 | Catalog/synthetic separation and canonical validation | routes, imports, worker | zero-import-traffic and normalization tests | In progress — imports are catalog-only; safe canary method gate, canonical pipeline, and preview endpoint landed; migration remains | Pending |
 | SEC-006 | Encrypted/rotatable synthetic secret references | secrets, migrations | redaction and rotation tests | Planned | — |
 | SEC-008 | Endpoint limits and server timeouts | HTTP platform | configuration and slow-client tests | Planned | — |
 | Threat model: tenant isolation | Scope every request, job, token, mapping, incident, and export | API, stores, workers | cross-tenant negative tests | Planned | — |
@@ -40,6 +40,7 @@
 | 1a | Cookie session and browser credential hardening | Complete | Pending |
 | 1 | Identity, authorization, secure global shell | In progress | — |
 | 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | Pending |
+| 2b | Canonical endpoint pipeline and preview API | Complete | Pending |
 | 4a | Hidden-state contract and motion-plan implementation | Complete | Pending |
 | 2 | Environments, endpoint canonicalization, safe synthetic migration | Planned | — |
 | 3 | Telemetry ingestion, metric storage, mapping, SLO and incidents | Planned | — |
@@ -66,3 +67,4 @@
 | 2026-07-28 | 1a | Opaque server-stored session token is issued as an HttpOnly, SameSite=Lax cookie; browser mutations require a CSRF cookie/header match; project frontend no longer reads or persists bearer credentials; legacy API keys are memory-only and an unset legacy key fails closed. Focused Go and JavaScript syntax checks passed. | Complete |
 | 2026-07-28 | 2a | OpenAPI commit now creates disabled catalog entries only. Explicit synthetic activation is restricted to GET/HEAD; POST, PUT, PATCH, DELETE, OPTIONS, and TRACE cannot be enabled. Broad route polling is now opt-in through `ROUTE_BROAD_POLLING_ENABLED`; fresh v2 configuration does not schedule a request per imported operation. Focused application and HTTP API tests passed. | Complete |
 | 2026-07-28 | 4a | Implemented the shared `.hidden`/`[hidden]` rendering contract and all five motion-plan outcomes: static brand mark, instant tab changes, semantic reduced motion, state-driven refresh pulse, and fine-pointer hover behavior for primary controls. Browser accessibility snapshots confirmed that the guest Projects view excludes the hidden authenticated shell and registration-only fields. | Complete |
+| 2026-07-28 | 2b | Added one IDNA-aware structured canonicalizer for manual routes, bulk input, OpenAPI import, updates, and worker fetch-target construction. It returns stable codes/fields, preserves the established trailing-slash identity policy, and is exposed through an editor-only normalization preview endpoint with duplicate, safety, traffic, and daily-request feedback. Domain, application, and API tests passed. | Complete |

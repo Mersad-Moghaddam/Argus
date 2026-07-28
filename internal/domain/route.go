@@ -110,18 +110,8 @@ func NormalizeMethod(method string) (string, error) {
 	}
 }
 
-// NormalizePath ensures a route path is stored consistently (leading slash,
-// no trailing slash unless root, no surrounding whitespace).
+// NormalizePath remains as a compatibility entry point while delegating to the
+// v2 canonical route-template pipeline.
 func NormalizePath(path string) (string, error) {
-	p := strings.TrimSpace(path)
-	if p == "" {
-		return "", ErrInvalidRoute
-	}
-	if !strings.HasPrefix(p, "/") {
-		p = "/" + p
-	}
-	if len(p) > 1 && strings.HasSuffix(p, "/") {
-		p = strings.TrimRight(p, "/")
-	}
-	return p, nil
+	return NormalizeRouteTemplate(path)
 }

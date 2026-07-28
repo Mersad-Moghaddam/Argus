@@ -141,7 +141,7 @@ func TestBulkCreateRoutesReportsPartialFailures(t *testing.T) {
 		1: domain.ErrInvalidRoute.Error(),
 		3: domain.ErrDuplicateRoute.Error(),
 		4: domain.ErrDuplicateRoute.Error(),
-		5: domain.ErrInvalidRoute.Error(),
+		5: "a route template is required",
 	}
 	for _, f := range result.Failed {
 		want, ok := wantIndexes[f.Index]
