@@ -74,6 +74,25 @@ type RouteCheck struct {
 	CreatedAt     time.Time `json:"createdAt"`
 }
 
+// MetricPoint is one aggregated time bucket of check results, used to draw
+// the dashboard's uptime and latency charts without shipping raw check rows
+// to the browser.
+type MetricPoint struct {
+	BucketStart  time.Time `json:"bucketStart"`
+	Checks       int       `json:"checks"`
+	Failures     int       `json:"failures"`
+	UptimePct    float64   `json:"uptimePct"`
+	AvgLatencyMS int       `json:"avgLatencyMs"`
+	MaxLatencyMS int       `json:"maxLatencyMs"`
+}
+
+// TimeseriesWindow describes a bounded, bucketed query over route_checks.
+type TimeseriesWindow struct {
+	Range         string    `json:"range"`
+	Since         time.Time `json:"since"`
+	BucketSeconds int       `json:"bucketSeconds"`
+}
+
 // RouteIncident tracks an open/resolved failure window for a route.
 type RouteIncident struct {
 	ID                int64      `json:"id"`

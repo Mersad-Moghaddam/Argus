@@ -27,11 +27,11 @@ type createWebsiteRequest struct {
 	StatusPageID           *int64  `json:"statusPageId"`
 }
 
-func RegisterWebsiteRoutes(app fiber.Router, h *WebsiteHandler) {
-	app.Get("/websites", h.ListWebsites)
-	app.Post("/websites", h.CreateWebsite)
-	app.Delete("/websites/:id", h.DeleteWebsite)
-	app.Post("/websites/:id/heartbeat", h.MarkHeartbeat)
+func RegisterWebsiteRoutes(app fiber.Router, h *WebsiteHandler, guards ...fiber.Handler) {
+	app.Get("/websites", guarded(guards, h.ListWebsites)...)
+	app.Post("/websites", guarded(guards, h.CreateWebsite)...)
+	app.Delete("/websites/:id", guarded(guards, h.DeleteWebsite)...)
+	app.Post("/websites/:id/heartbeat", guarded(guards, h.MarkHeartbeat)...)
 }
 
 func (h *WebsiteHandler) CreateWebsite(c *fiber.Ctx) error {

@@ -9,7 +9,11 @@ CREATE TABLE IF NOT EXISTS status_pages (
 
 CREATE TABLE IF NOT EXISTS websites (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    url VARCHAR(2083) NOT NULL UNIQUE,
+    -- Uniqueness is enforced on a 500-character prefix: a full-length index on
+    -- VARCHAR(2083) needs 8332 bytes under utf8mb4, over InnoDB's 3072-byte
+    -- key limit, so CREATE TABLE fails outright on a utf8mb4 server. 500
+    -- characters is far beyond any real monitored URL.
+    url VARCHAR(2083) NOT NULL,
     health_check_url VARCHAR(2083) NULL,
     check_interval_seconds INT NOT NULL,
     monitor_type ENUM('http_status', 'keyword', 'heartbeat', 'tls_expiry') NOT NULL DEFAULT 'http_status',
@@ -25,6 +29,7 @@ CREATE TABLE IF NOT EXISTS websites (
     status_page_id BIGINT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_websites_url (url(500)),
     INDEX idx_websites_next_check_at (next_check_at),
     INDEX idx_websites_status_page_id (status_page_id),
     FOREIGN KEY (status_page_id) REFERENCES status_pages(id) ON DELETE SET NULL

@@ -30,27 +30,30 @@ func NewFiberApp(service *application.Service, logStore *observability.LogStore,
 	apiGroup := app.Group("/api")
 
 	// Legacy single-tenant website/heartbeat/TLS monitoring API: unchanged
-	// behavior, still protected by the global X-API-Key when configured.
-	legacyGroup := apiGroup.Group("", adapterhttp.APIKeyAuth(apiKey))
+	// behavior, still protected by the global X-API-Key when configured. The
+	// guard is attached per route rather than as /api-wide middleware, because
+	// the project API below shares the /api prefix but uses bearer tokens; a
+	// group-level Use would apply the API-key check to both.
+	legacyGuard := adapterhttp.APIKeyAuth(apiKey)
 	websiteHandler := api.NewWebsiteHandler(service)
 	logHandler := api.NewLogHandler(logStore)
 	featureHandler := api.NewFeatureHandler(service)
-	api.RegisterWebsiteRoutes(legacyGroup, websiteHandler)
-	api.RegisterLogRoutes(legacyGroup, logHandler)
-	api.RegisterFeatureRoutes(legacyGroup, featureHandler)
+	api.RegisterWebsiteRoutes(apiGroup, websiteHandler, legacyGuard)
+	api.RegisterLogRoutes(apiGroup, logHandler, legacyGuard)
+	api.RegisterFeatureRoutes(apiGroup, featureHandler, legacyGuard)
 
 	// Project-based API route monitoring: separate bearer-token user auth,
 	// independent from the legacy API key.
 	authHandler := api.NewAuthHandler(service)
 	api.RegisterAuthRoutes(apiGroup, authHandler, adapterhttp.BearerAuth(service))
 
-	projectAPI := apiGroup.Group("", adapterhttp.BearerAuth(service))
+	bearerGuard := adapterhttp.BearerAuth(service)
 	projectHandler := api.NewProjectHandler(service)
 	routeHandler := api.NewRouteHandler(service)
 	importHandler := api.NewImportHandler(service)
-	api.RegisterProjectRoutes(projectAPI, projectHandler)
-	api.RegisterRouteRoutes(projectAPI, routeHandler)
-	api.RegisterImportRoutes(projectAPI, importHandler)
+	api.RegisterProjectRoutes(apiGroup, projectHandler, bearerGuard)
+	api.RegisterRouteRoutes(apiGroup, routeHandler, bearerGuard)
+	api.RegisterImportRoutes(apiGroup, importHandler, bearerGuard)
 
 	app.Static("/", "./frontend", fiber.Static{
 		Compress:      true,

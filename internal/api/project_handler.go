@@ -16,14 +16,14 @@ func NewProjectHandler(service *application.Service) *ProjectHandler {
 	return &ProjectHandler{service: service}
 }
 
-func RegisterProjectRoutes(app fiber.Router, h *ProjectHandler) {
-	app.Get("/projects", h.ListProjects)
-	app.Post("/projects", h.CreateProject)
-	app.Get("/projects/:projectId", h.GetProject)
-	app.Put("/projects/:projectId", h.UpdateProject)
-	app.Post("/projects/:projectId/archive", h.ArchiveProject)
-	app.Post("/projects/:projectId/unarchive", h.UnarchiveProject)
-	app.Delete("/projects/:projectId", h.DeleteProject)
+func RegisterProjectRoutes(app fiber.Router, h *ProjectHandler, guards ...fiber.Handler) {
+	app.Get("/projects", guarded(guards, h.ListProjects)...)
+	app.Post("/projects", guarded(guards, h.CreateProject)...)
+	app.Get("/projects/:projectId", guarded(guards, h.GetProject)...)
+	app.Put("/projects/:projectId", guarded(guards, h.UpdateProject)...)
+	app.Post("/projects/:projectId/archive", guarded(guards, h.ArchiveProject)...)
+	app.Post("/projects/:projectId/unarchive", guarded(guards, h.UnarchiveProject)...)
+	app.Delete("/projects/:projectId", guarded(guards, h.DeleteProject)...)
 }
 
 type projectRequest struct {

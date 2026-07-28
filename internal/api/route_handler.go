@@ -18,18 +18,19 @@ func NewRouteHandler(service *application.Service) *RouteHandler {
 	return &RouteHandler{service: service}
 }
 
-func RegisterRouteRoutes(app fiber.Router, h *RouteHandler) {
-	app.Get("/projects/:projectId/routes", h.ListRoutes)
-	app.Post("/projects/:projectId/routes", h.CreateRoute)
-	app.Post("/projects/:projectId/routes/bulk", h.BulkCreateRoutes)
-	app.Post("/projects/:projectId/routes/bulk-delete", h.BulkDeleteRoutes)
-	app.Get("/projects/:projectId/routes/:routeId", h.GetRoute)
-	app.Put("/projects/:projectId/routes/:routeId", h.UpdateRoute)
-	app.Post("/projects/:projectId/routes/:routeId/enable", h.EnableRoute)
-	app.Post("/projects/:projectId/routes/:routeId/disable", h.DisableRoute)
-	app.Delete("/projects/:projectId/routes/:routeId", h.DeleteRoute)
-	app.Get("/projects/:projectId/routes/:routeId/checks", h.ListRouteChecks)
-	app.Get("/projects/:projectId/incidents", h.ListIncidents)
+func RegisterRouteRoutes(app fiber.Router, h *RouteHandler, guards ...fiber.Handler) {
+	app.Get("/projects/:projectId/routes", guarded(guards, h.ListRoutes)...)
+	app.Post("/projects/:projectId/routes", guarded(guards, h.CreateRoute)...)
+	app.Post("/projects/:projectId/routes/bulk", guarded(guards, h.BulkCreateRoutes)...)
+	app.Post("/projects/:projectId/routes/bulk-delete", guarded(guards, h.BulkDeleteRoutes)...)
+	app.Get("/projects/:projectId/routes/:routeId", guarded(guards, h.GetRoute)...)
+	app.Put("/projects/:projectId/routes/:routeId", guarded(guards, h.UpdateRoute)...)
+	app.Post("/projects/:projectId/routes/:routeId/enable", guarded(guards, h.EnableRoute)...)
+	app.Post("/projects/:projectId/routes/:routeId/disable", guarded(guards, h.DisableRoute)...)
+	app.Delete("/projects/:projectId/routes/:routeId", guarded(guards, h.DeleteRoute)...)
+	app.Get("/projects/:projectId/routes/:routeId/checks", guarded(guards, h.ListRouteChecks)...)
+	app.Get("/projects/:projectId/incidents", guarded(guards, h.ListIncidents)...)
+	app.Get("/projects/:projectId/metrics/timeseries", guarded(guards, h.ListMetricsTimeseries)...)
 }
 
 type routeRequest struct {
@@ -283,6 +284,36 @@ func (h *RouteHandler) ListIncidents(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list incidents"})
 	}
 	return c.JSON(incidents)
+}
+
+// ListMetricsTimeseries serves the bucketed data behind the dashboard's
+// time-range charts. Passing routeId narrows it to a single route.
+func (h *RouteHandler) ListMetricsTimeseries(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleViewer)
+	if !ok {
+		return nil
+	}
+	var routeID *int64
+	if raw := c.Query("routeId"); raw != "" {
+		v, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || v <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid routeId"})
+		}
+		// Confirm the route belongs to this project before exposing its data.
+		route, getErr := h.service.GetRoute(c.UserContext(), v)
+		if getErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load route"})
+		}
+		if route == nil || route.ProjectID != project.ID {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "route not found"})
+		}
+		routeID = &v
+	}
+	series, err := h.service.ListMetricsTimeseries(c.UserContext(), project.ID, routeID, c.Query("range"))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load metrics"})
+	}
+	return c.JSON(series)
 }
 
 func routeErrorResponse(c *fiber.Ctx, err error) error {

@@ -82,6 +82,7 @@
         <button class="tab-btn" id="tab-incidents" data-tab="incidents" role="tab" aria-selected="false" aria-controls="panel-incidents" tabindex="-1">Incidents</button>
         <button class="tab-btn" id="tab-alerts" data-tab="alerts" role="tab" aria-selected="false" aria-controls="panel-alerts" tabindex="-1">Alerts &amp; Status Pages</button>
         <button class="tab-btn" id="tab-logs" data-tab="logs" role="tab" aria-selected="false" aria-controls="panel-logs" tabindex="-1">Ping History</button>
+        <button class="tab-btn" id="tab-projects" data-tab="projects" role="tab" aria-selected="false" aria-controls="panel-projects" tabindex="-1">API Projects</button>
       </nav>
 
       <!-- Overview -->
@@ -284,8 +285,224 @@
         </section>
       </section>
 
+      <!-- API Projects: project-based API route monitoring -->
+      <section class="tab-panel" id="panel-projects" role="tabpanel" aria-labelledby="tab-projects" tabindex="0">
+        <!-- Sign-in gate. The project API uses its own bearer-token accounts,
+             independent from the legacy X-API-Key above. -->
+        <div id="projAuthGate" class="proj-auth-gate hidden">
+          <section class="card proj-auth-card">
+            <div class="card-header">
+              <h2 id="projAuthTitle">Sign in to API Projects</h2>
+            </div>
+            <p class="card-subtitle" id="projAuthIntro">
+              API route monitoring uses its own account, separate from the uptime dashboard's API key.
+            </p>
+            <form id="projAuthForm" class="stack" autocomplete="on">
+              <div class="field" id="projAuthNameField" hidden>
+                <label for="projAuthName">Display name</label>
+                <input id="projAuthName" autocomplete="name" placeholder="Ada Lovelace" />
+              </div>
+              <div class="field">
+                <label for="projAuthEmail">Email</label>
+                <input id="projAuthEmail" type="email" autocomplete="email" placeholder="you@example.com" required />
+              </div>
+              <div class="field">
+                <label for="projAuthPassword">Password</label>
+                <input id="projAuthPassword" type="password" autocomplete="current-password" placeholder="At least 8 characters" required minlength="8" />
+              </div>
+              <p class="proj-form-error hidden" id="projAuthError" role="alert"></p>
+              <button type="submit" id="projAuthSubmit">Sign in</button>
+              <p class="hint">
+                <span id="projAuthSwitchPrompt">No account yet?</span>
+                <button type="button" class="link-btn" id="projAuthSwitch">Create one</button>
+              </p>
+            </form>
+          </section>
+        </div>
+
+        <!-- Authenticated shell. Views are swapped by the hash sub-router. -->
+        <div id="projShell" class="hidden">
+          <div class="proj-topline">
+            <nav class="proj-crumbs" id="projCrumbs" aria-label="Breadcrumb"></nav>
+            <div class="proj-identity">
+              <span class="proj-user" id="projUserLabel"></span>
+              <button class="ghost sm" type="button" id="projSignOut">Sign out</button>
+            </div>
+          </div>
+
+          <div class="proj-view" id="projViewList" aria-live="polite"></div>
+          <div class="proj-view hidden" id="projViewProject" aria-live="polite"></div>
+          <div class="proj-view hidden" id="projViewRoute" aria-live="polite"></div>
+          <div class="proj-view hidden" id="projViewImport" aria-live="polite"></div>
+        </div>
+      </section>
+
       <footer class="app-footer">ARGUS_UPTIME &middot; open source &middot; self-hosted &middot; never sleeps</footer>
     </main>
+
+    <!-- Project create/edit -->
+    <div class="modal-overlay hidden" id="projProjectModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projProjectModalTitle" tabindex="-1">
+        <h3 id="projProjectModalTitle">New project</h3>
+        <form id="projProjectForm" class="stack">
+          <div class="field">
+            <label for="projFormName">Name</label>
+            <input id="projFormName" placeholder="Payments API" required maxlength="255" />
+          </div>
+          <div class="field">
+            <label for="projFormDescription">Description</label>
+            <input id="projFormDescription" placeholder="Public checkout endpoints" maxlength="2000" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="projFormInterval">Check interval (s)</label>
+              <input id="projFormInterval" type="number" min="10" max="86400" value="300" />
+            </div>
+            <div class="field">
+              <label for="projFormTimeout">Timeout (ms)</label>
+              <input id="projFormTimeout" type="number" min="200" max="60000" value="5000" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="projFormRetries">Retries</label>
+              <input id="projFormRetries" type="number" min="0" max="5" value="1" />
+            </div>
+            <div class="field">
+              <label for="projFormFailureThreshold">Failures to open incident</label>
+              <input id="projFormFailureThreshold" type="number" min="1" max="20" value="3" />
+            </div>
+            <div class="field">
+              <label for="projFormRecovery">Successes to resolve</label>
+              <input id="projFormRecovery" type="number" min="1" max="20" value="1" />
+            </div>
+          </div>
+          <p class="hint">These become the defaults for new routes. Existing routes keep their own settings.</p>
+          <p class="proj-form-error hidden" id="projProjectFormError" role="alert"></p>
+          <div class="modal-actions">
+            <button class="secondary" type="button" id="projProjectCancel">Cancel</button>
+            <button type="submit" id="projProjectSubmit">Save project</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Route create/edit -->
+    <div class="modal-overlay hidden" id="projRouteModal">
+      <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="projRouteModalTitle" tabindex="-1">
+        <h3 id="projRouteModalTitle">Add route</h3>
+        <form id="projRouteForm" class="stack">
+          <div class="field-row">
+            <div class="field" style="flex:0 0 8.5rem">
+              <label for="projRouteMethod">Method</label>
+              <select id="projRouteMethod">
+                <option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option>
+                <option>DELETE</option><option>HEAD</option><option>OPTIONS</option><option>TRACE</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="projRoutePath">Path</label>
+              <input id="projRoutePath" placeholder="/v1/pets/{petId}" required maxlength="1024" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="projRouteBaseUrl">Base URL</label>
+            <input id="projRouteBaseUrl" placeholder="https://api.example.com" required maxlength="2083" />
+            <p class="hint">Must be a public http(s) address. Private, loopback and cloud-metadata targets are refused.</p>
+          </div>
+          <div class="field">
+            <label for="projRouteSummary">Summary</label>
+            <input id="projRouteSummary" placeholder="Fetch a single pet" maxlength="1024" />
+          </div>
+          <div class="field">
+            <label for="projRouteTags">Tags (comma separated)</label>
+            <input id="projRouteTags" placeholder="pets, public" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="projRouteInterval">Interval (s)</label>
+              <input id="projRouteInterval" type="number" min="10" max="86400" />
+            </div>
+            <div class="field">
+              <label for="projRouteTimeout">Timeout (ms)</label>
+              <input id="projRouteTimeout" type="number" min="200" max="60000" />
+            </div>
+            <div class="field">
+              <label for="projRouteRetries">Retries</label>
+              <input id="projRouteRetries" type="number" min="0" max="5" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="projRouteExpected">Expected status</label>
+              <input id="projRouteExpected" placeholder="200-399" />
+            </div>
+            <div class="field">
+              <label for="projRouteFailureThreshold">Failures to open</label>
+              <input id="projRouteFailureThreshold" type="number" min="1" max="20" />
+            </div>
+            <div class="field">
+              <label for="projRouteRecovery">Successes to resolve</label>
+              <input id="projRouteRecovery" type="number" min="1" max="20" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="projRouteHeaders">Request headers (JSON object)</label>
+            <textarea id="projRouteHeaders" rows="3" placeholder='{"Authorization":"Bearer ..."}'></textarea>
+            <p class="hint">Secret values are masked whenever they are read back. Leave blank to keep the stored value.</p>
+          </div>
+          <label class="proj-checkbox">
+            <input type="checkbox" id="projRouteDeprecated" />
+            <span>Mark as deprecated</span>
+          </label>
+          <label class="proj-checkbox">
+            <input type="checkbox" id="projRouteEnabled" checked />
+            <span>Monitoring enabled</span>
+          </label>
+          <p class="proj-form-error hidden" id="projRouteFormError" role="alert"></p>
+          <div class="modal-actions">
+            <button class="secondary" type="button" id="projRouteCancel">Cancel</button>
+            <button type="submit" id="projRouteSubmit">Save route</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Bulk route entry -->
+    <div class="modal-overlay hidden" id="projBulkModal">
+      <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="projBulkModalTitle" tabindex="-1">
+        <h3 id="projBulkModalTitle">Bulk add routes</h3>
+        <p class="card-subtitle">One route per line as <code>METHOD /path</code>. Up to 5000 rows per submission.</p>
+        <form id="projBulkForm" class="stack">
+          <div class="field">
+            <label for="projBulkBaseUrl">Base URL for every row</label>
+            <input id="projBulkBaseUrl" placeholder="https://api.example.com" required />
+          </div>
+          <div class="field">
+            <label for="projBulkRoutes">Routes</label>
+            <textarea id="projBulkRoutes" rows="10" placeholder="GET /v1/pets&#10;POST /v1/pets&#10;GET /v1/pets/{petId}" required></textarea>
+          </div>
+          <p class="proj-form-error hidden" id="projBulkFormError" role="alert"></p>
+          <div id="projBulkResult"></div>
+          <div class="modal-actions">
+            <button class="secondary" type="button" id="projBulkCancel">Close</button>
+            <button type="submit" id="projBulkSubmit">Add routes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Generic confirmation for project-scoped destructive actions -->
+    <div class="modal-overlay hidden" id="projConfirmModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projConfirmTitle" aria-describedby="projConfirmBody" tabindex="-1">
+        <h3 id="projConfirmTitle">Are you sure?</h3>
+        <p id="projConfirmBody">This action cannot be undone.</p>
+        <div class="modal-actions">
+          <button class="secondary" id="projConfirmCancel" type="button">Cancel</button>
+          <button class="danger" id="projConfirmOk" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
 
     <div class="modal-overlay hidden" id="confirmModal">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmBody" tabindex="-1">
@@ -299,5 +516,6 @@
     </div>
 
     <script src="/app.js" defer></script>
+    <script src="/projects.js" defer></script>
   </body>
 </html>

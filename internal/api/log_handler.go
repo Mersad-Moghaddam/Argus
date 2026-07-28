@@ -18,8 +18,8 @@ func NewLogHandler(store *observability.LogStore) *LogHandler {
 }
 
 // RegisterLogRoutes sets up log routes.
-func RegisterLogRoutes(app fiber.Router, handler *LogHandler) {
-	app.Get("/logs", handler.ListLogs)
+func RegisterLogRoutes(app fiber.Router, handler *LogHandler, guards ...fiber.Handler) {
+	app.Get("/logs", guarded(guards, handler.ListLogs)...)
 }
 
 // ListLogs returns recent system and worker logs.

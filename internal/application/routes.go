@@ -274,6 +274,53 @@ func (s *Service) ListRouteIncidents(ctx context.Context, projectID int64, route
 	return s.routeIncidents.ListRouteIncidents(ctx, projectID, routeID, state, limit, offset)
 }
 
+// timeseriesRanges are the only windows the API will serve. Fixing the set
+// (rather than accepting an arbitrary since/bucket pair) keeps every chart
+// query bounded and index-friendly, and keeps the bucket count small enough
+// to render without a charting library.
+var timeseriesRanges = map[string]models.TimeseriesWindow{
+	"1h":  {Range: "1h", BucketSeconds: 120},    // 30 buckets
+	"6h":  {Range: "6h", BucketSeconds: 600},    // 36 buckets
+	"24h": {Range: "24h", BucketSeconds: 1800},  // 48 buckets
+	"7d":  {Range: "7d", BucketSeconds: 10800},  // 56 buckets
+	"30d": {Range: "30d", BucketSeconds: 86400}, // 30 buckets
+}
+
+var timeseriesSpans = map[string]time.Duration{
+	"1h": time.Hour, "6h": 6 * time.Hour, "24h": 24 * time.Hour,
+	"7d": 7 * 24 * time.Hour, "30d": 30 * 24 * time.Hour,
+}
+
+// DefaultTimeseriesRange is used when a caller omits or misspells the range.
+const DefaultTimeseriesRange = "24h"
+
+// maxTimeseriesBuckets bounds the response regardless of the requested range.
+const maxTimeseriesBuckets = 500
+
+// MetricsTimeseries is a bounded, bucketed view of a project's (or a single
+// route's) check history, ready for charting.
+type MetricsTimeseries struct {
+	models.TimeseriesWindow
+	Points []models.MetricPoint `json:"points"`
+}
+
+// ListMetricsTimeseries resolves a named range into a bounded bucketed query.
+// Unknown ranges fall back to the default rather than erroring, so a stale
+// bookmark cannot break the dashboard.
+func (s *Service) ListMetricsTimeseries(ctx context.Context, projectID int64, routeID *int64, rangeKey string) (MetricsTimeseries, error) {
+	window, ok := timeseriesRanges[strings.ToLower(strings.TrimSpace(rangeKey))]
+	if !ok {
+		window = timeseriesRanges[DefaultTimeseriesRange]
+	}
+	window.Since = time.Now().UTC().Add(-timeseriesSpans[window.Range])
+
+	points, err := s.routes.AggregateCheckTimeseries(ctx, projectID, routeID, window.Since, window.BucketSeconds, maxTimeseriesBuckets)
+	if err != nil {
+		return MetricsTimeseries{}, err
+	}
+	return MetricsTimeseries{TimeseriesWindow: window, Points: points}, nil
+}
+
 // ProcessRouteCheckResult is the single place that turns a raw check
 // outcome into updated route health state, a persisted check record, and
 // (if warranted) an incident open/resolve transition. It is the route
