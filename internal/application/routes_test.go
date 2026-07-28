@@ -80,6 +80,36 @@ func TestCreateRouteRejectsInvalidAndDuplicate(t *testing.T) {
 	}
 }
 
+func TestRoutesAreCatalogOnlyUntilAnExplicitSafeCanaryIsEnabled(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	project := seedProject(t, h)
+
+	catalog, err := h.service.CreateRoute(ctx, project, RouteInput{Method: "POST", Path: "/orders", BaseURL: "https://api.example.com", Enabled: boolPtr(false)})
+	if err != nil {
+		t.Fatalf("create catalog entry: %v", err)
+	}
+	if catalog.Enabled || catalog.Status != domain.RouteStatusDisabled {
+		t.Fatalf("a catalog entry must not start a synthetic check: %+v", catalog)
+	}
+	if _, err := h.service.CreateRoute(ctx, project, RouteInput{Method: "DELETE", Path: "/orders/{id}", BaseURL: "https://api.example.com", Enabled: boolPtr(true)}); !errors.Is(err, domain.ErrUnsafeSynthetic) {
+		t.Fatalf("expected unsafe enabled method to be rejected, got %v", err)
+	}
+	if err := h.service.SetRouteEnabled(ctx, catalog.ID, true); !errors.Is(err, domain.ErrUnsafeSynthetic) {
+		t.Fatalf("expected unsafe catalog entry enablement to be rejected, got %v", err)
+	}
+
+	safe, err := h.service.CreateRoute(ctx, project, RouteInput{Method: "GET", Path: "/health", BaseURL: "https://api.example.com", Enabled: boolPtr(true)})
+	if err != nil {
+		t.Fatalf("create safe canary: %v", err)
+	}
+	if !safe.Enabled {
+		t.Fatal("explicit GET canary should be enabled")
+	}
+}
+
+func boolPtr(v bool) *bool { return &v }
+
 func TestBulkCreateRoutesReportsPartialFailures(t *testing.T) {
 	h := newTestHarness()
 	ctx := context.Background()

@@ -185,7 +185,9 @@ func (s *Service) CommitImport(ctx context.Context, project models.Project, jobI
 				OperationID: item.OperationID, Summary: item.Summary, Description: item.Description,
 				Tags: item.Tags, Deprecated: item.Deprecated, SpecHash: item.SpecHash,
 				Parameters: item.Parameters, RequestBody: item.RequestBody, Responses: item.Responses, Security: item.Security,
-				Source: "import", Enabled: true,
+				// OpenAPI is a catalog source. Importing it must not schedule a
+				// request, regardless of operation method or prior defaults.
+				Source: "import", Enabled: false,
 				MonitorIntervalSecs: project.DefaultIntervalSeconds, TimeoutMS: project.DefaultTimeoutMS, Retries: project.DefaultRetries,
 				ExpectedStatusRange: "200-399", FailureThreshold: project.FailureThreshold, RecoverySuccesses: project.RecoverySuccessThreshold,
 				Status: domain.RouteStatusUnknown, NextCheckAt: time.Now().UTC(),

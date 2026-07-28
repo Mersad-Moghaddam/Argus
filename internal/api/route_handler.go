@@ -207,7 +207,7 @@ func (h *RouteHandler) setEnabled(c *fiber.Ctx, enabled bool) error {
 		return sendErr
 	}
 	if err := h.service.SetRouteEnabled(c.UserContext(), route.ID, enabled); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update route"})
+		return routeErrorResponse(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
@@ -318,7 +318,7 @@ func (h *RouteHandler) ListMetricsTimeseries(c *fiber.Ctx) error {
 
 func routeErrorResponse(c *fiber.Ctx, err error) error {
 	switch {
-	case errors.Is(err, domain.ErrInvalidRoute), errors.Is(err, domain.ErrDuplicateRoute), errors.Is(err, domain.ErrInvalidInput):
+	case errors.Is(err, domain.ErrInvalidRoute), errors.Is(err, domain.ErrDuplicateRoute), errors.Is(err, domain.ErrInvalidInput), errors.Is(err, domain.ErrUnsafeSynthetic):
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	default:
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "route operation failed"})

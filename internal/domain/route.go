@@ -27,6 +27,7 @@ var (
 	ErrInvalidRoute       = errors.New("invalid route definition")
 	ErrImportJobNotFound  = errors.New("import job not found")
 	ErrImportJobCommitted = errors.New("import job already committed")
+	ErrUnsafeSynthetic    = errors.New("only GET and HEAD can be enabled as synthetic checks")
 )
 
 // DefaultFailureThreshold is the number of consecutive failures required to
@@ -48,6 +49,11 @@ type RouteHealthInput struct {
 	ConsecutiveSuccesses int
 	FailureThreshold     int
 }
+
+// IsSafeSyntheticMethod is deliberately narrower than the HTTP safe-method
+// definition. OPTIONS can still have target-specific side effects, so the
+// product starts with only the predictable read-only canary methods.
+func IsSafeSyntheticMethod(method string) bool { return method == "GET" || method == "HEAD" }
 
 // ComputeRouteStatus is the single source of truth for route health state.
 func ComputeRouteStatus(in RouteHealthInput) string {

@@ -111,9 +111,15 @@ func (s *Service) buildRoute(project models.Project, input RouteInput, source st
 	if err != nil {
 		return models.APIRoute{}, err
 	}
+	// Compatibility callers without an explicit Enabled field retain their
+	// legacy behavior. All v2 browser and import paths send an explicit value;
+	// import is catalog-only and browser defaults are disabled.
 	enabled := true
 	if input.Enabled != nil {
 		enabled = *input.Enabled
+	}
+	if input.Enabled != nil && enabled && !domain.IsSafeSyntheticMethod(method) {
+		return models.APIRoute{}, domain.ErrUnsafeSynthetic
 	}
 	interval := orDefault(input.MonitorIntervalSecs, project.DefaultIntervalSeconds, 10, 86400)
 	timeout := orDefault(input.TimeoutMS, project.DefaultTimeoutMS, 200, 60000)
@@ -247,6 +253,18 @@ func lastStatusLabel(statusCode int, failureReason string) string {
 }
 
 func (s *Service) SetRouteEnabled(ctx context.Context, id int64, enabled bool) error {
+	if enabled {
+		route, err := s.routes.GetRouteByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		if route == nil {
+			return domain.ErrRouteNotFound
+		}
+		if !domain.IsSafeSyntheticMethod(route.Method) {
+			return domain.ErrUnsafeSynthetic
+		}
+	}
 	return s.routes.SetRouteEnabled(ctx, id, enabled)
 }
 

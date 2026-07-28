@@ -25,7 +25,7 @@
 | --- | --- | --- | --- | --- | --- |
 | SEC-001, SEC-003, SEC-004, SEC-009 | Secure sessions; fail-closed auth; abuse limits; coalesced session activity | auth, HTTP middleware, MySQL | lifecycle, CSRF, rate-limit, negative-auth tests | In progress — browser session, CSRF, fail-closed legacy guard, and coalesced last-used writes landed; abuse limits and explicit server limits remain | Pending |
 | SEC-002, SEC-010, SEC-011 | CSP-safe DOM rendering and exclusive accessible UI state | frontend | browser and keyboard tests | Planned | — |
-| SEC-005, SEC-007 | Catalog/synthetic separation and canonical validation | routes, imports, worker | zero-import-traffic and normalization tests | Planned | — |
+| SEC-005, SEC-007 | Catalog/synthetic separation and canonical validation | routes, imports, worker | zero-import-traffic and normalization tests | In progress — imports are catalog-only; safe canary method gate and broad-polling migration switch landed; canonical pipeline remains | Pending |
 | SEC-006 | Encrypted/rotatable synthetic secret references | secrets, migrations | redaction and rotation tests | Planned | — |
 | SEC-008 | Endpoint limits and server timeouts | HTTP platform | configuration and slow-client tests | Planned | — |
 | Threat model: tenant isolation | Scope every request, job, token, mapping, incident, and export | API, stores, workers | cross-tenant negative tests | Planned | — |
@@ -39,6 +39,7 @@
 | 0 | Branch, baseline evidence, architecture/traceability controls | In progress | — |
 | 1a | Cookie session and browser credential hardening | Complete | Pending |
 | 1 | Identity, authorization, secure global shell | In progress | — |
+| 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | Pending |
 | 2 | Environments, endpoint canonicalization, safe synthetic migration | Planned | — |
 | 3 | Telemetry ingestion, metric storage, mapping, SLO and incidents | Planned | — |
 | 4 | Onboarding and all management views; accessibility and motion | Planned | — |
@@ -62,3 +63,4 @@
 | --- | --- | --- | --- |
 | 2026-07-28 | 0 | `go test ./...` and `go test -race ./...` passed; `govulncheck ./...` passed; `git diff --check` passed. `staticcheck ./...` was not runnable through the mandated RTK wrapper (`./... matched no packages`) and remains a CI verification item. | Complete |
 | 2026-07-28 | 1a | Opaque server-stored session token is issued as an HttpOnly, SameSite=Lax cookie; browser mutations require a CSRF cookie/header match; project frontend no longer reads or persists bearer credentials; legacy API keys are memory-only and an unset legacy key fails closed. Focused Go and JavaScript syntax checks passed. | Complete |
+| 2026-07-28 | 2a | OpenAPI commit now creates disabled catalog entries only. Explicit synthetic activation is restricted to GET/HEAD; POST, PUT, PATCH, DELETE, OPTIONS, and TRACE cannot be enabled. Broad route polling is now opt-in through `ROUTE_BROAD_POLLING_ENABLED`; fresh v2 configuration does not schedule a request per imported operation. Focused application and HTTP API tests passed. | Complete |
