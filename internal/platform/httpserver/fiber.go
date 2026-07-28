@@ -125,7 +125,7 @@ func serverTelemetry(c *fiber.Ctx) error {
 	)
 	initHTTPMetrics()
 	httpRequestCount(ctx, 1, attrs)
-	httpDuration(ctx, float64(time.Since(started).Milliseconds()), attrs)
+	httpDuration(ctx, time.Since(started).Seconds(), attrs)
 	if status >= 500 || err != nil {
 		span.SetStatus(codes.Error, "server request failed")
 	}
@@ -137,7 +137,7 @@ func initHTTPMetrics() {
 	httpTelemetryOnce.Do(func() {
 		meter := otel.Meter("argus/http")
 		count, _ := meter.Int64Counter("argus.http.server.requests")
-		duration, _ := meter.Float64Histogram("argus.http.server.duration")
+		duration, _ := meter.Float64Histogram("argus.http.server.duration", metric.WithUnit("s"))
 		httpRequestCount = count.Add
 		httpDuration = duration.Record
 	})
