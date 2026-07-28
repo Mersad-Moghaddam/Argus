@@ -23,11 +23,11 @@
 
 | Contract | Required outcome | Owner area | Acceptance evidence | Status | Commit |
 | --- | --- | --- | --- | --- | --- |
-| SEC-001, SEC-003, SEC-004, SEC-009 | Secure sessions; fail-closed auth; abuse limits; coalesced session activity | auth, HTTP middleware, MySQL | lifecycle, CSRF, rate-limit, negative-auth tests | In progress — browser session, CSRF, session inventory/revoke-others, fail-closed legacy guard, and coalesced last-used writes landed; abuse limits and explicit server limits remain | Pending |
+| SEC-001, SEC-003, SEC-004, SEC-009 | Secure sessions; fail-closed auth; abuse limits; coalesced session activity | auth, HTTP middleware, MySQL | lifecycle, CSRF, rate-limit, negative-auth tests | In progress — browser session, CSRF, session inventory/revoke-others, rate limit, fail-closed legacy guard, and coalesced last-used writes landed; endpoint-specific limits still expand beyond auth | Pending |
 | SEC-002, SEC-010, SEC-011 | CSP-safe DOM rendering and exclusive accessible UI state | frontend | browser and keyboard tests | Planned | — |
 | SEC-005, SEC-007 | Catalog/synthetic separation and canonical validation | routes, imports, worker | zero-import-traffic and normalization tests | In progress — imports are catalog-only; safe canary method gate, canonical pipeline, and preview endpoint landed; migration remains | Pending |
 | SEC-006 | Encrypted/rotatable synthetic secret references | secrets, migrations | redaction and rotation tests | Planned | — |
-| SEC-008 | Endpoint limits and server timeouts | HTTP platform | configuration and slow-client tests | Planned | — |
+| SEC-008 | Endpoint limits and server timeouts | HTTP platform | configuration and slow-client tests | In progress — explicit server timeouts, security headers, and auth control-payload limit landed; import-specific limits and slow-client integration evidence remain | Pending |
 | Threat model: tenant isolation | Scope every request, job, token, mapping, incident, and export | API, stores, workers | cross-tenant negative tests | Planned | — |
 | Threat model: SSRF | Preserve dial- and redirect-time address validation | worker, synthetic policy | redirect, DNS, IPv4/IPv6 test suite | Planned | — |
 | Migration | Additive, restartable, reversible changes and conflict reporting | migrations, backfill | fresh and legacy migration tests | In progress — additive environment/identity/conflict-ledger schema landed; deterministic backfill and cutover remain | Pending |
@@ -39,6 +39,7 @@
 | 0 | Branch, baseline evidence, architecture/traceability controls | In progress | — |
 | 1a | Cookie session and browser credential hardening | Complete | Pending |
 | 1b | Account session inventory and revoke-other-sessions controls | Complete | Pending |
+| 1c | HTTP timeout, browser-header, and authentication-abuse baseline | Complete | Pending |
 | 1 | Identity, authorization, secure global shell | In progress | — |
 | 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | Pending |
 | 2b | Canonical endpoint pipeline and preview API | Complete | Pending |
@@ -72,3 +73,4 @@
 | 2026-07-28 | 2b | Added one IDNA-aware structured canonicalizer for manual routes, bulk input, OpenAPI import, updates, and worker fetch-target construction. It returns stable codes/fields, preserves the established trailing-slash identity policy, and is exposed through an editor-only normalization preview endpoint with duplicate, safety, traffic, and daily-request feedback. Domain, application, and API tests passed. | Complete |
 | 2026-07-28 | 2c | Added an ordered, reversible migration for project environments, nullable versioned canonical identity/hash fields, and an operator-visible collision ledger. It retains legacy route fields during the migration window. Storage migration parser tests passed; live MySQL smoke testing remains available through `MYSQL_TEST_DSN`. | Complete |
 | 2026-07-28 | 1b | Added authenticated session inventory and revoke-other-sessions controls. Only the current-session marker is returned; token hashes remain server-only. Revocation removes every sibling session while retaining the session used for the request. Application and API tests passed. | Complete |
+| 2026-07-28 | 1c | Added explicit Fiber read/write/idle timeouts, strict CSP and companion browser headers, a 256 KiB authentication/control payload guard, and per-IP authentication throttling with `429` responses. Platform, application, and HTTP API tests passed. | Complete |
