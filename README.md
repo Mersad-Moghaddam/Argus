@@ -34,14 +34,13 @@ The current route-monitoring implementation remains documented in
 generation uses passive OpenTelemetry data for broad endpoint coverage and
 keeps active synthetic requests limited to explicit, safe canaries.
 
-- [Transformation index](docs/TRANSFORMATION_INDEX.fa.md)
-- [Product, UI/UX, accessibility, and user-flow audit](docs/reviews/2026-07-28-product-ux-audit.fa.md)
-- [Monitoring v2 architecture decision](docs/architecture/MONITORING_V2_ADR.fa.md)
-- [URL and route normalization specification](docs/architecture/URL_ROUTE_NORMALIZATION_SPEC.fa.md)
-- [Scrum product backlog and sprint forecast](docs/planning/MONITORING_V2_SCRUM_PLAN.fa.md)
-- [Security best-practices report](security_best_practices_report.md)
+- [English transformation index](docs/audit-2026-07-28-en/README.md)
+- [Product, UI/UX, system design, normalization, strategy, and Scrum blueprint](docs/audit-2026-07-28-en/ARGUS_TRANSFORMATION_BLUEPRINT.md)
+- [Security best-practices review](docs/audit-2026-07-28-en/SECURITY_REVIEW.md)
 - [Repository threat model](Argus-threat-model.md)
 - [Motion audit and implementation plans](animation-plans/README.md)
+- [Skills and plugins decision](docs/audit-2026-07-28-en/TOOLING_DECISION.md)
+- [Research and standards register](docs/audit-2026-07-28-en/SOURCES.md)
 
 ## Why Argus?
 
@@ -349,7 +348,7 @@ docker compose logs -f mysql redis
 | Email delivery adapter | Planned |
 | Expanded integration/E2E coverage and observability | Planned |
 
-The implementation history lives in [PROJECT_MONITORING_PLAN.md](PROJECT_MONITORING_PLAN.md). The new product and architecture package starts at [docs/TRANSFORMATION_INDEX.fa.md](docs/TRANSFORMATION_INDEX.fa.md). Broader modernization notes remain in [REWRITE_ROADMAP.md](REWRITE_ROADMAP.md).
+The implementation history lives in [PROJECT_MONITORING_PLAN.md](PROJECT_MONITORING_PLAN.md). The English product and architecture package starts at [docs/audit-2026-07-28-en/README.md](docs/audit-2026-07-28-en/README.md). Broader modernization notes remain in [REWRITE_ROADMAP.md](REWRITE_ROADMAP.md).
 
 ## Contributing
 

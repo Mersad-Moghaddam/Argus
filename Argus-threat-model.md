@@ -2,7 +2,7 @@
 
 Date: 2026-07-28
 Repository baseline: `b576998`
-Assumption check-in status: the requested deployment-context questions were raised during the review; no clarifying answer was available before this report, so conditional conclusions are marked explicitly.
+Assumption check-in status: the requested deployment-context questions were raised during the review. No clarifying answer was supplied, so this report uses the conservative assumptions below and marks conclusions that would change if they are incorrect.
 
 ## Executive summary
 
@@ -20,7 +20,7 @@ In scope:
 - `internal/adapters/outbound/mysql/`, `db/migrations/`
 - `internal/openapi/`
 - `docker-compose.yml`, `.env.example`, `go.mod`, `go.sum`
-- the proposed design in `docs/architecture/MONITORING_V2_ADR.fa.md`, clearly separated from current runtime behavior
+- the proposed design in `docs/audit-2026-07-28-en/ARGUS_TRANSFORMATION_BLUEPRINT.md`, clearly separated from current runtime behavior
 
 Out of scope:
 
@@ -32,18 +32,21 @@ Out of scope:
 
 Material assumptions:
 
-- the service can be internet-reachable because it binds to `:8080` by default; a private-only deployment reduces likelihood but not design impact (`internal/config/config.go:49-53`);
-- the target architecture may support multiple users/projects and eventually multiple tenants; if Argus is permanently single-user, cross-tenant risk falls but authorization consistency is still required;
+- Argus must support both private self-hosting and a possible future internet-facing, multi-tenant service. Controls are therefore ranked for the stronger boundary; a permanently private single-tenant deployment reduces likelihood but not design impact;
+- private-network targets are monitored through a customer-side agent. The central control plane does not receive a general ability to dial arbitrary customer-private addresses;
+- metrics retention defaults to 30 days and is configurable. No specific residency, regulated-data, or compliance regime is assumed; such a requirement would change storage, encryption, deletion, audit, and regional architecture;
+- the service can be internet-reachable because it binds to `:8080` by default (`internal/config/config.go:49-53`);
+- the target architecture supports multiple users/projects and may support multiple tenants, so tenant attribution and authorization are security boundaries;
 - route headers, API keys, auth tokens and telemetry may be sensitive;
 - users can add URLs and upload/import OpenAPI documents;
 - Docker Compose self-hosting is the current operational baseline;
 - project scale can reach thousands of routes because imports allow up to the repository's configured parser limits.
 
-Open questions that materially change ranking:
+Assumptions to reconfirm before implementation:
 
-1. Is the supported production model single-user/private self-hosting, or internet-facing multi-tenant SaaS?
-2. Must Argus monitor private-network targets, and if so through a customer-side agent or the central worker?
-3. What telemetry/incident retention, residency and compliance requirements apply?
+1. If Argus will be permanently private and single-tenant, cross-tenant threats can be downgraded, but fail-open management access and outbound-request abuse remain release risks.
+2. If the central worker must reach private targets, the design needs a separate egress trust zone, destination registration/approval, and stronger network enforcement; simply enabling the existing private-target flag is insufficient.
+3. If residency or regulated-data requirements apply, telemetry collection must be minimized and region/deletion/key-management controls must be designed before ingestion is enabled.
 
 ## System model
 
@@ -56,7 +59,7 @@ Open questions that materially change ranking:
 - **Redis/Asynq**: scheduled check and worker queues (`internal/platform/worker/`, `internal/config/config.go`).
 - **Outbound workers**: active HTTP/TLS/keyword/route checks against user-selected targets (`internal/worker/processor.go`, `internal/worker/route_evaluator.go`).
 - **OpenAPI parser**: multipart/JSON/YAML parsing, reference resolution and bounded operation import (`internal/openapi/`, `internal/api/import_handler.go`).
-- **Proposed Monitoring v2 gateway**: future authenticated OTLP ingestion and metrics backend; design only, not current runtime (`docs/architecture/MONITORING_V2_ADR.fa.md`).
+- **Proposed Monitoring v2 gateway**: future authenticated OTLP ingestion and metrics backend; design only, not current runtime (`docs/audit-2026-07-28-en/ARGUS_TRANSFORMATION_BLUEPRINT.md`).
 
 ### Data flows and trust boundaries
 
@@ -185,7 +188,7 @@ flowchart LR
 | Legacy evaluator | queued website to default client | Control plane → untrusted network | redirect/rebinding parity gap | `internal/worker/processor.go` |
 | MySQL DSN/config | environment and `.env` | Operator → process | defaults include known dev credentials | `internal/config/config.go:Load`; `.env.example` |
 | Redis/Asynq | deployment network | Application → queue | optional password | `internal/config/config.go:Load` |
-| Future OTLP | public/scoped ingest | Customer workload → data plane | design-time only | `docs/architecture/MONITORING_V2_ADR.fa.md` |
+| Future OTLP | public/scoped ingest | Customer workload → data plane | design-time only | `docs/audit-2026-07-28-en/ARGUS_TRANSFORMATION_BLUEPRINT.md` |
 
 ## Top abuse paths
 
@@ -321,7 +324,7 @@ Hardening gaps with low realistic exploitability and small impact in the assumed
 | `frontend/index.html` | third-party resources, auth forms and script policy compatibility | TM-004, TM-009 |
 | `internal/config/config.go` | insecure/missing production defaults and limits | TM-001, TM-002, TM-007 |
 | `docker-compose.yml` | service exposure, network and credential assumptions | TM-001, TM-009 |
-| `docs/architecture/MONITORING_V2_ADR.fa.md` | design-time OTLP trust boundary before implementation | TM-010 |
+| `docs/audit-2026-07-28-en/ARGUS_TRANSFORMATION_BLUEPRINT.md` | design-time OTLP trust boundary before implementation | TM-010 |
 
 Quality check:
 
