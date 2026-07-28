@@ -1199,3 +1199,29 @@ func TestProjectListingEndpoint(t *testing.T) {
 		t.Fatalf("expected 400 for a blank name, got %d", resp.StatusCode)
 	}
 }
+
+func TestProjectEnvironmentEndpoints(t *testing.T) {
+	a := newTestAPI(t)
+	_, token := a.register(t, "environment-api@example.com")
+	project := a.createProject(t, token, "Environment API")
+
+	resp := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/environments", project.ID), token, map[string]string{
+		"name": "staging", "baseUrl": "HTTPS://API.Example.com:443/v1/",
+	})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create environment: expected 201, got %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+	var created models.ProjectEnvironment
+	decode(t, resp, &created)
+	if created.CanonicalBaseURL != "https://api.example.com/v1" || created.CanonicalOrigin != "https://api.example.com" {
+		t.Fatalf("environment was not canonicalized: %+v", created)
+	}
+
+	var listed struct {
+		Items []models.ProjectEnvironment `json:"items"`
+	}
+	decode(t, a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d/environments", project.ID), token, nil), &listed)
+	if len(listed.Items) != 2 {
+		t.Fatalf("environments = %d, want default production plus staging", len(listed.Items))
+	}
+}
