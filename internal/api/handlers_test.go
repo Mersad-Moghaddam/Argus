@@ -100,7 +100,7 @@ func bodyString(t *testing.T, resp *http.Response) string {
 // register creates an account through the public API and returns its token.
 func (a *testAPI) register(t *testing.T, email string) (int64, string) {
 	t.Helper()
-	resp := a.do(t, http.MethodPost, "/api/auth/register", "", map[string]string{
+	resp := a.do(t, http.MethodPost, "/identity/register", "", map[string]string{
 		"email": email, "password": "longenoughpassword", "name": email,
 	})
 	if resp.StatusCode != fiber.StatusCreated {
@@ -119,7 +119,7 @@ func (a *testAPI) register(t *testing.T, email string) (int64, string) {
 
 func (a *testAPI) createProject(t *testing.T, token, name string) models.Project {
 	t.Helper()
-	resp := a.do(t, http.MethodPost, "/api/projects", token, map[string]any{"name": name})
+	resp := a.do(t, http.MethodPost, "/project/catalog", token, map[string]any{"name": name})
 	if resp.StatusCode != fiber.StatusCreated {
 		t.Fatalf("create project: expected 201, got %d (%s)", resp.StatusCode, bodyString(t, resp))
 	}
@@ -137,12 +137,12 @@ func TestSLODefinitionEndpointsEnforceProjectRoles(t *testing.T) {
 		t.Fatal(err)
 	}
 	payload := map[string]any{"name": "Availability", "sliKind": "availability", "targetPercent": 99.9, "minEvents": 20}
-	if response := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/slos", project.ID), viewerToken, payload); response.StatusCode != fiber.StatusForbidden {
+	if response := a.do(t, http.MethodPost, fmt.Sprintf("/slo/catalog/%d", project.ID), viewerToken, payload); response.StatusCode != fiber.StatusForbidden {
 		t.Fatalf("viewer must not create SLO, got %d (%s)", response.StatusCode, bodyString(t, response))
 	} else {
 		_ = response.Body.Close()
 	}
-	response := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/slos", project.ID), ownerToken, payload)
+	response := a.do(t, http.MethodPost, fmt.Sprintf("/slo/catalog/%d", project.ID), ownerToken, payload)
 	if response.StatusCode != fiber.StatusCreated {
 		t.Fatalf("create SLO: %d (%s)", response.StatusCode, bodyString(t, response))
 	}
@@ -151,12 +151,12 @@ func TestSLODefinitionEndpointsEnforceProjectRoles(t *testing.T) {
 	if definition.Version != 1 || definition.ID == 0 {
 		t.Fatalf("unexpected SLO response: %+v", definition)
 	}
-	if response = a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d/slos", project.ID), viewerToken, nil); response.StatusCode != fiber.StatusOK {
+	if response = a.do(t, http.MethodGet, fmt.Sprintf("/slo/catalog/%d", project.ID), viewerToken, nil); response.StatusCode != fiber.StatusOK {
 		t.Fatalf("viewer must list SLOs: %d", response.StatusCode)
 	} else {
 		_ = response.Body.Close()
 	}
-	if response = a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d/slos/%d/evaluations", project.ID, definition.ID), viewerToken, nil); response.StatusCode != fiber.StatusOK {
+	if response = a.do(t, http.MethodGet, fmt.Sprintf("/slo/evaluations/%d/%d", project.ID, definition.ID), viewerToken, nil); response.StatusCode != fiber.StatusOK {
 		t.Fatalf("viewer must list SLO evaluations: %d", response.StatusCode)
 	} else {
 		_ = response.Body.Close()
@@ -169,7 +169,7 @@ func TestAuthEndpoints(t *testing.T) {
 	a := newTestAPI(t)
 
 	t.Run("register validation errors are 400", func(t *testing.T) {
-		resp := a.do(t, http.MethodPost, "/api/auth/register", "", map[string]string{"email": "nope", "password": "longenoughpassword"})
+		resp := a.do(t, http.MethodPost, "/identity/register", "", map[string]string{"email": "nope", "password": "longenoughpassword"})
 		if resp.StatusCode != fiber.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", resp.StatusCode)
 		}
@@ -177,7 +177,7 @@ func TestAuthEndpoints(t *testing.T) {
 
 	t.Run("register then login", func(t *testing.T) {
 		_, token := a.register(t, "api-user@example.com")
-		resp := a.do(t, http.MethodPost, "/api/auth/login", "", map[string]string{
+		resp := a.do(t, http.MethodPost, "/identity/login", "", map[string]string{
 			"email": "api-user@example.com", "password": "longenoughpassword",
 		})
 		if resp.StatusCode != fiber.StatusOK {
@@ -188,7 +188,7 @@ func TestAuthEndpoints(t *testing.T) {
 			t.Fatalf("login response leaked credentials: %s", body)
 		}
 
-		me := a.do(t, http.MethodGet, "/api/auth/me", token, nil)
+		me := a.do(t, http.MethodGet, "/identity/profile", token, nil)
 		if me.StatusCode != fiber.StatusOK {
 			t.Fatalf("expected 200 from /auth/me, got %d", me.StatusCode)
 		}
@@ -196,7 +196,7 @@ func TestAuthEndpoints(t *testing.T) {
 
 	t.Run("bad password is 401", func(t *testing.T) {
 		a.register(t, "pw@example.com")
-		resp := a.do(t, http.MethodPost, "/api/auth/login", "", map[string]string{"email": "pw@example.com", "password": "wrongwrongwrong"})
+		resp := a.do(t, http.MethodPost, "/identity/login", "", map[string]string{"email": "pw@example.com", "password": "wrongwrongwrong"})
 		if resp.StatusCode != fiber.StatusUnauthorized {
 			t.Fatalf("expected 401, got %d", resp.StatusCode)
 		}
@@ -204,17 +204,17 @@ func TestAuthEndpoints(t *testing.T) {
 
 	t.Run("logout revokes the token", func(t *testing.T) {
 		_, token := a.register(t, "logout@example.com")
-		if resp := a.do(t, http.MethodPost, "/api/auth/logout", token, nil); resp.StatusCode != fiber.StatusNoContent {
+		if resp := a.do(t, http.MethodPost, "/identity/logout", token, nil); resp.StatusCode != fiber.StatusNoContent {
 			t.Fatalf("expected 204, got %d", resp.StatusCode)
 		}
-		if resp := a.do(t, http.MethodGet, "/api/projects", token, nil); resp.StatusCode != fiber.StatusUnauthorized {
+		if resp := a.do(t, http.MethodGet, "/project/catalog", token, nil); resp.StatusCode != fiber.StatusUnauthorized {
 			t.Fatalf("a revoked token must be rejected, got %d", resp.StatusCode)
 		}
 	})
 
 	t.Run("change password keeps current session and invalidates old credentials", func(t *testing.T) {
 		_, token := a.register(t, "change-password@example.com")
-		resp := a.do(t, http.MethodPost, "/api/auth/password", token, map[string]string{
+		resp := a.do(t, http.MethodPost, "/identity/password", token, map[string]string{
 			"currentPassword": "longenoughpassword",
 			"newPassword":     "new-long-password",
 		})
@@ -222,12 +222,12 @@ func TestAuthEndpoints(t *testing.T) {
 			t.Fatalf("expected 204, got %d (%s)", resp.StatusCode, bodyString(t, resp))
 		}
 		_ = resp.Body.Close()
-		if resp := a.do(t, http.MethodGet, "/api/auth/me", token, nil); resp.StatusCode != fiber.StatusOK {
+		if resp := a.do(t, http.MethodGet, "/identity/profile", token, nil); resp.StatusCode != fiber.StatusOK {
 			t.Fatalf("current session must remain valid, got %d", resp.StatusCode)
 		} else {
 			_ = resp.Body.Close()
 		}
-		if resp := a.do(t, http.MethodPost, "/api/auth/login", "", map[string]string{"email": "change-password@example.com", "password": "longenoughpassword"}); resp.StatusCode != fiber.StatusUnauthorized {
+		if resp := a.do(t, http.MethodPost, "/identity/login", "", map[string]string{"email": "change-password@example.com", "password": "longenoughpassword"}); resp.StatusCode != fiber.StatusUnauthorized {
 			t.Fatalf("old password must fail, got %d", resp.StatusCode)
 		} else {
 			_ = resp.Body.Close()
@@ -237,7 +237,7 @@ func TestAuthEndpoints(t *testing.T) {
 
 func TestBrowserSessionUsesHttpOnlyCookieAndCSRF(t *testing.T) {
 	a := newTestAPI(t)
-	resp := a.do(t, http.MethodPost, "/api/auth/register", "", map[string]string{
+	resp := a.do(t, http.MethodPost, "/identity/register", "", map[string]string{
 		"email": "cookie@example.com", "password": "longenoughpassword", "name": "Cookie user",
 	})
 	if resp.StatusCode != fiber.StatusCreated {
@@ -261,7 +261,7 @@ func TestBrowserSessionUsesHttpOnlyCookieAndCSRF(t *testing.T) {
 		t.Fatalf("expected readable CSRF cookie, got %#v", csrf)
 	}
 
-	me := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	me := httptest.NewRequest(http.MethodGet, "/identity/profile", nil)
 	me.AddCookie(session)
 	meResp, err := a.app.Test(me, -1)
 	if err != nil {
@@ -272,7 +272,7 @@ func TestBrowserSessionUsesHttpOnlyCookieAndCSRF(t *testing.T) {
 	}
 	_ = meResp.Body.Close()
 
-	create := httptest.NewRequest(http.MethodPost, "/api/projects", strings.NewReader(`{"name":"Cookie project"}`))
+	create := httptest.NewRequest(http.MethodPost, "/project/catalog", strings.NewReader(`{"name":"Cookie project"}`))
 	create.Header.Set("Content-Type", "application/json")
 	create.AddCookie(session)
 	create.AddCookie(csrf)
@@ -285,7 +285,7 @@ func TestBrowserSessionUsesHttpOnlyCookieAndCSRF(t *testing.T) {
 	}
 	_ = missingCSRF.Body.Close()
 
-	create = httptest.NewRequest(http.MethodPost, "/api/projects", strings.NewReader(`{"name":"Cookie project"}`))
+	create = httptest.NewRequest(http.MethodPost, "/project/catalog", strings.NewReader(`{"name":"Cookie project"}`))
 	create.Header.Set("Content-Type", "application/json")
 	create.Header.Set("X-CSRF-Token", csrf.Value)
 	create.AddCookie(session)
@@ -306,21 +306,21 @@ func TestProjectRoutesRequireBearerToken(t *testing.T) {
 	project := a.createProject(t, token, "Guarded")
 
 	protected := []struct{ method, path string }{
-		{http.MethodGet, "/api/projects"},
-		{http.MethodPost, "/api/projects"},
-		{http.MethodGet, fmt.Sprintf("/api/projects/%d", project.ID)},
-		{http.MethodPut, fmt.Sprintf("/api/projects/%d", project.ID)},
-		{http.MethodDelete, fmt.Sprintf("/api/projects/%d", project.ID)},
-		{http.MethodPost, fmt.Sprintf("/api/projects/%d/archive", project.ID)},
-		{http.MethodGet, fmt.Sprintf("/api/projects/%d/routes", project.ID)},
-		{http.MethodPost, fmt.Sprintf("/api/projects/%d/routes", project.ID)},
-		{http.MethodPost, fmt.Sprintf("/api/projects/%d/routes/bulk", project.ID)},
-		{http.MethodPost, fmt.Sprintf("/api/projects/%d/routes/bulk-delete", project.ID)},
-		{http.MethodGet, fmt.Sprintf("/api/projects/%d/incidents", project.ID)},
-		{http.MethodPost, fmt.Sprintf("/api/projects/%d/imports/validate", project.ID)},
-		{http.MethodGet, fmt.Sprintf("/api/projects/%d/telemetry-credentials", project.ID)},
-		{http.MethodGet, fmt.Sprintf("/api/projects/%d/telemetry-ingress", project.ID)},
-		{http.MethodPost, fmt.Sprintf("/api/projects/%d/telemetry-credentials", project.ID)},
+		{http.MethodGet, "/project/catalog"},
+		{http.MethodPost, "/project/catalog"},
+		{http.MethodGet, fmt.Sprintf("/project/catalog/%d", project.ID)},
+		{http.MethodPut, fmt.Sprintf("/project/catalog/%d", project.ID)},
+		{http.MethodDelete, fmt.Sprintf("/project/catalog/%d", project.ID)},
+		{http.MethodPost, fmt.Sprintf("/project/archive/%d", project.ID)},
+		{http.MethodGet, fmt.Sprintf("/route/catalog/%d", project.ID)},
+		{http.MethodPost, fmt.Sprintf("/route/catalog/%d", project.ID)},
+		{http.MethodPost, fmt.Sprintf("/route/bulk/%d", project.ID)},
+		{http.MethodPost, fmt.Sprintf("/route/removal/%d", project.ID)},
+		{http.MethodGet, fmt.Sprintf("/route/incidents/%d", project.ID)},
+		{http.MethodPost, fmt.Sprintf("/import/validation/%d", project.ID)},
+		{http.MethodGet, fmt.Sprintf("/telemetry/credentials/%d", project.ID)},
+		{http.MethodGet, fmt.Sprintf("/telemetry/ingress/%d", project.ID)},
+		{http.MethodPost, fmt.Sprintf("/telemetry/credentials/%d", project.ID)},
 	}
 
 	for _, tc := range protected {
@@ -343,6 +343,22 @@ func TestProjectRoutesRequireBearerToken(t *testing.T) {
 	}
 }
 
+func TestControlPlaneRoutesUseFamilyAndPurposeWithoutAPIPrefix(t *testing.T) {
+	a := newTestAPI(t)
+	_, token := a.register(t, "taxonomy@example.com")
+	project := a.createProject(t, token, "Taxonomy")
+	if response := a.do(t, http.MethodGet, fmt.Sprintf("/project/catalog/%d", project.ID), token, nil); response.StatusCode != fiber.StatusOK {
+		t.Fatalf("family/purpose route must work: %d (%s)", response.StatusCode, bodyString(t, response))
+	} else {
+		_ = response.Body.Close()
+	}
+	if response := a.do(t, http.MethodGet, fmt.Sprintf("/api/project/catalog/%d", project.ID), token, nil); response.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("removed API prefix must not be mounted: %d (%s)", response.StatusCode, bodyString(t, response))
+	} else {
+		_ = response.Body.Close()
+	}
+}
+
 func TestTelemetryCredentialEndpoints(t *testing.T) {
 	a := newTestAPI(t)
 	ownerID, ownerToken := a.register(t, "telemetry-owner@example.com")
@@ -357,7 +373,7 @@ func TestTelemetryCredentialEndpoints(t *testing.T) {
 	if err != nil || len(environments) != 1 {
 		t.Fatalf("default environment: %v %+v", err, environments)
 	}
-	base := fmt.Sprintf("/api/projects/%d/telemetry-credentials", project.ID)
+	base := fmt.Sprintf("/telemetry/credentials/%d", project.ID)
 	created := a.do(t, http.MethodPost, base, ownerToken, map[string]any{
 		"name": "production collector", "environmentId": environments[0].ID, "expiresInDays": 30,
 	})
@@ -372,7 +388,7 @@ func TestTelemetryCredentialEndpoints(t *testing.T) {
 	if _, err := a.service.AuthenticateTelemetryCredential(context.Background(), issued.Token); err != nil {
 		t.Fatalf("created secret must authenticate: %v", err)
 	}
-	if resp := a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d/telemetry-ingress", project.ID), viewerToken, nil); resp.StatusCode != fiber.StatusOK {
+	if resp := a.do(t, http.MethodGet, fmt.Sprintf("/telemetry/ingress/%d", project.ID), viewerToken, nil); resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("viewer diagnostics: expected 200, got %d", resp.StatusCode)
 	} else {
 		_ = resp.Body.Close()
@@ -391,7 +407,7 @@ func TestTelemetryCredentialEndpoints(t *testing.T) {
 		t.Fatalf("credential listing leaked secret material: %s", body)
 	}
 
-	rotated := a.do(t, http.MethodPost, fmt.Sprintf("%s/%d/rotate", base, issued.Credential.ID), ownerToken, map[string]any{})
+	rotated := a.do(t, http.MethodPost, fmt.Sprintf("/telemetry/rotate/%d/%d", project.ID, issued.Credential.ID), ownerToken, map[string]any{})
 	if rotated.StatusCode != fiber.StatusCreated {
 		t.Fatalf("rotate: %d (%s)", rotated.StatusCode, bodyString(t, rotated))
 	}
@@ -401,7 +417,7 @@ func TestTelemetryCredentialEndpoints(t *testing.T) {
 		t.Fatalf("old token must not authenticate after rotation: %v", err)
 	}
 
-	revoked := a.do(t, http.MethodPost, fmt.Sprintf("%s/%d/revoke", base, replacement.Credential.ID), ownerToken, nil)
+	revoked := a.do(t, http.MethodPost, fmt.Sprintf("/telemetry/revoke/%d/%d", project.ID, replacement.Credential.ID), ownerToken, nil)
 	if revoked.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("revoke: expected 204, got %d (%s)", revoked.StatusCode, bodyString(t, revoked))
 	}
@@ -431,7 +447,13 @@ func TestProjectAuthorizationMatrix(t *testing.T) {
 		t.Fatalf("add viewer: %v", err)
 	}
 
-	base := fmt.Sprintf("/api/projects/%d", project.ID)
+	base := fmt.Sprintf("/project/catalog/%d", project.ID)
+	routes := fmt.Sprintf("/route/catalog/%d", project.ID)
+	incidents := fmt.Sprintf("/route/incidents/%d", project.ID)
+	bulkRemoval := fmt.Sprintf("/route/removal/%d", project.ID)
+	importValidation := fmt.Sprintf("/import/validation/%d", project.ID)
+	archive := fmt.Sprintf("/project/archive/%d", project.ID)
+	restore := fmt.Sprintf("/project/restore/%d", project.ID)
 	routeBody := map[string]any{"method": "GET", "path": "/authz-probe", "baseUrl": "https://api.example.com"}
 
 	cases := []struct {
@@ -443,28 +465,28 @@ func TestProjectAuthorizationMatrix(t *testing.T) {
 		want   int
 	}{
 		{"viewer can read the project", http.MethodGet, base, viewerToken, nil, fiber.StatusOK},
-		{"viewer can list routes", http.MethodGet, base + "/routes", viewerToken, nil, fiber.StatusOK},
-		{"viewer can list incidents", http.MethodGet, base + "/incidents", viewerToken, nil, fiber.StatusOK},
-		{"viewer cannot create routes", http.MethodPost, base + "/routes", viewerToken, routeBody, fiber.StatusForbidden},
-		{"viewer cannot bulk delete", http.MethodPost, base + "/routes/bulk-delete", viewerToken, map[string]any{"ids": []int64{1}}, fiber.StatusForbidden},
+		{"viewer can list routes", http.MethodGet, routes, viewerToken, nil, fiber.StatusOK},
+		{"viewer can list incidents", http.MethodGet, incidents, viewerToken, nil, fiber.StatusOK},
+		{"viewer cannot create routes", http.MethodPost, routes, viewerToken, routeBody, fiber.StatusForbidden},
+		{"viewer cannot bulk delete", http.MethodPost, bulkRemoval, viewerToken, map[string]any{"ids": []int64{1}}, fiber.StatusForbidden},
 		{"viewer cannot update the project", http.MethodPut, base, viewerToken, map[string]any{"name": "x"}, fiber.StatusForbidden},
-		{"viewer cannot import", http.MethodPost, base + "/imports/validate", viewerToken, map[string]any{"spec": "{}"}, fiber.StatusForbidden},
-		{"viewer cannot archive", http.MethodPost, base + "/archive", viewerToken, nil, fiber.StatusForbidden},
+		{"viewer cannot import", http.MethodPost, importValidation, viewerToken, map[string]any{"spec": "{}"}, fiber.StatusForbidden},
+		{"viewer cannot archive", http.MethodPost, archive, viewerToken, nil, fiber.StatusForbidden},
 		{"viewer cannot delete", http.MethodDelete, base, viewerToken, nil, fiber.StatusForbidden},
 
-		{"editor can create routes", http.MethodPost, base + "/routes", editorToken, routeBody, fiber.StatusCreated},
+		{"editor can create routes", http.MethodPost, routes, editorToken, routeBody, fiber.StatusCreated},
 		{"editor can update the project", http.MethodPut, base, editorToken, map[string]any{"name": "Shared v2"}, fiber.StatusOK},
-		{"editor cannot archive", http.MethodPost, base + "/archive", editorToken, nil, fiber.StatusForbidden},
+		{"editor cannot archive", http.MethodPost, archive, editorToken, nil, fiber.StatusForbidden},
 		{"editor cannot delete the project", http.MethodDelete, base, editorToken, nil, fiber.StatusForbidden},
 
-		{"owner can archive", http.MethodPost, base + "/archive", ownerToken, nil, fiber.StatusNoContent},
-		{"owner can unarchive", http.MethodPost, base + "/unarchive", ownerToken, nil, fiber.StatusNoContent},
+		{"owner can archive", http.MethodPost, archive, ownerToken, nil, fiber.StatusNoContent},
+		{"owner can unarchive", http.MethodPost, restore, ownerToken, nil, fiber.StatusNoContent},
 
 		// A non-member must never learn that the project exists.
 		{"stranger gets 404 reading", http.MethodGet, base, strangerToken, nil, fiber.StatusNotFound},
-		{"stranger gets 404 writing", http.MethodPost, base + "/routes", strangerToken, routeBody, fiber.StatusNotFound},
+		{"stranger gets 404 writing", http.MethodPost, routes, strangerToken, routeBody, fiber.StatusNotFound},
 		{"stranger gets 404 deleting", http.MethodDelete, base, strangerToken, nil, fiber.StatusNotFound},
-		{"stranger gets 404 listing routes", http.MethodGet, base + "/routes", strangerToken, nil, fiber.StatusNotFound},
+		{"stranger gets 404 listing routes", http.MethodGet, routes, strangerToken, nil, fiber.StatusNotFound},
 	}
 
 	for _, tc := range cases {
@@ -487,8 +509,8 @@ func TestNonexistentAndForbiddenProjectsAreIndistinguishable(t *testing.T) {
 	_, strangerToken := a.register(t, "enum-stranger@example.com")
 	project := a.createProject(t, ownerToken, "Hidden")
 
-	forbidden := a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d", project.ID), strangerToken, nil)
-	missing := a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d", project.ID+9999), strangerToken, nil)
+	forbidden := a.do(t, http.MethodGet, fmt.Sprintf("/project/catalog/%d", project.ID), strangerToken, nil)
+	missing := a.do(t, http.MethodGet, fmt.Sprintf("/project/catalog/%d", project.ID+9999), strangerToken, nil)
 
 	if forbidden.StatusCode != fiber.StatusNotFound || missing.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("expected both to be 404, got %d and %d", forbidden.StatusCode, missing.StatusCode)
@@ -502,7 +524,7 @@ func TestInvalidProjectIDIsRejected(t *testing.T) {
 	a := newTestAPI(t)
 	_, token := a.register(t, "badid@example.com")
 	for _, id := range []string{"abc", "0", "-1"} {
-		resp := a.do(t, http.MethodGet, "/api/projects/"+id, token, nil)
+		resp := a.do(t, http.MethodGet, "/project/catalog/"+id, token, nil)
 		if resp.StatusCode != fiber.StatusBadRequest {
 			t.Fatalf("project id %q: expected 400, got %d", id, resp.StatusCode)
 		}
@@ -516,7 +538,7 @@ func TestCreateRouteEndpoint(t *testing.T) {
 	a := newTestAPI(t)
 	_, token := a.register(t, "routes@example.com")
 	project := a.createProject(t, token, "Routes")
-	base := fmt.Sprintf("/api/projects/%d/routes", project.ID)
+	base := fmt.Sprintf("/route/catalog/%d", project.ID)
 
 	t.Run("creates and returns 201", func(t *testing.T) {
 		resp := a.do(t, http.MethodPost, base, token, map[string]any{
@@ -572,7 +594,7 @@ func TestEndpointNormalizationPreview(t *testing.T) {
 	a := newTestAPI(t)
 	_, token := a.register(t, "normalization-preview@example.com")
 	project := a.createProject(t, token, "Preview")
-	resp := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/endpoint-normalization/preview", project.ID), token, map[string]any{
+	resp := a.do(t, http.MethodPost, fmt.Sprintf("/route/normalization/%d", project.ID), token, map[string]any{
 		"method": " get ", "baseUrl": "HTTPS://EXAMPLE.COM:443/api/../", "routeTemplate": "v1/%70ets/{petId}", "intervalSeconds": 300,
 	})
 	if resp.StatusCode != fiber.StatusOK {
@@ -594,7 +616,7 @@ func TestEndpointNormalizationPreview(t *testing.T) {
 		t.Fatalf("unexpected safety preview: %+v", preview.Safety)
 	}
 
-	bad := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/endpoint-normalization/preview", project.ID), token, map[string]any{"method": "GET", "baseUrl": "example.com", "routeTemplate": "/x"})
+	bad := a.do(t, http.MethodPost, fmt.Sprintf("/route/normalization/%d", project.ID), token, map[string]any{"method": "GET", "baseUrl": "example.com", "routeTemplate": "/x"})
 	if bad.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", bad.StatusCode)
 	}
@@ -610,7 +632,7 @@ func TestRouteResponsesRedactSecretHeaders(t *testing.T) {
 	_, token := a.register(t, "redact@example.com")
 	project := a.createProject(t, token, "Redaction")
 
-	resp := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/routes", project.ID), token, map[string]any{
+	resp := a.do(t, http.MethodPost, fmt.Sprintf("/route/catalog/%d", project.ID), token, map[string]any{
 		"method": "GET", "path": "/secured", "baseUrl": "https://api.example.com",
 		"headers": `{"Authorization":"Bearer super-secret","X-Trace":"visible"}`,
 	})
@@ -627,8 +649,8 @@ func TestRouteResponsesRedactSecretHeaders(t *testing.T) {
 	}
 
 	for _, path := range []string{
-		fmt.Sprintf("/api/projects/%d/routes/%d", project.ID, created.ID),
-		fmt.Sprintf("/api/projects/%d/routes", project.ID),
+		fmt.Sprintf("/route/catalog/%d/%d", project.ID, created.ID),
+		fmt.Sprintf("/route/catalog/%d", project.ID),
 	} {
 		body := bodyString(t, a.do(t, http.MethodGet, path, token, nil))
 		if strings.Contains(body, "super-secret") {
@@ -650,7 +672,7 @@ func TestBulkCreateRoutesEndpoint(t *testing.T) {
 	a := newTestAPI(t)
 	_, token := a.register(t, "bulk@example.com")
 	project := a.createProject(t, token, "Bulk")
-	path := fmt.Sprintf("/api/projects/%d/routes/bulk", project.ID)
+	path := fmt.Sprintf("/route/bulk/%d", project.ID)
 
 	t.Run("reports per-row outcomes", func(t *testing.T) {
 		resp := a.do(t, http.MethodPost, path, token, map[string]any{"routes": []map[string]any{
@@ -709,7 +731,7 @@ func TestRouteFromAnotherProjectIsNotReachable(t *testing.T) {
 	projectA := a.createProject(t, tokenA, "Tenant A")
 	projectB := a.createProject(t, tokenB, "Tenant B")
 
-	resp := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/routes", projectB.ID), tokenB, map[string]any{
+	resp := a.do(t, http.MethodPost, fmt.Sprintf("/route/catalog/%d", projectB.ID), tokenB, map[string]any{
 		"method": "GET", "path": "/private", "baseUrl": "https://b.example.com",
 	})
 	var victim models.APIRoute
@@ -725,7 +747,7 @@ func TestRouteFromAnotherProjectIsNotReachable(t *testing.T) {
 		{http.MethodPost, "/disable"},
 		{http.MethodGet, "/checks"},
 	} {
-		path := fmt.Sprintf("/api/projects/%d/routes/%d%s", projectA.ID, victim.ID, tc.suffix)
+		path := fmt.Sprintf("/route/catalog/%d/%d%s", projectA.ID, victim.ID, tc.suffix)
 		var body any
 		if tc.method == http.MethodPut {
 			body = map[string]any{"method": "GET", "path": "/private"}
@@ -752,12 +774,12 @@ func TestBulkDeleteIsProjectScopedOverHTTP(t *testing.T) {
 	projectB := a.createProject(t, tokenB, "BD B")
 
 	var mine, theirs models.APIRoute
-	decode(t, a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/routes", projectA.ID), tokenA,
+	decode(t, a.do(t, http.MethodPost, fmt.Sprintf("/route/catalog/%d", projectA.ID), tokenA,
 		map[string]any{"method": "GET", "path": "/mine", "baseUrl": "https://a.example"}), &mine)
-	decode(t, a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/routes", projectB.ID), tokenB,
+	decode(t, a.do(t, http.MethodPost, fmt.Sprintf("/route/catalog/%d", projectB.ID), tokenB,
 		map[string]any{"method": "GET", "path": "/theirs", "baseUrl": "https://b.example"}), &theirs)
 
-	resp := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/routes/bulk-delete", projectA.ID), tokenA,
+	resp := a.do(t, http.MethodPost, fmt.Sprintf("/route/removal/%d", projectA.ID), tokenA,
 		map[string]any{"ids": []int64{mine.ID, theirs.ID}})
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -773,7 +795,7 @@ func TestBulkDeleteIsProjectScopedOverHTTP(t *testing.T) {
 		t.Fatal("a bulk delete must never reach another project's routes")
 	}
 
-	empty := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/routes/bulk-delete", projectA.ID), tokenA, map[string]any{"ids": []int64{}})
+	empty := a.do(t, http.MethodPost, fmt.Sprintf("/route/removal/%d", projectA.ID), tokenA, map[string]any{"ids": []int64{}})
 	if empty.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("expected 400 for an empty id list, got %d", empty.StatusCode)
 	}
@@ -783,7 +805,7 @@ func TestRouteLifecycleEndpoints(t *testing.T) {
 	a := newTestAPI(t)
 	_, token := a.register(t, "lifecycle@example.com")
 	project := a.createProject(t, token, "Lifecycle")
-	base := fmt.Sprintf("/api/projects/%d/routes", project.ID)
+	base := fmt.Sprintf("/route/catalog/%d", project.ID)
 
 	var route models.APIRoute
 	decode(t, a.do(t, http.MethodPost, base, token, map[string]any{
@@ -792,7 +814,7 @@ func TestRouteLifecycleEndpoints(t *testing.T) {
 
 	one := fmt.Sprintf("%s/%d", base, route.ID)
 
-	if resp := a.do(t, http.MethodPost, one+"/disable", token, nil); resp.StatusCode != fiber.StatusNoContent {
+	if resp := a.do(t, http.MethodPost, fmt.Sprintf("/route/disable/%d/%d", project.ID, route.ID), token, nil); resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("disable: expected 204, got %d", resp.StatusCode)
 	}
 	var afterDisable models.APIRoute
@@ -801,7 +823,7 @@ func TestRouteLifecycleEndpoints(t *testing.T) {
 		t.Fatalf("expected a disabled route, got %+v", afterDisable)
 	}
 
-	if resp := a.do(t, http.MethodPost, one+"/enable", token, nil); resp.StatusCode != fiber.StatusNoContent {
+	if resp := a.do(t, http.MethodPost, fmt.Sprintf("/route/enable/%d/%d", project.ID, route.ID), token, nil); resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("enable: expected 204, got %d", resp.StatusCode)
 	}
 
@@ -811,7 +833,7 @@ func TestRouteLifecycleEndpoints(t *testing.T) {
 		t.Fatalf("update did not apply: %+v", updated)
 	}
 
-	checks := a.do(t, http.MethodGet, one+"/checks", token, nil)
+	checks := a.do(t, http.MethodGet, fmt.Sprintf("/route/checks/%d/%d", project.ID, route.ID), token, nil)
 	if checks.StatusCode != fiber.StatusOK {
 		t.Fatalf("checks: expected 200, got %d", checks.StatusCode)
 	}
@@ -828,7 +850,7 @@ func TestListRoutesQueryParameters(t *testing.T) {
 	a := newTestAPI(t)
 	_, token := a.register(t, "query@example.com")
 	project := a.createProject(t, token, "Query")
-	base := fmt.Sprintf("/api/projects/%d/routes", project.ID)
+	base := fmt.Sprintf("/route/catalog/%d", project.ID)
 
 	for _, r := range []map[string]any{
 		{"method": "GET", "path": "/pets", "baseUrl": "https://a.example", "tags": []string{"pets"}},
@@ -881,10 +903,10 @@ func TestMetricsTimeseriesEndpoint(t *testing.T) {
 	_, token := a.register(t, "metrics@example.com")
 	_, otherToken := a.register(t, "metrics-other@example.com")
 	project := a.createProject(t, token, "Metrics")
-	base := fmt.Sprintf("/api/projects/%d/metrics/timeseries", project.ID)
+	base := fmt.Sprintf("/route/metrics/%d", project.ID)
 
 	var route models.APIRoute
-	decode(t, a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/routes", project.ID), token,
+	decode(t, a.do(t, http.MethodPost, fmt.Sprintf("/route/catalog/%d", project.ID), token,
 		map[string]any{"method": "GET", "path": "/charted", "baseUrl": "https://a.example"}), &route)
 
 	if err := a.stores.Routes.RecordRouteCheck(context.Background(), models.RouteCheck{
@@ -932,7 +954,7 @@ func TestMetricsTimeseriesEndpoint(t *testing.T) {
 	t.Run("a routeId from another project is 404", func(t *testing.T) {
 		otherProject := a.createProject(t, otherToken, "Other Metrics")
 		var foreign models.APIRoute
-		decode(t, a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/routes", otherProject.ID), otherToken,
+		decode(t, a.do(t, http.MethodPost, fmt.Sprintf("/route/catalog/%d", otherProject.ID), otherToken,
 			map[string]any{"method": "GET", "path": "/foreign", "baseUrl": "https://b.example"}), &foreign)
 
 		resp := a.do(t, http.MethodGet, fmt.Sprintf("%s?routeId=%d", base, foreign.ID), token, nil)
@@ -1014,7 +1036,7 @@ func TestImportValidateAndCommitOverHTTP(t *testing.T) {
 	a := newTestAPI(t)
 	_, token := a.register(t, "import@example.com")
 	project := a.createProject(t, token, "Import")
-	validatePath := fmt.Sprintf("/api/projects/%d/imports/validate", project.ID)
+	validatePath := fmt.Sprintf("/import/validation/%d", project.ID)
 
 	t.Run("file upload", func(t *testing.T) {
 		resp := a.upload(t, validatePath, token, "spec.json", importSpec, "")
@@ -1032,13 +1054,13 @@ func TestImportValidateAndCommitOverHTTP(t *testing.T) {
 
 		// Fetch the job back.
 		var fetched models.ImportJob
-		decode(t, a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d/imports/%d", project.ID, job.ID), token, nil), &fetched)
+		decode(t, a.do(t, http.MethodGet, fmt.Sprintf("/import/job/%d/%d", project.ID, job.ID), token, nil), &fetched)
 		if fetched.ID != job.ID {
 			t.Fatalf("expected job %d, got %d", job.ID, fetched.ID)
 		}
 
 		// Commit it.
-		commitPath := fmt.Sprintf("/api/projects/%d/imports/%d/commit", project.ID, job.ID)
+		commitPath := fmt.Sprintf("/import/commit/%d/%d", project.ID, job.ID)
 		var committed models.ImportJob
 		commitResp := a.do(t, http.MethodPost, commitPath, token, map[string]any{"selections": []map[string]any{
 			{"key": "GET /alpha", "selected": true},
@@ -1083,7 +1105,7 @@ func TestImportRejectsBadUploads(t *testing.T) {
 	a := newTestAPI(t)
 	_, token := a.register(t, "badimport@example.com")
 	project := a.createProject(t, token, "Bad Import")
-	path := fmt.Sprintf("/api/projects/%d/imports/validate", project.ID)
+	path := fmt.Sprintf("/import/validation/%d", project.ID)
 
 	t.Run("malformed spec is 400 with a useful error", func(t *testing.T) {
 		resp := a.upload(t, path, token, "spec.json", "{ this is not a spec", "")
@@ -1128,7 +1150,7 @@ func TestImportRejectsBadUploads(t *testing.T) {
 	})
 
 	t.Run("unknown job is 404", func(t *testing.T) {
-		resp := a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d/imports/424242", project.ID), token, nil)
+		resp := a.do(t, http.MethodGet, fmt.Sprintf("/import/job/%d/424242", project.ID), token, nil)
 		if resp.StatusCode != fiber.StatusNotFound {
 			t.Fatalf("expected 404, got %d", resp.StatusCode)
 		}
@@ -1146,7 +1168,7 @@ func TestImportFiveHundredRoutesOverHTTP(t *testing.T) {
 	const expected = resources * 4
 	spec := largeSpec(resources)
 
-	resp := a.upload(t, fmt.Sprintf("/api/projects/%d/imports/validate", project.ID), token, "large.json", spec, "")
+	resp := a.upload(t, fmt.Sprintf("/import/validation/%d", project.ID), token, "large.json", spec, "")
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("validate: expected 200, got %d (%s)", resp.StatusCode, bodyString(t, resp))
 	}
@@ -1160,7 +1182,7 @@ func TestImportFiveHundredRoutesOverHTTP(t *testing.T) {
 	for _, item := range job.Items {
 		selections = append(selections, map[string]any{"key": item.Key, "selected": true})
 	}
-	commit := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/imports/%d/commit", project.ID, job.ID), token,
+	commit := a.do(t, http.MethodPost, fmt.Sprintf("/import/commit/%d/%d", project.ID, job.ID), token,
 		map[string]any{"selections": selections})
 	if commit.StatusCode != fiber.StatusOK {
 		t.Fatalf("commit: expected 200, got %d (%s)", commit.StatusCode, bodyString(t, commit))
@@ -1175,7 +1197,7 @@ func TestImportFiveHundredRoutesOverHTTP(t *testing.T) {
 		Items []models.APIRoute `json:"items"`
 		Total int               `json:"total"`
 	}
-	decode(t, a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d/routes?limit=25", project.ID), token, nil), &list)
+	decode(t, a.do(t, http.MethodGet, fmt.Sprintf("/route/catalog/%d?limit=25", project.ID), token, nil), &list)
 	if list.Total != expected {
 		t.Fatalf("expected %d routes listed, got %d", expected, list.Total)
 	}
@@ -1186,7 +1208,7 @@ func TestImportFiveHundredRoutesOverHTTP(t *testing.T) {
 	var searched struct {
 		Total int `json:"total"`
 	}
-	decode(t, a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d/routes?search=resource042", project.ID), token, nil), &searched)
+	decode(t, a.do(t, http.MethodGet, fmt.Sprintf("/route/catalog/%d?search=resource042", project.ID), token, nil), &searched)
 	if searched.Total != 4 {
 		t.Fatalf("expected 4 search hits, got %d", searched.Total)
 	}
@@ -1221,7 +1243,7 @@ func TestLegacyAPIKeyRoutesAreUnchanged(t *testing.T) {
 	_, bearerToken := a.register(t, "legacy@example.com")
 
 	t.Run("no key is 401", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/websites", nil)
+		req := httptest.NewRequest(http.MethodGet, "/monitor/websites", nil)
 		resp, err := a.app.Test(req, -1)
 		if err != nil {
 			t.Fatalf("request: %v", err)
@@ -1233,7 +1255,7 @@ func TestLegacyAPIKeyRoutesAreUnchanged(t *testing.T) {
 	})
 
 	t.Run("a project bearer token does not unlock the legacy API", func(t *testing.T) {
-		resp := a.do(t, http.MethodGet, "/api/websites", bearerToken, nil)
+		resp := a.do(t, http.MethodGet, "/monitor/websites", bearerToken, nil)
 		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusUnauthorized {
 			t.Fatalf("expected 401, got %d", resp.StatusCode)
@@ -1241,7 +1263,7 @@ func TestLegacyAPIKeyRoutesAreUnchanged(t *testing.T) {
 	})
 
 	t.Run("the API key still works", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/websites", nil)
+		req := httptest.NewRequest(http.MethodGet, "/monitor/websites", nil)
 		req.Header.Set("X-API-Key", legacyAPIKey)
 		resp, err := a.app.Test(req, -1)
 		if err != nil {
@@ -1254,7 +1276,7 @@ func TestLegacyAPIKeyRoutesAreUnchanged(t *testing.T) {
 	})
 
 	t.Run("the API key does not unlock the project API", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/projects", nil)
+		req := httptest.NewRequest(http.MethodGet, "/project/catalog", nil)
 		req.Header.Set("X-API-Key", legacyAPIKey)
 		resp, err := a.app.Test(req, -1)
 		if err != nil {
@@ -1276,7 +1298,7 @@ func TestProjectListingEndpoint(t *testing.T) {
 	archived := a.createProject(t, token, "Archived Project")
 	a.createProject(t, otherToken, "Not Mine")
 
-	if resp := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/archive", archived.ID), token, nil); resp.StatusCode != fiber.StatusNoContent {
+	if resp := a.do(t, http.MethodPost, fmt.Sprintf("/project/archive/%d", archived.ID), token, nil); resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("archive: got %d", resp.StatusCode)
 	}
 
@@ -1285,24 +1307,24 @@ func TestProjectListingEndpoint(t *testing.T) {
 		Total int              `json:"total"`
 	}
 	var all listResponse
-	decode(t, a.do(t, http.MethodGet, "/api/projects", token, nil), &all)
+	decode(t, a.do(t, http.MethodGet, "/project/catalog", token, nil), &all)
 	if all.Total != 2 {
 		t.Fatalf("expected only the caller's 2 projects, got %d", all.Total)
 	}
 
 	var activeOnly listResponse
-	decode(t, a.do(t, http.MethodGet, "/api/projects?status=active", token, nil), &activeOnly)
+	decode(t, a.do(t, http.MethodGet, "/project/catalog?status=active", token, nil), &activeOnly)
 	if activeOnly.Total != 1 || activeOnly.Items[0].ID != active.ID {
 		t.Fatalf("status filter failed: %+v", activeOnly)
 	}
 
 	var searched listResponse
-	decode(t, a.do(t, http.MethodGet, "/api/projects?search=archived", token, nil), &searched)
+	decode(t, a.do(t, http.MethodGet, "/project/catalog?search=archived", token, nil), &searched)
 	if searched.Total != 1 || searched.Items[0].ID != archived.ID {
 		t.Fatalf("search filter failed: %+v", searched)
 	}
 
-	if resp := a.do(t, http.MethodPost, "/api/projects", token, map[string]any{"name": "  "}); resp.StatusCode != fiber.StatusBadRequest {
+	if resp := a.do(t, http.MethodPost, "/project/catalog", token, map[string]any{"name": "  "}); resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("expected 400 for a blank name, got %d", resp.StatusCode)
 	}
 }
@@ -1312,7 +1334,7 @@ func TestProjectEnvironmentEndpoints(t *testing.T) {
 	_, token := a.register(t, "environment-api@example.com")
 	project := a.createProject(t, token, "Environment API")
 
-	resp := a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/environments", project.ID), token, map[string]string{
+	resp := a.do(t, http.MethodPost, fmt.Sprintf("/environment/catalog/%d", project.ID), token, map[string]string{
 		"name": "staging", "baseUrl": "HTTPS://API.Example.com:443/v1/",
 	})
 	if resp.StatusCode != fiber.StatusCreated {
@@ -1327,7 +1349,7 @@ func TestProjectEnvironmentEndpoints(t *testing.T) {
 	var listed struct {
 		Items []models.ProjectEnvironment `json:"items"`
 	}
-	decode(t, a.do(t, http.MethodGet, fmt.Sprintf("/api/projects/%d/environments", project.ID), token, nil), &listed)
+	decode(t, a.do(t, http.MethodGet, fmt.Sprintf("/environment/catalog/%d", project.ID), token, nil), &listed)
 	if len(listed.Items) != 2 {
 		t.Fatalf("environments = %d, want default production plus staging", len(listed.Items))
 	}

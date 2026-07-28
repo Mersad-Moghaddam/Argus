@@ -29,13 +29,13 @@ func NewAuthHandler(service *application.Service, cookieSecure ...bool) *AuthHan
 }
 
 func RegisterAuthRoutes(app fiber.Router, h *AuthHandler, guards ...fiber.Handler) {
-	app.Post("/auth/register", h.Register)
-	app.Post("/auth/login", h.Login)
-	app.Post("/auth/logout", guarded(guards, h.Logout)...)
-	app.Get("/auth/me", guarded(guards[:1], h.Me)...)
-	app.Get("/auth/sessions", guarded(guards[:1], h.ListSessions)...)
-	app.Post("/auth/sessions/revoke-others", guarded(guards, h.RevokeOtherSessions)...)
-	app.Post("/auth/password", guarded(guards, h.ChangePassword)...)
+	app.Post("/identity/register", h.Register)
+	app.Post("/identity/login", h.Login)
+	app.Post("/identity/logout", guarded(guards, h.Logout)...)
+	app.Get("/identity/profile", guarded(guards[:1], h.Me)...)
+	app.Get("/identity/sessions", guarded(guards[:1], h.ListSessions)...)
+	app.Post("/identity/sessions/revoke-others", guarded(guards, h.RevokeOtherSessions)...)
+	app.Post("/identity/password", guarded(guards, h.ChangePassword)...)
 }
 
 type registerRequest struct {

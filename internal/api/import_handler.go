@@ -19,9 +19,9 @@ func NewImportHandler(service *application.Service) *ImportHandler {
 }
 
 func RegisterImportRoutes(app fiber.Router, h *ImportHandler, guards ...fiber.Handler) {
-	app.Post("/projects/:projectId/imports/validate", guarded(guards, h.Validate)...)
-	app.Get("/projects/:projectId/imports/:jobId", guarded(guards, h.GetJob)...)
-	app.Post("/projects/:projectId/imports/:jobId/commit", guarded(guards, h.Commit)...)
+	app.Post("/import/validation/:projectId", guarded(guards, h.Validate)...)
+	app.Get("/import/job/:projectId/:jobId", guarded(guards, h.GetJob)...)
+	app.Post("/import/commit/:projectId/:jobId", guarded(guards, h.Commit)...)
 }
 
 type pasteImportRequest struct {

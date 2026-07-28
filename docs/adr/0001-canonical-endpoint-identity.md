@@ -35,7 +35,7 @@ decision.
 
 Manual create/update, bulk input, OpenAPI import, and worker composition share
 the same canonical path today. The authenticated preview endpoint is
-`POST /api/projects/{projectId}/endpoint-normalization/preview`; it returns
+`POST /route/normalization/{projectId}`; it returns
 stable `code` and `field` values for invalid requests.
 
 The upcoming environment/hash migration will persist the canonical identity

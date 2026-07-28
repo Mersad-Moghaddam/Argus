@@ -122,7 +122,7 @@ The application connects to MySQL and Redis, applies every `*.up.sql` migration 
 Use the **Add monitor** form in the dashboard, or call the API:
 
 ```bash
-curl --request POST http://localhost:8080/api/websites \
+curl --request POST http://localhost:8080/monitor/websites \
   --header 'Content-Type: application/json' \
   --data '{
     "url": "https://example.com",
@@ -187,7 +187,7 @@ Invalid integer or duration values fall back to defaults; an invalid `REDIS_DB` 
 
 ## HTTP API
 
-Responses are JSON unless an endpoint returns `204 No Content`. The website API uses optional global API-key auth; the project API uses its own bearer-token sessions.
+Responses are JSON unless an endpoint returns `204 No Content`. Every Argus control-plane route uses `/family/purpose[/optional]`; the removed `/api/*` prefix is not accepted. The website API uses optional global API-key auth; the project API uses its own bearer-token sessions.
 
 ### Website monitoring API
 
@@ -195,18 +195,18 @@ When `API_KEY` is non-empty, include `X-API-Key: <key>` on every endpoint below.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/websites?limit=100&offset=0` | List monitors. |
-| `POST` | `/api/websites` | Create a monitor. |
-| `DELETE` | `/api/websites/:id` | Delete a monitor and its dependent history. |
-| `POST` | `/api/websites/:id/heartbeat` | Record a heartbeat. |
-| `GET` | `/api/checks?limit=100` | Read recent check history. |
-| `GET` | `/api/incidents?limit=100&offset=0` | Read incident history. |
-| `POST` | `/api/alert-channels` | Create a webhook, Slack, or email channel. |
-| `POST` | `/api/maintenance-windows` | Schedule alert suppression globally or for one monitor. |
-| `GET` | `/api/status-pages?limit=100&offset=0` | List status pages. |
-| `POST` | `/api/status-pages` | Create a status page. |
-| `GET` | `/api/public/status/:slug` | Read a public status page payload. |
-| `GET` | `/api/logs` | Read the in-memory operational log buffer. |
+| `GET` | `/monitor/websites?limit=100&offset=0` | List monitors. |
+| `POST` | `/monitor/websites` | Create a monitor. |
+| `DELETE` | `/monitor/websites/:id` | Delete a monitor and its dependent history. |
+| `POST` | `/monitor/heartbeat/:id` | Record a heartbeat. |
+| `GET` | `/system/checks?limit=100` | Read recent check history. |
+| `GET` | `/system/incidents?limit=100&offset=0` | Read incident history. |
+| `POST` | `/notification/channels` | Create a webhook, Slack, or email channel. |
+| `POST` | `/notification/maintenance` | Schedule alert suppression globally or for one monitor. |
+| `GET` | `/status/pages?limit=100&offset=0` | List status pages. |
+| `POST` | `/status/pages` | Create a status page. |
+| `GET` | `/status/public/:slug` | Read a public status page payload. |
+| `GET` | `/system/logs` | Read the in-memory operational log buffer. |
 
 See the step-by-step [User Guide](USER_GUIDE.md) for request bodies and daily workflows.
 
@@ -216,22 +216,22 @@ This API is an **in-progress foundation** for multi-project route monitoring. Re
 
 ```bash
 # Register
-curl --request POST http://localhost:8080/api/auth/register \
+curl --request POST http://localhost:8080/identity/register \
   --header 'Content-Type: application/json' \
   --data '{"email":"operator@example.com","password":"change-me-now","name":"Operator"}'
 
 # Use the returned token
-curl http://localhost:8080/api/projects \
+curl http://localhost:8080/project/catalog \
   --header 'Authorization: Bearer <token>'
 ```
 
 | Area | Endpoints |
 | --- | --- |
-| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
-| Projects | `GET/POST /api/projects`, `GET/PUT/DELETE /api/projects/:projectId`, archive and unarchive actions |
-| Telemetry | Editor-only `GET/POST /api/projects/:projectId/telemetry-credentials`, plus credential `rotate` and `revoke` actions. Create and rotate responses show the opaque secret exactly once. Any project viewer can read bounded freshness/mapping diagnostics at `GET /api/projects/:projectId/telemetry-ingress`. |
-| Routes | Project-scoped list, create, update, delete, enable/disable, bulk create/delete, check history, and incidents |
-| Imports | Validate, preview, and commit OpenAPI 3.x or Swagger 2.0 JSON/YAML documents up to 10 MiB |
+| Identity | `POST /identity/register`, `POST /identity/login`, `POST /identity/logout`, `GET /identity/profile` |
+| Projects | `GET/POST /project/catalog`, `GET/PUT/DELETE /project/catalog/:projectId`, `/project/archive/:projectId`, and `/project/restore/:projectId` |
+| Telemetry | Editor-only `GET/POST /telemetry/credentials/:projectId`, plus `/telemetry/rotate/:projectId/:credentialId` and `/telemetry/revoke/:projectId/:credentialId`. Any project viewer can read freshness diagnostics at `/telemetry/ingress/:projectId`. |
+| Routes | `/route/catalog/:projectId` for project-scoped list/create; focused family/purpose routes handle mutations, checks, incidents, and metrics. |
+| Imports | `/import/validation/:projectId`, `/import/job/:projectId/:jobId`, and `/import/commit/:projectId/:jobId` support OpenAPI 3.x or Swagger 2.0 JSON/YAML documents up to 10 MiB. |
 
 ### OTLP/HTTP ingestion
 
@@ -256,8 +256,8 @@ and bucket boundary as labels. Other metrics remain visible only as bounded
 ingestion diagnostics until Argus has an explicit safe translation for them.
 
 Telemetry route mappings are a project-scoped control-plane API at
-`GET/POST /api/projects/:projectId/telemetry-mappings` (and
-`DELETE /api/projects/:projectId/telemetry-mappings/:mappingId`). A mapping
+`GET/POST /telemetry/mappings/:projectId` (and
+`DELETE /telemetry/mappings/:projectId/:mappingId`). A mapping
 binds a catalog route to an existing project environment and service identity;
 it cannot reference another project's route or environment.
 

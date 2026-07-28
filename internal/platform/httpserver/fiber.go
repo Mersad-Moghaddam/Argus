@@ -57,11 +57,13 @@ func NewFiberAppWithMetricSink(service *application.Service, logStore *observabi
 	app.Use(etag.New())
 	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
 
-	apiGroup := app.Group("/api")
+	// Control-plane URLs follow /family/purpose[/optional]. This keeps their
+	// meaning visible in server telemetry and removes the ambiguous /api prefix.
+	controlGroup := app.Group("")
 	// Authentication is intentionally bounded before bcrypt work occurs. This
 	// in-process limiter is a baseline; production multi-instance deployments
 	// should use a shared Fiber limiter storage at the edge or in Redis.
-	apiGroup.Use("/auth", controlBodyLimit(maxControlBodyBytes), limiter.New(limiter.Config{
+	controlGroup.Use("/identity", controlBodyLimit(maxControlBodyBytes), limiter.New(limiter.Config{
 		Max: 100, Expiration: time.Minute,
 		KeyGenerator: func(c *fiber.Ctx) string { return c.IP() },
 		LimitReached: func(c *fiber.Ctx) error {
@@ -71,30 +73,30 @@ func NewFiberAppWithMetricSink(service *application.Service, logStore *observabi
 
 	// Legacy single-tenant website/heartbeat/TLS monitoring API: unchanged
 	// behavior, still protected by the global X-API-Key when configured. The
-	// guard is attached per route rather than as /api-wide middleware, because
-	// the project API below shares the /api prefix but uses bearer tokens; a
+	// guard is attached per route rather than as control-plane-wide middleware,
+	// because the project API below uses bearer tokens; a
 	// group-level Use would apply the API-key check to both.
 	legacyGuard := adapterhttp.APIKeyAuth(apiKey)
 	websiteHandler := api.NewWebsiteHandler(service)
 	logHandler := api.NewLogHandler(logStore)
 	featureHandler := api.NewFeatureHandler(service)
-	api.RegisterWebsiteRoutes(apiGroup, websiteHandler, legacyGuard)
-	api.RegisterLogRoutes(apiGroup, logHandler, legacyGuard)
-	api.RegisterFeatureRoutes(apiGroup, featureHandler, legacyGuard)
+	api.RegisterWebsiteRoutes(controlGroup, websiteHandler, legacyGuard)
+	api.RegisterLogRoutes(controlGroup, logHandler, legacyGuard)
+	api.RegisterFeatureRoutes(controlGroup, featureHandler, legacyGuard)
 
 	// Project-based API route monitoring: separate bearer-token user auth,
 	// independent from the legacy API key.
 	authHandler := api.NewAuthHandler(service, cookieSecure)
 	bearerGuard := adapterhttp.BearerAuth(service)
-	api.RegisterAuthRoutes(apiGroup, authHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterAuthRoutes(controlGroup, authHandler, bearerGuard, adapterhttp.CSRFProtect)
 
 	projectHandler := api.NewProjectHandler(service)
 	routeHandler := api.NewRouteHandler(service)
 	importHandler := api.NewImportHandler(service)
 	telemetryIngestHandler := api.NewTelemetryIngestHandler(service, metricSink)
-	api.RegisterProjectRoutes(apiGroup, projectHandler, bearerGuard, adapterhttp.CSRFProtect)
-	api.RegisterRouteRoutes(apiGroup, routeHandler, bearerGuard, adapterhttp.CSRFProtect)
-	api.RegisterImportRoutes(apiGroup, importHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterProjectRoutes(controlGroup, projectHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterRouteRoutes(controlGroup, routeHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterImportRoutes(controlGroup, importHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterTelemetryIngestRoutes(app, telemetryIngestHandler)
 
 	app.Static("/", "./frontend", fiber.Static{

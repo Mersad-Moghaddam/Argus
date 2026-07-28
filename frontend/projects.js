@@ -194,7 +194,7 @@
 
     let res;
     try {
-      res = await fetch(`/api${path}`, { ...options, headers, credentials: 'same-origin' });
+	  res = await fetch(path, { ...options, headers, credentials: 'same-origin' });
     } catch (networkErr) {
       throw new Error(`Network error: ${networkErr.message}`);
     }
@@ -558,7 +558,7 @@
     state.account.loading = true;
     renderAccountSessions();
     try {
-      const result = await apiProjects('/auth/sessions');
+	  const result = await apiProjects('/identity/sessions');
       state.account.sessions = result.sessions || [];
       renderAccountSessions();
     } catch (err) {
@@ -596,7 +596,7 @@
 
     setButtonLoading(pel.authSubmit, true, registering ? 'Creating...' : 'Signing in...');
     try {
-      const res = await fetch(`/api/auth/${registering ? 'register' : 'login'}`, {
+	  const res = await fetch(`/identity/${registering ? 'register' : 'login'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -628,7 +628,7 @@
     hideFormError(pel.accountPasswordError);
     setButtonLoading(pel.accountPasswordSubmit, true, 'Changing...');
     try {
-      await apiProjects('/auth/password', {
+	  await apiProjects('/identity/password', {
         method: 'POST',
         body: JSON.stringify({
           currentPassword: pel.accountCurrentPassword.value,
@@ -651,7 +651,7 @@
     if (!window.confirm('Revoke every other active session?')) return;
     setButtonLoading(pel.accountRevokeOthers, true, 'Revoking...');
     try {
-      await apiProjects('/auth/sessions/revoke-others', { method: 'POST' });
+	  await apiProjects('/identity/sessions/revoke-others', { method: 'POST' });
       state.account.sessions = null;
       await loadAccountSessions();
       showToast('Other active sessions were revoked.', 'success');
@@ -664,7 +664,7 @@
 
   async function signOut() {
     try {
-      await apiProjects('/auth/logout', { method: 'POST' });
+	  await apiProjects('/identity/logout', { method: 'POST' });
     } catch {
       // A failed logout still clears the local session.
     }
@@ -679,7 +679,7 @@
   async function restoreSession() {
     if (state.sessionResolved) return;
     try {
-      const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+	  const res = await fetch('/identity/profile', { credentials: 'same-origin' });
       if (res.ok) {
         const payload = await res.json();
         setSession(payload.user);
@@ -700,7 +700,7 @@
     if (!state.list.data) pel.viewList.innerHTML = listShellHtml(skeletonCards());
     try {
       const res = await apiProjects(
-        `/projects${qs({ search: state.list.search, status: state.list.status, limit: state.list.limit, offset: state.list.offset })}`
+		`/project/catalog${qs({ search: state.list.search, status: state.list.status, limit: state.list.limit, offset: state.list.offset })}`
       );
       state.list.data = res.items || [];
       state.list.total = res.total || 0;
@@ -854,12 +854,12 @@
     try {
       const p = state.project;
       const [project, series, incidents, routes, environments, telemetryIngress] = await Promise.all([
-        apiProjects(`/projects/${id}`),
-        apiProjects(`/projects/${id}/metrics/timeseries${qs({ range: p.range })}`),
-        apiProjects(`/projects/${id}/incidents${qs({ limit: 15 })}`),
-        apiProjects(`/projects/${id}/routes${routeQuery(p)}`),
-        apiProjects(`/projects/${id}/environments`),
-		apiProjects(`/projects/${id}/telemetry-ingress${qs({ limit: 20 })}`),
+		apiProjects(`/project/catalog/${id}`),
+		apiProjects(`/route/metrics/${id}${qs({ range: p.range })}`),
+		apiProjects(`/route/incidents/${id}${qs({ limit: 15 })}`),
+		apiProjects(`/route/catalog/${id}${routeQuery(p)}`),
+		apiProjects(`/environment/catalog/${id}`),
+		apiProjects(`/telemetry/ingress/${id}${qs({ limit: 20 })}`),
       ]);
       state.project.project = project;
       state.project.series = series;
@@ -1193,11 +1193,11 @@
     }
     try {
       const [route, checks, incidents, series, project] = await Promise.all([
-        apiProjects(`/projects/${projectId}/routes/${routeId}`),
-        apiProjects(`/projects/${projectId}/routes/${routeId}/checks${qs({ limit: 100 })}`),
-        apiProjects(`/projects/${projectId}/incidents${qs({ routeId, limit: 20 })}`),
-        apiProjects(`/projects/${projectId}/metrics/timeseries${qs({ range: state.routeDetail.range, routeId })}`),
-        state.project.project && state.project.id === projectId ? Promise.resolve(state.project.project) : apiProjects(`/projects/${projectId}`),
+		apiProjects(`/route/catalog/${projectId}/${routeId}`),
+		apiProjects(`/route/checks/${projectId}/${routeId}${qs({ limit: 100 })}`),
+		apiProjects(`/route/incidents/${projectId}${qs({ routeId, limit: 20 })}`),
+		apiProjects(`/route/metrics/${projectId}${qs({ range: state.routeDetail.range, routeId })}`),
+		state.project.project && state.project.id === projectId ? Promise.resolve(state.project.project) : apiProjects(`/project/catalog/${projectId}`),
       ]);
       state.routeDetail.route = route;
       state.routeDetail.checks = checks || [];
@@ -1616,9 +1616,9 @@
           const fd = new FormData();
           fd.append('file', file);
           if (baseUrl.value.trim()) fd.append('baseUrlOverride', baseUrl.value.trim());
-          job = await apiProjects(`/projects/${state.importer.projectId}/imports/validate`, { method: 'POST', body: fd });
+		  job = await apiProjects(`/import/validation/${state.importer.projectId}`, { method: 'POST', body: fd });
         } else {
-          job = await apiProjects(`/projects/${state.importer.projectId}/imports/validate`, {
+		  job = await apiProjects(`/import/validation/${state.importer.projectId}`, {
             method: 'POST',
             body: JSON.stringify({ spec: pastedText, baseUrlOverride: baseUrl.value.trim() }),
           });
@@ -1811,7 +1811,7 @@
         selected: !!state.importer.selections.get(item.key),
         action: item.action,
       }));
-      const result = await apiProjects(`/projects/${state.importer.projectId}/imports/${job.id}/commit`, {
+	  const result = await apiProjects(`/import/commit/${state.importer.projectId}/${job.id}`, {
         method: 'POST',
         body: JSON.stringify({ selections }),
       });
@@ -1923,7 +1923,7 @@
     hideFormError(pel.environmentFormError);
     setButtonLoading(pel.environmentSubmit, true, 'Creating...');
     try {
-      await apiProjects(`/projects/${state.project.id}/environments`, {
+	  await apiProjects(`/environment/catalog/${state.project.id}`, {
         method: 'POST',
         body: JSON.stringify({ name: pel.environmentName.value, baseUrl: pel.environmentBaseURL.value }),
       });
@@ -1970,7 +1970,7 @@
     }
     setButtonLoading(pel.telemetryCredentialSubmit, true, 'Creating...');
     try {
-      const issued = await apiProjects(`/projects/${state.project.id}/telemetry-credentials`, {
+	  const issued = await apiProjects(`/telemetry/credentials/${state.project.id}`, {
         method: 'POST',
         body: JSON.stringify({
           name: pel.telemetryCredentialName.value.trim(),
@@ -2026,10 +2026,10 @@
     setButtonLoading(pel.projectSubmit, true, 'Saving...');
     try {
       if (editingProjectId) {
-        await apiProjects(`/projects/${editingProjectId}`, { method: 'PUT', body: JSON.stringify(payload) });
+		await apiProjects(`/project/catalog/${editingProjectId}`, { method: 'PUT', body: JSON.stringify(payload) });
         showToast('Project updated.', 'success');
       } else {
-        const created = await apiProjects('/projects', { method: 'POST', body: JSON.stringify(payload) });
+		const created = await apiProjects('/project/catalog', { method: 'POST', body: JSON.stringify(payload) });
         showToast(`Project "${created.name}" created.`, 'success');
       }
       closeModal(pel.projectModal);
@@ -2120,10 +2120,10 @@
     try {
       const pid = state.project.id;
       if (editingRouteId) {
-        await apiProjects(`/projects/${pid}/routes/${editingRouteId}`, { method: 'PUT', body: JSON.stringify(payload) });
+		await apiProjects(`/route/catalog/${pid}/${editingRouteId}`, { method: 'PUT', body: JSON.stringify(payload) });
         showToast('Route updated.', 'success');
       } else {
-        await apiProjects(`/projects/${pid}/routes`, { method: 'POST', body: JSON.stringify(payload) });
+		await apiProjects(`/route/catalog/${pid}`, { method: 'POST', body: JSON.stringify(payload) });
         showToast('Route added.', 'success');
       }
       closeModal(pel.routeModal);
@@ -2171,7 +2171,7 @@
 
     setButtonLoading(pel.bulkSubmit, true, 'Adding...');
     try {
-      const result = await apiProjects(`/projects/${state.project.id}/routes/bulk`, {
+	  const result = await apiProjects(`/route/bulk/${state.project.id}`, {
         method: 'POST',
         body: JSON.stringify({ routes }),
       });
@@ -2211,11 +2211,11 @@
   async function findProject(id) {
     const cached = (state.list.data || []).find((p) => p.id === id);
     if (cached) return cached;
-    return apiProjects(`/projects/${id}`);
+	return apiProjects(`/project/catalog/${id}`);
   }
 
   async function setRouteEnabled(routeId, enabled) {
-    await apiProjects(`/projects/${state.project.id}/routes/${routeId}/${enabled ? 'enable' : 'disable'}`, { method: 'POST' });
+	await apiProjects(`/route/${enabled ? 'enable' : 'disable'}/${state.project.id}/${routeId}`, { method: 'POST' });
     showToast(`Route ${enabled ? 'enabled' : 'disabled'}.`, 'success');
     refreshCurrentView();
   }
@@ -2236,7 +2236,7 @@
       },
       async () => {
         if (action === 'delete') {
-          const res = await apiProjects(`/projects/${state.project.id}/routes/bulk-delete`, {
+		  const res = await apiProjects(`/route/removal/${state.project.id}`, {
             method: 'POST',
             body: JSON.stringify({ ids }),
           });
@@ -2245,7 +2245,7 @@
           // The API exposes enable/disable per route; run them with bounded
           // concurrency so a large selection cannot open hundreds of sockets.
           const failures = await mapWithLimit(ids, 6, async (id) => {
-            await apiProjects(`/projects/${state.project.id}/routes/${id}/${action}`, { method: 'POST' });
+			await apiProjects(`/route/${action}/${state.project.id}/${id}`, { method: 'POST' });
           });
           if (failures.length) {
             showToast(`${ids.length - failures.length} updated, ${failures.length} failed.`, 'error');
@@ -2314,7 +2314,7 @@
               danger: false,
             },
             async () => {
-              await apiProjects(`/projects/${id}/${archiving ? 'archive' : 'unarchive'}`, { method: 'POST' });
+			  await apiProjects(`/project/${archiving ? 'archive' : 'restore'}/${id}`, { method: 'POST' });
               showToast(archiving ? 'Project archived.' : 'Project restored.', 'success');
               loadProjectsList();
             }
@@ -2329,7 +2329,7 @@
               confirmLabel: 'Delete project',
             },
             async () => {
-              await apiProjects(`/projects/${id}`, { method: 'DELETE' });
+			  await apiProjects(`/project/catalog/${id}`, { method: 'DELETE' });
               showToast('Project deleted.', 'success');
               navigate('#/projects');
               loadProjectsList();
@@ -2359,7 +2359,7 @@
           break;
         case 'edit-route': {
           const route = state.project.routes.find((r) => r.id === id) || (state.routeDetail.route && state.routeDetail.route.id === id ? state.routeDetail.route : null);
-          openRouteModal(route || (await apiProjects(`/projects/${state.project.id}/routes/${id}`)));
+		  openRouteModal(route || (await apiProjects(`/route/catalog/${state.project.id}/${id}`)));
           break;
         }
         case 'enable-route':
@@ -2376,7 +2376,7 @@
               confirmLabel: 'Delete route',
             },
             async () => {
-              await apiProjects(`/projects/${state.project.id}/routes/${id}`, { method: 'DELETE' });
+			  await apiProjects(`/route/catalog/${state.project.id}/${id}`, { method: 'DELETE' });
               showToast('Route deleted.', 'success');
               if (state.route.name === 'route') navigate(`#/projects/${state.project.id}`);
               else loadProjectDetail({ silent: true });

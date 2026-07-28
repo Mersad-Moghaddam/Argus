@@ -53,7 +53,7 @@ From the **Overview** tab:
 API equivalent:
 
 ```http
-POST /api/websites
+POST /monitor/websites
 Content-Type: application/json
 X-API-Key: <key>
 
@@ -80,7 +80,7 @@ X-API-Key: <key>
 - Expects periodic heartbeat call:
 
 ```http
-POST /api/websites/:id/heartbeat
+POST /monitor/heartbeat/:id
 ```
 
 - If heartbeats stop beyond grace time, monitor turns down.
@@ -100,7 +100,7 @@ POST /api/websites/:id/heartbeat
 ### Add alert channel
 
 ```http
-POST /api/alert-channels
+POST /notification/channels
 {
   "name": "Ops Webhook",
   "channelType": "webhook",
@@ -120,7 +120,7 @@ Supported channel types:
 Mute alerts during planned work:
 
 ```http
-POST /api/maintenance-windows
+POST /notification/maintenance
 {
   "websiteId": 1,
   "startsAt": "2026-04-04T10:00:00Z",
@@ -141,7 +141,7 @@ During active window:
 ### Create status page
 
 ```http
-POST /api/status-pages
+POST /status/pages
 {
   "slug": "public-status",
   "title": "Public Service Status"
@@ -151,19 +151,19 @@ POST /api/status-pages
 ### Read public status page
 
 ```http
-GET /api/public/status/public-status
+GET /status/public/public-status
 ```
 
 ---
 
 ## 7. Common endpoints
 
-- `GET /api/websites?limit=100&offset=0`
-- `GET /api/checks?limit=100` (latest ping/check history)
-- `DELETE /api/websites/:id`
-- `GET /api/incidents?limit=100&offset=0`
-- `GET /api/status-pages?limit=100&offset=0`
-- `GET /api/logs`
+- `GET /monitor/websites?limit=100&offset=0`
+- `GET /system/checks?limit=100` (latest ping/check history)
+- `DELETE /monitor/websites/:id`
+- `GET /system/incidents?limit=100&offset=0`
+- `GET /status/pages?limit=100&offset=0`
+- `GET /system/logs`
 
 ---
 
@@ -182,7 +182,7 @@ GET /api/public/status/public-status
 ## 9. Projects & API route monitoring
 
 The **API Projects** tab monitors individual API operations rather than whole sites. It is a separate
-bounded context: its own tables, its own accounts, and its own `/api/projects...` routes. Everything
+bounded context: its own tables, its own accounts, and its own `/project/...` routes. Everything
 in sections 1–8 keeps working exactly as before and is unaffected.
 
 ### 9.1 Sign in
@@ -193,10 +193,10 @@ token is stored in `localStorage` under `argus_project_token` and sent as
 `Authorization: Bearer <token>`. Tokens are valid for 30 days and can be revoked with **Sign out**.
 
 ```http
-POST /api/auth/register   { "email": "you@example.com", "password": "at-least-8-chars", "name": "You" }
-POST /api/auth/login      { "email": "you@example.com", "password": "at-least-8-chars" }
-POST /api/auth/logout     Authorization: Bearer <token>
-GET  /api/auth/me         Authorization: Bearer <token>
+POST /identity/register   { "email": "you@example.com", "password": "at-least-8-chars", "name": "You" }
+POST /identity/login      { "email": "you@example.com", "password": "at-least-8-chars" }
+POST /identity/logout     Authorization: Bearer <token>
+GET  /identity/profile    Authorization: Bearer <token>
 ```
 
 Whoever creates a project becomes its **owner**. Roles are `owner` > `editor` > `viewer`:
@@ -217,7 +217,7 @@ Click **New project**. The interval, timeout, retries and incident thresholds yo
 defaults inherited by *new* routes; changing them later never rewrites existing routes.
 
 ```http
-POST /api/projects
+POST /project/catalog
 { "name": "Payments API", "defaultIntervalSeconds": 300, "defaultTimeoutMs": 5000,
   "defaultRetries": 1, "failureThreshold": 3, "recoverySuccessThreshold": 1 }
 ```
@@ -282,7 +282,7 @@ What re-importing guarantees:
 - **Summary tiles** — route counts per health state, 24h uptime, 24h average latency, open
   incidents, last check time.
 - **Charts** — uptime % and response time over `1h`, `6h`, `24h`, `7d` or `30d`. These are served
-  pre-bucketed by `GET /api/projects/:id/metrics/timeseries?range=24h`, so the browser never
+  pre-bucketed by `GET /route/metrics/:id?range=24h`, so the browser never
   downloads raw check rows.
 - **Incidents** — open and recently resolved, with duration and failure reason.
 - **Route table** — search by path/name/summary, filter by method, health, tag, enabled and
@@ -355,31 +355,31 @@ Every outbound check is treated as hostile input:
 All of these require `Authorization: Bearer <token>`.
 
 ```http
-GET    /api/projects?search=&status=&limit=&offset=
-POST   /api/projects
-GET    /api/projects/:projectId
-PUT    /api/projects/:projectId
-POST   /api/projects/:projectId/archive
-POST   /api/projects/:projectId/unarchive
-DELETE /api/projects/:projectId
+GET    /project/catalog?search=&status=&limit=&offset=
+POST   /project/catalog
+GET    /project/catalog/:projectId
+PUT    /project/catalog/:projectId
+POST   /project/archive/:projectId
+POST   /project/restore/:projectId
+DELETE /project/catalog/:projectId
 
-GET    /api/projects/:projectId/routes?search=&method=&status=&tag=&enabled=&deprecated=&sortBy=&sortDir=&limit=&offset=
-POST   /api/projects/:projectId/routes
-POST   /api/projects/:projectId/routes/bulk
-POST   /api/projects/:projectId/routes/bulk-delete
-GET    /api/projects/:projectId/routes/:routeId
-PUT    /api/projects/:projectId/routes/:routeId
-POST   /api/projects/:projectId/routes/:routeId/enable
-POST   /api/projects/:projectId/routes/:routeId/disable
-DELETE /api/projects/:projectId/routes/:routeId
-GET    /api/projects/:projectId/routes/:routeId/checks?limit=&offset=
+GET    /route/catalog/:projectId?search=&method=&status=&tag=&enabled=&deprecated=&sortBy=&sortDir=&limit=&offset=
+POST   /route/catalog/:projectId
+POST   /route/bulk/:projectId
+POST   /route/removal/:projectId
+GET    /route/catalog/:projectId/:routeId
+PUT    /route/catalog/:projectId/:routeId
+POST   /route/enable/:projectId/:routeId
+POST   /route/disable/:projectId/:routeId
+DELETE /route/catalog/:projectId/:routeId
+GET    /route/checks/:projectId/:routeId?limit=&offset=
 
-GET    /api/projects/:projectId/incidents?routeId=&state=&limit=&offset=
-GET    /api/projects/:projectId/metrics/timeseries?range=1h|6h|24h|7d|30d&routeId=
+GET    /route/incidents/:projectId?routeId=&state=&limit=&offset=
+GET    /route/metrics/:projectId?range=1h|6h|24h|7d|30d&routeId=
 
-POST   /api/projects/:projectId/imports/validate      (multipart "file", or JSON {"spec": "..."})
-GET    /api/projects/:projectId/imports/:jobId
-POST   /api/projects/:projectId/imports/:jobId/commit
+POST   /import/validation/:projectId      (multipart "file", or JSON {"spec": "..."})
+GET    /import/job/:projectId/:jobId
+POST   /import/commit/:projectId/:jobId
 ```
 
 ### 9.11 Configuration

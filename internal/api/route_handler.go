@@ -19,19 +19,19 @@ func NewRouteHandler(service *application.Service) *RouteHandler {
 }
 
 func RegisterRouteRoutes(app fiber.Router, h *RouteHandler, guards ...fiber.Handler) {
-	app.Post("/projects/:projectId/endpoint-normalization/preview", guarded(guards, h.PreviewNormalization)...)
-	app.Get("/projects/:projectId/routes", guarded(guards, h.ListRoutes)...)
-	app.Post("/projects/:projectId/routes", guarded(guards, h.CreateRoute)...)
-	app.Post("/projects/:projectId/routes/bulk", guarded(guards, h.BulkCreateRoutes)...)
-	app.Post("/projects/:projectId/routes/bulk-delete", guarded(guards, h.BulkDeleteRoutes)...)
-	app.Get("/projects/:projectId/routes/:routeId", guarded(guards, h.GetRoute)...)
-	app.Put("/projects/:projectId/routes/:routeId", guarded(guards, h.UpdateRoute)...)
-	app.Post("/projects/:projectId/routes/:routeId/enable", guarded(guards, h.EnableRoute)...)
-	app.Post("/projects/:projectId/routes/:routeId/disable", guarded(guards, h.DisableRoute)...)
-	app.Delete("/projects/:projectId/routes/:routeId", guarded(guards, h.DeleteRoute)...)
-	app.Get("/projects/:projectId/routes/:routeId/checks", guarded(guards, h.ListRouteChecks)...)
-	app.Get("/projects/:projectId/incidents", guarded(guards, h.ListIncidents)...)
-	app.Get("/projects/:projectId/metrics/timeseries", guarded(guards, h.ListMetricsTimeseries)...)
+	app.Post("/route/normalization/:projectId", guarded(guards, h.PreviewNormalization)...)
+	app.Get("/route/catalog/:projectId", guarded(guards, h.ListRoutes)...)
+	app.Post("/route/catalog/:projectId", guarded(guards, h.CreateRoute)...)
+	app.Post("/route/bulk/:projectId", guarded(guards, h.BulkCreateRoutes)...)
+	app.Post("/route/removal/:projectId", guarded(guards, h.BulkDeleteRoutes)...)
+	app.Get("/route/catalog/:projectId/:routeId", guarded(guards, h.GetRoute)...)
+	app.Put("/route/catalog/:projectId/:routeId", guarded(guards, h.UpdateRoute)...)
+	app.Post("/route/enable/:projectId/:routeId", guarded(guards, h.EnableRoute)...)
+	app.Post("/route/disable/:projectId/:routeId", guarded(guards, h.DisableRoute)...)
+	app.Delete("/route/catalog/:projectId/:routeId", guarded(guards, h.DeleteRoute)...)
+	app.Get("/route/checks/:projectId/:routeId", guarded(guards, h.ListRouteChecks)...)
+	app.Get("/route/incidents/:projectId", guarded(guards, h.ListIncidents)...)
+	app.Get("/route/metrics/:projectId", guarded(guards, h.ListMetricsTimeseries)...)
 }
 
 type normalizationPreviewRequest struct {
