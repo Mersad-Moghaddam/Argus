@@ -15,14 +15,14 @@ func NewFeatureHandler(service *application.Service) *FeatureHandler {
 	return &FeatureHandler{service: service}
 }
 
-func RegisterFeatureRoutes(app fiber.Router, h *FeatureHandler) {
-	app.Get("/incidents", h.ListIncidents)
-	app.Get("/checks", h.ListChecks)
-	app.Post("/alert-channels", h.CreateAlertChannel)
-	app.Post("/maintenance-windows", h.CreateMaintenanceWindow)
-	app.Get("/status-pages", h.ListStatusPages)
-	app.Post("/status-pages", h.CreateStatusPage)
-	app.Get("/public/status/:slug", h.GetPublicStatusPage)
+func RegisterFeatureRoutes(app fiber.Router, h *FeatureHandler, guards ...fiber.Handler) {
+	app.Get("/incidents", guarded(guards, h.ListIncidents)...)
+	app.Get("/checks", guarded(guards, h.ListChecks)...)
+	app.Post("/alert-channels", guarded(guards, h.CreateAlertChannel)...)
+	app.Post("/maintenance-windows", guarded(guards, h.CreateMaintenanceWindow)...)
+	app.Get("/status-pages", guarded(guards, h.ListStatusPages)...)
+	app.Post("/status-pages", guarded(guards, h.CreateStatusPage)...)
+	app.Get("/public/status/:slug", guarded(guards, h.GetPublicStatusPage)...)
 }
 
 func (h *FeatureHandler) ListChecks(c *fiber.Ctx) error {

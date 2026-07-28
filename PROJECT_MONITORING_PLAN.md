@@ -426,6 +426,67 @@ work.
   file to CRLF, which made `gofmt -l` report the entire repository as
   unformatted. `gofmt -l` is now clean, `go build`, `go vet`, `go test ./...`
   all pass.
-- **Section 7 (next)** — Backend automated tests for the application and API
-  layers (fakes for the new ports, authz matrix, import validate/commit,
-  incident open/resolve, handler status codes, 500+ route import).
+- **Section 7 (commit pending)** — Done. Added `internal/testsupport`: one
+  shared set of hand-rolled, in-memory port implementations (no mock
+  framework) mirroring the MySQL adapters' observable semantics, used by both
+  the application and API test suites. It depends only on `domain`/`models`
+  so it cannot create an import cycle, and is referenced exclusively from
+  `_test.go` files so it is never linked into `cmd/api`.
+
+  Application tests (`auth_test.go`, `projects_test.go`, `routes_test.go`,
+  `imports_test.go`): register/login/logout/authenticate incl. duplicate
+  email, wrong password, unknown account returning the *same* error,
+  token expiry, per-session token isolation; project create/update/archive/
+  unarchive/delete, default clamping, slug uniqueness, membership+status
+  filtering; the full `AuthorizeProject` owner/editor/viewer matrix including
+  a test that the non-member and nonexistent-project errors are
+  byte-identical; route create/normalize/duplicate detection, bulk-create
+  partial-failure reporting per input row, update field preservation and
+  clamping, disabled-state derivation, project-scoped bulk delete, header
+  redaction; `ProcessRouteCheckResult` metric updates and the full
+  healthy→degraded→failing→healthy progression asserting exactly ONE incident
+  opens after N consecutive failures and exactly one resolution after M
+  successes (acceptance criteria 3 and 4), with per-route configurable
+  thresholds; import validate/commit covering create/update/skip/
+  duplicate-in-spec/removed-from-spec, malformed/non-spec/no-paths/oversized/
+  bad-source-type rejection, cross-project job isolation, double-commit
+  conflict, Swagger 2.0 host+basePath+scheme handling, per-row commit failure
+  reporting that does not abort the batch, and the re-import contract:
+  metadata refreshed, user monitoring config (interval/timeout/retries/
+  status range/thresholds/headers) provably untouched, removals reported but
+  never pre-selected and applied as *disable*, never delete.
+
+  API tests (`internal/api/handlers_test.go`, package `api_test`) drive the
+  real `httpserver.NewFiberApp` — same middleware stack and body limit as
+  production — covering 401 for missing/garbage/empty/unknown bearer tokens
+  across every project endpoint, 404 for non-members with a byte-identical
+  body to the nonexistent-project case, 403 for viewer-attempting-write and
+  editor-attempting-owner-action, 400 for invalid project IDs, duplicate
+  routes, malformed JSON and malformed/non-spec uploads, 413 for oversized
+  uploads and pastes, 409 for commit replay, bulk-create per-row reporting
+  and the 5000-row cap, cross-project route access via guessed route IDs
+  (404, resource untouched), project-scoped bulk delete over HTTP, secret
+  header redaction on every read path while storage keeps the real value,
+  full route lifecycle, all list query parameters, and a 600-route import
+  driven end to end through multipart upload → preview → commit → search.
+
+  **Bug found and fixed:** `httpserver.NewFiberApp` mounted the legacy
+  `APIKeyAuth` via `apiGroup.Group("", mw)`, which in Fiber registers the
+  middleware on the *whole* `/api` subtree — so with `API_KEY` set, every new
+  `/api/auth` and `/api/projects` endpoint returned 401 `unauthorized` and the
+  entire project subsystem was unreachable. Section 5's tests had not covered
+  a non-empty API key, so it was invisible. Fixed by attaching each scheme's
+  guard per route via a new `api.guarded` helper (`internal/api/guards.go`)
+  and making every `Register*Routes` function take variadic guards; the two
+  auth schemes are now independent regardless of registration order, and
+  `TestLegacyAPIKeyRoutesAreUnchanged` locks the behavior in both directions.
+
+  Also added `internal/platform/storage/migrate_test.go`: a DB-free structural
+  test (every up migration has a down migration, none are empty, none use
+  `DELIMITER` which the naive `;` splitter cannot handle, lexical order
+  matches apply order) plus an opt-in up→up→down→up smoke test against a
+  throwaway MySQL schema, gated on `MYSQL_TEST_DSN` so the suite stays green
+  without a database.
+- **Section 8 (next)** — Frontend: auth panel, Projects tab with a hash
+  sub-router, projects list dashboard, project dashboard with charts and
+  route table, route detail page, import wizard, styles, docs.

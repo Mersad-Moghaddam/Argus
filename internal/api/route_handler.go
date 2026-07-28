@@ -18,18 +18,18 @@ func NewRouteHandler(service *application.Service) *RouteHandler {
 	return &RouteHandler{service: service}
 }
 
-func RegisterRouteRoutes(app fiber.Router, h *RouteHandler) {
-	app.Get("/projects/:projectId/routes", h.ListRoutes)
-	app.Post("/projects/:projectId/routes", h.CreateRoute)
-	app.Post("/projects/:projectId/routes/bulk", h.BulkCreateRoutes)
-	app.Post("/projects/:projectId/routes/bulk-delete", h.BulkDeleteRoutes)
-	app.Get("/projects/:projectId/routes/:routeId", h.GetRoute)
-	app.Put("/projects/:projectId/routes/:routeId", h.UpdateRoute)
-	app.Post("/projects/:projectId/routes/:routeId/enable", h.EnableRoute)
-	app.Post("/projects/:projectId/routes/:routeId/disable", h.DisableRoute)
-	app.Delete("/projects/:projectId/routes/:routeId", h.DeleteRoute)
-	app.Get("/projects/:projectId/routes/:routeId/checks", h.ListRouteChecks)
-	app.Get("/projects/:projectId/incidents", h.ListIncidents)
+func RegisterRouteRoutes(app fiber.Router, h *RouteHandler, guards ...fiber.Handler) {
+	app.Get("/projects/:projectId/routes", guarded(guards, h.ListRoutes)...)
+	app.Post("/projects/:projectId/routes", guarded(guards, h.CreateRoute)...)
+	app.Post("/projects/:projectId/routes/bulk", guarded(guards, h.BulkCreateRoutes)...)
+	app.Post("/projects/:projectId/routes/bulk-delete", guarded(guards, h.BulkDeleteRoutes)...)
+	app.Get("/projects/:projectId/routes/:routeId", guarded(guards, h.GetRoute)...)
+	app.Put("/projects/:projectId/routes/:routeId", guarded(guards, h.UpdateRoute)...)
+	app.Post("/projects/:projectId/routes/:routeId/enable", guarded(guards, h.EnableRoute)...)
+	app.Post("/projects/:projectId/routes/:routeId/disable", guarded(guards, h.DisableRoute)...)
+	app.Delete("/projects/:projectId/routes/:routeId", guarded(guards, h.DeleteRoute)...)
+	app.Get("/projects/:projectId/routes/:routeId/checks", guarded(guards, h.ListRouteChecks)...)
+	app.Get("/projects/:projectId/incidents", guarded(guards, h.ListIncidents)...)
 }
 
 type routeRequest struct {
