@@ -23,23 +23,37 @@ import (
 	"github.com/hibiken/asynq"
 )
 
+// taskEnqueuer is the subset of *asynq.Client the processor needs, kept as an
+// interface so enqueue behaviour can be asserted in tests without Redis.
+type taskEnqueuer interface {
+	EnqueueContext(ctx context.Context, task *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error)
+}
+
 type Processor struct {
 	monitors ports.MonitorStore
 	alerts   ports.AlertChannelStore
 	outbox   ports.OutboxStore
 	service  *application.Service
-	client   *asynq.Client
+	client   taskEnqueuer
 	notifier ports.Notifier
 	logger   *observability.LogStore
+
+	// Project-based API route monitoring dependencies.
+	routes    ports.RouteStore
+	evaluator *RouteEvaluator
+	routeCfg  RouteMonitorConfig
 }
 
-func NewProcessor(monitors ports.MonitorStore, alerts ports.AlertChannelStore, outbox ports.OutboxStore, service *application.Service, client *asynq.Client, notifier ports.Notifier, logger *observability.LogStore) *Processor {
-	return &Processor{monitors: monitors, alerts: alerts, outbox: outbox, service: service, client: client, notifier: notifier, logger: logger}
+func NewProcessor(monitors ports.MonitorStore, alerts ports.AlertChannelStore, outbox ports.OutboxStore, service *application.Service, client *asynq.Client, notifier ports.Notifier, logger *observability.LogStore,
+	routes ports.RouteStore, evaluator *RouteEvaluator, routeCfg RouteMonitorConfig) *Processor {
+	return &Processor{monitors: monitors, alerts: alerts, outbox: outbox, service: service, client: client, notifier: notifier, logger: logger,
+		routes: routes, evaluator: evaluator, routeCfg: routeCfg}
 }
 func (p *Processor) Register(mux *asynq.ServeMux) {
 	mux.HandleFunc(TypeEnqueueDueChecks, p.HandleEnqueueDueChecks)
 	mux.HandleFunc(TypeCheckWebsite, p.HandleCheckWebsite)
 	mux.HandleFunc(TypeDispatchOutbox, p.HandleDispatchOutbox)
+	p.RegisterRouteTasks(mux)
 }
 
 func (p *Processor) HandleEnqueueDueChecks(ctx context.Context, _ *asynq.Task) error {

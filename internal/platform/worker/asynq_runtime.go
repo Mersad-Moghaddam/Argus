@@ -30,6 +30,17 @@ func NewRuntime(cfg config.Config, processor *appworker.Processor, logger *obser
 	if _, err := scheduler.Register("@every 10s", appworker.NewDispatchOutboxTask(), asynq.Queue("default")); err != nil {
 		return nil, err
 	}
+	// Project API route monitoring runs on the "default" queue so it can
+	// never starve the legacy website checks on "critical".
+	if _, err := scheduler.Register(fmt.Sprintf("@every %s", cfg.RouteSchedulerInterval), appworker.NewEnqueueDueRouteChecksTask(), asynq.Queue("default")); err != nil {
+		return nil, err
+	}
+	if _, err := scheduler.Register(fmt.Sprintf("@every %s", cfg.RouteAggregateInterval), appworker.NewAggregateRouteMetricsTask(), asynq.Queue("default")); err != nil {
+		return nil, err
+	}
+	if _, err := scheduler.Register("@every 24h", appworker.NewPruneRouteChecksTask(), asynq.Queue("default")); err != nil {
+		return nil, err
+	}
 	mux := asynq.NewServeMux()
 	processor.Register(mux)
 	go func() { _ = server.Run(mux) }()

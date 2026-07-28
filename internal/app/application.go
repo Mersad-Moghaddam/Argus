@@ -46,7 +46,19 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	appService := application.NewService(store, store, store, store, store, store, logger, store, store, store, store, store, store)
 	httpApp := httpserver.NewFiberApp(appService, logger, cfg.APIKey)
 	asynqClient := asynq.NewClient(workerplatform.RedisClientOptions(cfg))
-	processor := worker.NewProcessor(store, store, store, appService, asynqClient, notifier.NewHTTPNotifier(), logger)
+	routeEvaluator := worker.NewRouteEvaluator(worker.EvaluatorConfig{
+		AllowPrivateTargets: cfg.RouteAllowPrivateTargets,
+		MaxRedirects:        cfg.RouteMaxRedirects,
+		MaxTimeout:          cfg.RouteMaxTimeout,
+		UserAgent:           cfg.RouteUserAgent,
+	})
+	routeMonitorCfg := worker.RouteMonitorConfig{
+		DueBatchSize:      cfg.RouteDueBatchSize,
+		CheckRetention:    cfg.RouteCheckRetention,
+		PruneBatchSize:    cfg.RouteCheckPruneBatch,
+		AggregationWindow: cfg.RouteAggregateWindow,
+	}
+	processor := worker.NewProcessor(store, store, store, appService, asynqClient, notifier.NewHTTPNotifier(), logger, store, routeEvaluator, routeMonitorCfg)
 	workerRt, err := workerplatform.NewRuntime(cfg, processor, logger)
 	if err != nil {
 		_ = asynqClient.Close()

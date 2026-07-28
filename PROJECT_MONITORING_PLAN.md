@@ -389,7 +389,43 @@ work.
   15MB to safely accept large OpenAPI upload requests ahead of the
   parser's own 10MB document cap. `go build`, `go vet`, `go test ./...`
   all clean.
-- **Section 6 (next)** — Worker: route check task (SSRF-safe HTTP
-  evaluator with retries/timeouts), scheduling + concurrency + duplicate-job
-  prevention, metric aggregation job, retention pruning job; wire into
-  `internal/app` and the asynq runtime.
+- **Section 6 (commit pending)** — Done. Added `internal/worker/
+  route_evaluator.go`: a shared, hardened HTTP evaluator used by every route
+  check. Its address policy runs in the dialer's `Control` hook, so it sees
+  the *resolved* IP immediately before connect — this closes the DNS-rebinding
+  hole a hostname-only pre-flight check leaves open, and it applies
+  identically to every redirect hop. Blocks (always) cloud metadata
+  hostnames/ranges, IPv6 link-local, CGNAT, benchmarking, reserved and
+  documentation ranges, multicast and unspecified addresses; blocks (by
+  default policy) loopback, RFC1918/ULA private and link-local unicast, with
+  `ROUTE_ALLOW_PRIVATE_TARGETS=true` as a documented opt-in for operators
+  monitoring internal APIs — metadata endpoints stay blocked either way.
+  Also: scheme allow-list, embedded-credential rejection, redirect cap with
+  per-hop re-validation, `Authorization`/`Cookie`/API-key stripping on
+  cross-origin redirects, per-route timeout (clamped to a ceiling), bounded
+  exponential retry with attempt counting, no retry for policy-blocked
+  targets, expected-status-range matching (`200-399`, `200,201`, `200-204,301`),
+  1MB response cap, custom header injection with hop-by-hop headers filtered,
+  and URL-escaped path-parameter substitution (`{id}` / `:id`) driven by the
+  spec's example/default values. Added `route_processor.go` with four asynq
+  handlers — `route:enqueue_due_checks` (cursor-paginated scan, one
+  `asynq.Unique`-keyed task per route for duplicate-job prevention, tolerant
+  of `ErrDuplicateTask`), `route:check` (re-reads the route so stale config is
+  never used, then delegates to `ProcessRouteCheckResult`),
+  `route:aggregate_metrics`, and `route:prune_checks` (bounded batches with an
+  iteration cap). All new tasks run on the `default` queue so they cannot
+  starve legacy website checks on `critical`; asynq's `Concurrency` bounds
+  in-flight work and no unbounded goroutines are created. Config gained ten
+  `ROUTE_*` knobs, all with safe defaults. Wired into
+  `platform/worker/asynq_runtime.go` and `app/application.go`. 30 new worker
+  tests (SSRF table incl. DNS rebinding, redirect cap, blocked-redirect,
+  secret stripping, timeout, retry counting, status ranges, path-param
+  escaping, enqueue filtering/pagination/dedupe, prune batching, aggregation
+  window). Added `.gitattributes` (`*.go text eol=lf`) and normalized the
+  tree to LF: with `core.autocrlf=true` a Windows checkout rewrote every Go
+  file to CRLF, which made `gofmt -l` report the entire repository as
+  unformatted. `gofmt -l` is now clean, `go build`, `go vet`, `go test ./...`
+  all pass.
+- **Section 7 (next)** — Backend automated tests for the application and API
+  layers (fakes for the new ports, authz matrix, import validate/commit,
+  incident open/resolve, handler status codes, 500+ route import).
