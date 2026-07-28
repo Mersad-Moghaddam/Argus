@@ -104,7 +104,10 @@ docker compose up -d
 docker compose ps
 ```
 
-This starts MySQL 8.4 and Redis 8.8 with persistent named volumes.
+This starts MySQL 8.4, Redis 8.8, and VictoriaMetrics with persistent named
+volumes. VictoriaMetrics is available only on local loopback at
+`http://127.0.0.1:8428`; see [ADR 0001](docs/adr/0001-prometheus-compatible-metrics-store.md)
+for retention, backup, restore, and production-access guidance.
 
 ### 2. Start Argus
 

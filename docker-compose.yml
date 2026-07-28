@@ -26,6 +26,32 @@ services:
     volumes:
       - redis_data:/data
 
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.148.0
+    container_name: argus-victoriametrics
+    restart: unless-stopped
+    command:
+      - -httpListenAddr=:8428
+      - -storageDataPath=/victoria-metrics-data
+      - -retentionPeriod=30d
+      - -memory.allowedPercent=60
+      - -storage.minFreeDiskSpaceBytes=5GB
+    # The query endpoint is bound to loopback for local development. Production
+    # deployments keep it on the private Compose network and query it only via
+    # the Argus service, which enforces project scope before forming PromQL.
+    ports:
+      - "127.0.0.1:8428:8428"
+    volumes:
+      - victoriametrics_data:/victoria-metrics-data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8428/-/healthy"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    mem_limit: 1g
+
 volumes:
   mysql_data:
   redis_data:
+  victoriametrics_data:
