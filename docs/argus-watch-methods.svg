@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="330" viewBox="0 0 1100 330" role="img" aria-labelledby="title desc">
+  <title id="title">The four labors of the Argus watch</title>
+  <desc id="desc">Four animated mythic instruments represent HTTP status, keyword, heartbeat, and TLS certificate monitoring.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#11172a"/><stop offset="1" stop-color="#092026"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#1d2337"/><stop offset="1" stop-color="#101724"/>
+    </linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f0d174"/><stop offset=".5" stop-color="#c76945"/><stop offset="1" stop-color="#7d3542"/>
+    </linearGradient>
+    <pattern id="key" width="40" height="12" patternUnits="userSpaceOnUse">
+      <path d="M0 1h25v7H10V5h10M40 11H15V4h15v3H20" fill="none" stroke="#d8904e" stroke-width="1.5"/>
+    </pattern>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <style>
+      .signal{filter:url(#glow)}
+      .traveler{animation:travel 2.8s linear infinite}
+      .scan{animation:scan 4s ease-in-out infinite}
+      .pulse{stroke-dasharray:140;animation:pulse 2.2s linear infinite}
+      .seal{stroke-dasharray:9 8;animation:seal 8s linear infinite}
+      .torch{animation:torch 1.8s ease-in-out infinite}
+      @keyframes travel{from{transform:translateX(0)}to{transform:translateX(170px)}}
+      @keyframes scan{0%,100%{transform:translateY(0)}50%{transform:translateY(48px)}}
+      @keyframes pulse{from{stroke-dashoffset:280}to{stroke-dashoffset:0}}
+      @keyframes seal{to{stroke-dashoffset:-136}}
+      @keyframes torch{0%,100%{opacity:.45}50%{opacity:1}}
+      @media (prefers-reduced-motion:reduce){.traveler,.scan,.pulse,.seal,.torch{animation:none}}
+    </style>
+  </defs>
+  <rect width="1100" height="330" rx="20" fill="url(#bg)"/>
+  <rect x="18" y="17" width="1064" height="296" rx="13" fill="none" stroke="#b95d41" stroke-width="1.5"/>
+  <rect x="28" y="26" width="1044" height="12" fill="url(#key)" opacity=".8"/>
+
+  <g text-anchor="middle">
+    <text x="550" y="69" fill="#f3e6c2" font-family="Georgia,Palatino Linotype,serif" font-size="25" font-weight="700" letter-spacing="4">THE FOUR LABORS OF THE WATCH</text>
+    <text x="550" y="90" fill="#72bdb2" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="10" letter-spacing="3">FOUR WAYS TO KEEP ONE PROMISE: KNOW WHEN IT FAILS</text>
+  </g>
+
+  <!-- HTTP / Temple gate -->
+  <g transform="translate(42 109)">
+    <rect width="236" height="172" rx="11" fill="url(#card)" stroke="#5d645d"/>
+    <path d="M57 67L118 29L179 67M67 67H169M77 67v57M103 67v57M133 67v57M159 67v57M61 124h116M53 134h130" fill="none" stroke="url(#metal)" stroke-width="3"/>
+    <path d="M26 52H50" stroke="#55d6c1" stroke-width="1.5" stroke-dasharray="3 4"/>
+    <circle class="signal traveler" cx="26" cy="52" r="4" fill="#70f0cc"/>
+    <text x="118" y="103" fill="#f0cd6d" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="15" text-anchor="middle">200</text>
+    <text x="118" y="153" fill="#f3e6c2" font-family="Georgia,serif" font-size="17" font-weight="700" text-anchor="middle">Temple Gate</text>
+    <text x="118" y="168" fill="#829791" font-family="ui-monospace,monospace" font-size="9" text-anchor="middle">HTTP STATUS</text>
+  </g>
+
+  <!-- Keyword / Oracle scroll -->
+  <g transform="translate(302 109)">
+    <rect width="236" height="172" rx="11" fill="url(#card)" stroke="#5d645d"/>
+    <path d="M72 41c-16 0-16 17 0 17v66c-16 0-16 17 0 17h92c16 0 16-17 0-17V58c16 0 16-17 0-17Z" fill="#e5d39f" stroke="#c46d48" stroke-width="2"/>
+    <path d="M87 70h62M87 86h50M87 102h67M87 118h42" stroke="#5e4c45" stroke-width="3" stroke-linecap="round" opacity=".65"/>
+    <rect class="scan" x="83" y="63" width="76" height="14" rx="3" fill="#2ba398" opacity=".35"/>
+    <circle class="torch" cx="118" cy="45" r="5" fill="#f0cd6d" filter="url(#glow)"/>
+    <text x="118" y="153" fill="#f3e6c2" font-family="Georgia,serif" font-size="17" font-weight="700" text-anchor="middle">Oracle Scroll</text>
+    <text x="118" y="168" fill="#829791" font-family="ui-monospace,monospace" font-size="9" text-anchor="middle">KEYWORD</text>
+  </g>
+
+  <!-- Heartbeat / Bronze drum -->
+  <g transform="translate(562 109)">
+    <rect width="236" height="172" rx="11" fill="url(#card)" stroke="#5d645d"/>
+    <ellipse cx="118" cy="70" rx="56" ry="25" fill="#512e37" stroke="#dc8f4f" stroke-width="3"/>
+    <path d="M62 70v43c0 14 112 14 112 0V70M76 83v36M160 83v36" fill="#3b2934" stroke="#bd6545" stroke-width="2"/>
+    <path class="pulse" d="M72 70h23l9-14l13 28l12-24l9 10h26" fill="none" stroke="#75e1ca" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle class="torch" cx="118" cy="70" r="6" fill="#e9c760" opacity=".5"/>
+    <text x="118" y="153" fill="#f3e6c2" font-family="Georgia,serif" font-size="17" font-weight="700" text-anchor="middle">Bronze Drum</text>
+    <text x="118" y="168" fill="#829791" font-family="ui-monospace,monospace" font-size="9" text-anchor="middle">HEARTBEAT</text>
+  </g>
+
+  <!-- TLS / Aegis -->
+  <g transform="translate(822 109)">
+    <rect width="236" height="172" rx="11" fill="url(#card)" stroke="#5d645d"/>
+    <path d="M118 34L169 52v34c0 30-20 47-51 59c-31-12-51-29-51-59V52Z" fill="#172d3d" stroke="url(#metal)" stroke-width="3"/>
+    <circle class="seal" cx="118" cy="86" r="33" fill="none" stroke="#56c5b7" stroke-width="2"/>
+    <rect x="101" y="82" width="34" height="28" rx="5" fill="#ca7049"/>
+    <path d="M107 82v-8a11 11 0 0 1 22 0v8" fill="none" stroke="#efd174" stroke-width="3"/>
+    <circle cx="118" cy="95" r="4" fill="#1a2032"/>
+    <text x="118" y="153" fill="#f3e6c2" font-family="Georgia,serif" font-size="17" font-weight="700" text-anchor="middle">Aegis Seal</text>
+    <text x="118" y="168" fill="#829791" font-family="ui-monospace,monospace" font-size="9" text-anchor="middle">TLS EXPIRY</text>
+  </g>
+
+  <text x="550" y="307" fill="#b48155" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="9" letter-spacing="3" text-anchor="middle">HTTP · CONTENT · LIFE SIGNAL · CERTIFICATE</text>
+</svg>

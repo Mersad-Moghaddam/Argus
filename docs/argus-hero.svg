@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="500" viewBox="0 0 1200 500" role="img" aria-labelledby="title desc">
+  <title id="title">Argus Panoptes — the all-seeing guardian</title>
+  <desc id="desc">An animated mythic guardian covered in watchful eyes stands before a fan of peacock feathers, framed like ancient Greek pottery.</desc>
+  <defs>
+    <linearGradient id="night" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#101528"/>
+      <stop offset=".48" stop-color="#17182b"/>
+      <stop offset="1" stop-color="#071d24"/>
+    </linearGradient>
+    <radialGradient id="aura">
+      <stop stop-color="#e7c66a" stop-opacity=".2"/>
+      <stop offset=".48" stop-color="#277f82" stop-opacity=".1"/>
+      <stop offset="1" stop-color="#071d24" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bronze" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f0d27d"/>
+      <stop offset=".45" stop-color="#c66b44"/>
+      <stop offset="1" stop-color="#863d34"/>
+    </linearGradient>
+    <linearGradient id="peacock" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#2aa69e"/>
+      <stop offset=".52" stop-color="#31579b"/>
+      <stop offset="1" stop-color="#782f68"/>
+    </linearGradient>
+    <filter id="goldGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="stars" width="74" height="58" patternUnits="userSpaceOnUse">
+      <circle cx="8" cy="13" r=".7" fill="#f4e7c1" opacity=".25"/>
+      <circle cx="43" cy="31" r="1" fill="#75c5b8" opacity=".2"/>
+      <circle cx="68" cy="49" r=".55" fill="#f4e7c1" opacity=".2"/>
+    </pattern>
+    <pattern id="meander" width="48" height="16" patternUnits="userSpaceOnUse">
+      <path d="M0 2h30v8H12v-4h12M48 14H18V6h18v4H24" fill="none" stroke="#dc9a59" stroke-width="2"/>
+    </pattern>
+    <g id="eye">
+      <path d="M-12 0C-6-7 6-7 12 0C6 7-6 7-12 0Z" fill="#f4e7c1" stroke="#d8754c" stroke-width="1.4"/>
+      <circle r="4.2" fill="#238a86"/>
+      <circle r="1.9" fill="#11162a"/>
+      <circle cx="1.3" cy="-1.3" r=".7" fill="#fff9df"/>
+    </g>
+    <g id="feather">
+      <path d="M0 15C-39-66-38-189 0-281C38-189 39-66 0 15Z" fill="#102b38" stroke="#287f80" stroke-width="2"/>
+      <path d="M0 14V-213" stroke="#dba857" stroke-width="2" opacity=".75"/>
+      <path d="M0-246C-25-227-23-194 0-179C23-194 25-227 0-246Z" fill="url(#peacock)" stroke="#dcb45f" stroke-width="2"/>
+      <ellipse cy="-212" rx="12" ry="18" fill="#102138"/>
+      <ellipse cy="-212" rx="6" ry="10" fill="#e8c767"/>
+      <circle cy="-212" r="3" fill="#15192c"/>
+    </g>
+    <style>
+      .watch{animation:wake 5.2s ease-in-out infinite}
+      .w2{animation-delay:-.65s}.w3{animation-delay:-1.3s}.w4{animation-delay:-1.95s}
+      .w5{animation-delay:-2.6s}.w6{animation-delay:-3.25s}.w7{animation-delay:-3.9s}
+      .fan{animation:fanGlow 6s ease-in-out infinite}
+      .thread{stroke-dasharray:3 11;animation:thread 12s linear infinite}
+      .star{animation:twinkle 3s ease-in-out infinite}.s2{animation-delay:-1.5s}
+      @keyframes wake{0%,42%,48%,100%{opacity:1}45%{opacity:.15}}
+      @keyframes fanGlow{0%,100%{opacity:.58}50%{opacity:.86}}
+      @keyframes thread{to{stroke-dashoffset:-140}}
+      @keyframes twinkle{0%,100%{opacity:.2}50%{opacity:1}}
+      @media (prefers-reduced-motion:reduce){.watch,.fan,.thread,.star{animation:none}}
+    </style>
+  </defs>
+
+  <rect width="1200" height="500" rx="24" fill="url(#night)"/>
+  <rect width="1200" height="500" rx="24" fill="url(#stars)"/>
+  <circle cx="600" cy="229" r="310" fill="url(#aura)"/>
+
+  <!-- Greek ceramic frame -->
+  <rect x="15" y="15" width="1170" height="470" rx="16" fill="none" stroke="#c76242" stroke-width="2"/>
+  <rect x="24" y="24" width="1152" height="16" fill="url(#meander)" opacity=".8"/>
+  <rect x="24" y="460" width="1152" height="16" fill="url(#meander)" opacity=".8"/>
+  <path d="M34 52V448M1166 52V448" stroke="#d79858" stroke-width="1" opacity=".45"/>
+
+  <!-- Constellation threads: the modern network watched by the guardian -->
+  <g fill="none" stroke="#50b7ad" stroke-width="1" opacity=".34">
+    <path class="thread" d="M111 135L252 91L390 145M809 145L951 89L1089 137"/>
+    <path class="thread" d="M92 287L248 333L382 289M818 289L950 334L1108 286"/>
+  </g>
+  <g fill="#e8c767" filter="url(#goldGlow)">
+    <circle class="star" cx="111" cy="135" r="3"/><circle class="star s2" cx="252" cy="91" r="3"/>
+    <circle class="star" cx="92" cy="287" r="3"/><circle class="star s2" cx="248" cy="333" r="3"/>
+    <circle class="star s2" cx="1089" cy="137" r="3"/><circle class="star" cx="951" cy="89" r="3"/>
+    <circle class="star s2" cx="1108" cy="286" r="3"/><circle class="star" cx="950" cy="334" r="3"/>
+  </g>
+
+  <!-- Hera's peacock memorial -->
+  <g class="fan" transform="translate(600 364)" opacity=".72">
+    <use href="#feather" transform="rotate(-72) scale(.72)"/>
+    <use href="#feather" transform="rotate(-57) scale(.8)"/>
+    <use href="#feather" transform="rotate(-42) scale(.88)"/>
+    <use href="#feather" transform="rotate(-28) scale(.95)"/>
+    <use href="#feather" transform="rotate(-14)"/>
+    <use href="#feather"/>
+    <use href="#feather" transform="rotate(14)"/>
+    <use href="#feather" transform="rotate(28) scale(.95)"/>
+    <use href="#feather" transform="rotate(42) scale(.88)"/>
+    <use href="#feather" transform="rotate(57) scale(.8)"/>
+    <use href="#feather" transform="rotate(72) scale(.72)"/>
+  </g>
+
+  <!-- Argus Panoptes: the many-eyed guardian -->
+  <g transform="translate(600 244)">
+    <path d="M-177 182C-164 86-112 41-61 24C-80 2-81-32-65-58C-49-85-25-99 0-99C25-99 49-85 65-58C81-32 80 2 61 24C112 41 164 86 177 182Z" fill="#0c111c" stroke="url(#bronze)" stroke-width="3"/>
+    <path d="M-61 24C-38 39 38 39 61 24M-135 108C-73 79 73 79 135 108M-160 149C-85 121 85 121 160 149" fill="none" stroke="#bc6547" stroke-width="1.5" opacity=".55"/>
+    <path d="M-38-69C-15-83 15-83 38-69M-47-42C-23-29 23-29 47-42" fill="none" stroke="#da9f5c" stroke-width="1.4" opacity=".5"/>
+
+    <use class="watch" href="#eye" transform="translate(0 -60) scale(1.05)"/>
+    <use class="watch w3" href="#eye" transform="translate(-31 -48) scale(.72)"/>
+    <use class="watch w6" href="#eye" transform="translate(31 -48) scale(.72)"/>
+    <use class="watch w2" href="#eye" transform="translate(-15 -20) scale(.68)"/>
+    <use class="watch w5" href="#eye" transform="translate(18 -20) scale(.68)"/>
+    <use class="watch w4" href="#eye" transform="translate(-61 42) scale(.8)"/>
+    <use class="watch w7" href="#eye" transform="translate(0 47) scale(.9)"/>
+    <use class="watch w2" href="#eye" transform="translate(61 42) scale(.8)"/>
+    <use class="watch w5" href="#eye" transform="translate(-106 77) scale(.72)"/>
+    <use class="watch w3" href="#eye" transform="translate(-37 83) scale(.72)"/>
+    <use class="watch w6" href="#eye" transform="translate(38 83) scale(.72)"/>
+    <use class="watch w4" href="#eye" transform="translate(106 77) scale(.72)"/>
+    <use class="watch w7" href="#eye" transform="translate(-129 117) scale(.65)"/>
+    <use class="watch w2" href="#eye" transform="translate(-71 120) scale(.65)"/>
+    <use class="watch w5" href="#eye" transform="translate(0 121) scale(.72)"/>
+    <use class="watch w3" href="#eye" transform="translate(71 120) scale(.65)"/>
+    <use class="watch w6" href="#eye" transform="translate(129 117) scale(.65)"/>
+    <use class="watch w4" href="#eye" transform="translate(-148 154) scale(.58)"/>
+    <use class="watch w7" href="#eye" transform="translate(-94 157) scale(.58)"/>
+    <use class="watch w2" href="#eye" transform="translate(-36 158) scale(.58)"/>
+    <use class="watch w5" href="#eye" transform="translate(36 158) scale(.58)"/>
+    <use class="watch w3" href="#eye" transform="translate(94 157) scale(.58)"/>
+    <use class="watch w6" href="#eye" transform="translate(148 154) scale(.58)"/>
+  </g>
+
+  <!-- Myth / product bridge -->
+  <g font-family="ui-monospace,SFMono-Regular,Consolas,monospace" fill="#e7c66a">
+    <text x="72" y="82" font-size="12" letter-spacing="3">ἌΡΓΟΣ ΠΑΝΌΠΤΗΣ</text>
+    <text x="1128" y="82" font-size="12" letter-spacing="3" text-anchor="end">THE ALL-SEEING</text>
+    <text x="72" y="405" font-size="11" letter-spacing="2" opacity=".78">SOME EYES REST</text>
+    <text x="72" y="423" font-size="11" letter-spacing="2" opacity=".78">THE WATCH NEVER DOES</text>
+    <text x="1128" y="405" font-size="11" letter-spacing="2" text-anchor="end" opacity=".78">OBSERVE · DETECT</text>
+    <text x="1128" y="423" font-size="11" letter-spacing="2" text-anchor="end" opacity=".78">REMEMBER · RESPOND</text>
+  </g>
+
+  <g text-anchor="middle">
+    <text x="600" y="426" fill="#f5e8c8" font-family="Georgia,Palatino Linotype,serif" font-size="58" font-weight="700" letter-spacing="13">ARGUS</text>
+    <text x="600" y="451" fill="#75c5b8" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="11" letter-spacing="4">THE NEVER-SLEEPING UPTIME GUARDIAN</text>
+  </g>
+</svg>

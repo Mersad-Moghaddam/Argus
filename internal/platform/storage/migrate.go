@@ -3,11 +3,14 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	mysqlDriver "github.com/go-sql-driver/mysql"
 )
 
 // sqlExecutor is satisfied by *sql.DB and *sql.Conn, so a batch can be run
@@ -18,12 +21,11 @@ type sqlExecutor interface {
 
 // ApplyMigrations executes all *.up.sql files in lexical order.
 //
-// Every file runs on a single pinned connection. Migrations may legitimately
-// depend on session state: MySQL has no `ADD COLUMN IF NOT EXISTS`, so
-// idempotent column additions are expressed as a user variable plus
-// PREPARE/EXECUTE, and both are session-scoped. Handing the statements to the
-// pool would scatter them across connections and the variable would read back
-// as NULL.
+// Every file runs on a single pinned connection, so a migration that depends on
+// session state (a user variable, a prepared statement, a session setting)
+// behaves the same as it would in a mysql client. Handing statements to the
+// pool would scatter them across connections and any session state would be
+// silently lost.
 func ApplyMigrations(ctx context.Context, db *sql.DB, migrationsDir string) error {
 	files, err := filepath.Glob(filepath.Join(migrationsDir, "*.up.sql"))
 	if err != nil {
@@ -53,10 +55,26 @@ func ApplyMigrations(ctx context.Context, db *sql.DB, migrationsDir string) erro
 func executeSQLBatch(ctx context.Context, exec sqlExecutor, sqlText string) error {
 	for _, stmt := range SplitStatements(sqlText) {
 		if _, err := exec.ExecContext(ctx, stmt); err != nil {
+			if isIgnorableMigrationError(err) {
+				continue
+			}
 			return err
 		}
 	}
 	return nil
+}
+
+// isIgnorableMigrationError reports whether err is the specific "column already
+// exists" failure that makes a re-run of an additive migration a no-op.
+//
+// MySQL has no `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (that syntax is a
+// MariaDB extension), so the compatibility migration issues plain ADD COLUMN
+// statements and relies on this narrow allowance for idempotency. Nothing else
+// is tolerated: every other error still aborts startup.
+func isIgnorableMigrationError(err error) bool {
+	var mysqlErr *mysqlDriver.MySQLError
+	const errDupFieldName = 1060
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == errDupFieldName
 }
 
 // SplitStatements splits a SQL batch into individual statements.
