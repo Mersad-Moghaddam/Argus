@@ -12,6 +12,8 @@
 
 **A fast, self-hosted uptime monitor and incident control center built in Go.**
 
+`PANOPTES MODE: ON` · Some eyes may rest. The watch never does.
+
 [Quick start](#quick-start) · [Features](#what-argus-watches) · [API](#http-api) · [Architecture](#architecture) · [Roadmap](#project-status-and-roadmap) · [Contributing](CONTRIBUTING.md)
 
 </div>
@@ -19,6 +21,8 @@
 ---
 
 Argus watches websites, health endpoints, expected content, heartbeat signals, and TLS certificates. It records every check, opens and resolves incidents, suppresses noise during maintenance, and dispatches alerts asynchronously—all from a responsive dashboard you can run on your own infrastructure.
+
+The name honors [Argus Panoptes](https://www.theoi.com/Gigante/GiganteArgosPanoptes.html)—the many-eyed, “all-seeing” guardian of Greek myth. Some of his eyes could sleep while others kept watch; after his death, Hera preserved them in the peacock’s tail. Argus turns that ancient image of continuous vigilance into a modern monitoring system.
 
 > [!IMPORTANT]
 > The website-monitoring workflow is the production-ready core of this repository. The newer **Projects + OpenAPI route monitoring** subsystem currently includes its database model, user auth, OpenAPI/Swagger parser, service layer, persistence adapters, and HTTP API. Its background route evaluator and dedicated project UI are still in development. See [Project status and roadmap](#project-status-and-roadmap).
@@ -36,10 +40,6 @@ Argus watches websites, health endpoints, expected content, heartbeat signals, a
 
 ## Dashboard
 
-<div align="center">
-  <img src="docs/main-page-preview.svg" width="920" alt="Argus dashboard showing monitor health, incidents, alerts, and status pages" />
-</div>
-
 The control center includes live health totals, searchable and sortable monitors, incident history, maintenance scheduling, alert channels, public status pages, ping history, toast feedback, light/dark themes, and a 30-second auto-refresh loop.
 
 ## What Argus watches
@@ -52,6 +52,10 @@ The control center includes live health totals, searchable and sortable monitors
 | `tls_expiry` | Opens a TLS connection and inspects the leaf certificate. | Expiry is beyond the configured threshold (14 days by default). |
 
 All monitor intervals must be at least 10 seconds. HTTP checks time out after 5 seconds; keyword checks after 6 seconds; TLS handshakes after 5 seconds.
+
+<div align="center">
+  <img src="docs/argus-watch-methods.svg" width="920" alt="Four animated mythic instruments representing Argus HTTP, keyword, heartbeat, and TLS monitoring" />
+</div>
 
 <div align="center">
   <img src="docs/monitoring-flow.svg" width="920" alt="Animated Argus monitoring flow from scheduler through checks and incidents to alert delivery" />
@@ -211,6 +215,10 @@ OpenAPI imports resolve only local `$ref` pointers—Argus does not fetch extern
 ## Architecture
 
 Argus follows a ports-and-adapters layout: business rules point inward, while HTTP, MySQL, Redis/Asynq, and outbound notifications remain replaceable edge concerns.
+
+<div align="center">
+  <img src="docs/argus-architecture.svg" width="920" alt="Animated Greek-temple diagram of Argus ports-and-adapters architecture" />
+</div>
 
 ```text
 Browser / API clients
