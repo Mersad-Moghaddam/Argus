@@ -34,12 +34,13 @@ type Service struct {
 	routeIncidents       ports.RouteIncidentStore
 	imports              ports.ImportStore
 	telemetryCredentials ports.TelemetryCredentialStore
+	telemetryIngress     ports.TelemetryIngressStore
 }
 
 func NewService(monitors ports.MonitorStore, incidents ports.IncidentStore, maintenance ports.MaintenanceStore, statusPages ports.StatusPageStore, alerts ports.AlertChannelStore, outbox ports.OutboxStore, logger *observability.LogStore,
-	users ports.UserStore, tokens ports.AuthTokenStore, projects ports.ProjectStore, routes ports.RouteStore, routeIncidents ports.RouteIncidentStore, imports ports.ImportStore, telemetryCredentials ports.TelemetryCredentialStore) *Service {
+	users ports.UserStore, tokens ports.AuthTokenStore, projects ports.ProjectStore, routes ports.RouteStore, routeIncidents ports.RouteIncidentStore, imports ports.ImportStore, telemetryCredentials ports.TelemetryCredentialStore, telemetryIngress ports.TelemetryIngressStore) *Service {
 	return &Service{monitors: monitors, incidents: incidents, maintenance: maintenance, statusPages: statusPages, alerts: alerts, outbox: outbox, logger: logger,
-		users: users, tokens: tokens, projects: projects, routes: routes, routeIncidents: routeIncidents, imports: imports, telemetryCredentials: telemetryCredentials}
+		users: users, tokens: tokens, projects: projects, routes: routes, routeIncidents: routeIncidents, imports: imports, telemetryCredentials: telemetryCredentials, telemetryIngress: telemetryIngress}
 }
 
 type CreateMonitorInput struct {

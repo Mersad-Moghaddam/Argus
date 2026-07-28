@@ -85,9 +85,11 @@ func NewFiberApp(service *application.Service, logStore *observability.LogStore,
 	projectHandler := api.NewProjectHandler(service)
 	routeHandler := api.NewRouteHandler(service)
 	importHandler := api.NewImportHandler(service)
+	telemetryIngestHandler := api.NewTelemetryIngestHandler(service)
 	api.RegisterProjectRoutes(apiGroup, projectHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterRouteRoutes(apiGroup, routeHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterImportRoutes(apiGroup, importHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterTelemetryIngestRoutes(app, telemetryIngestHandler)
 
 	app.Static("/", "./frontend", fiber.Static{
 		Compress:      true,

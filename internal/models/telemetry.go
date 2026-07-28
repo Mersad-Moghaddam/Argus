@@ -28,3 +28,19 @@ type IssuedTelemetryCredential struct {
 	Credential TelemetryCredential `json:"credential"`
 	Token      string              `json:"token"`
 }
+
+// TelemetryIngressRecord is a deliberately low-cardinality audit record for
+// one resource group accepted at the OTLP boundary. It is not a time-series
+// sample store: raw attributes, metric values, span names, trace IDs, URLs,
+// and payloads are never persisted here.
+type TelemetryIngressRecord struct {
+	ID                    int64     `json:"id"`
+	ProjectID             int64     `json:"projectId"`
+	EnvironmentID         int64     `json:"environmentId"`
+	CredentialID          int64     `json:"credentialId"`
+	SignalType            string    `json:"signalType"`
+	ServiceName           string    `json:"serviceName,omitempty"`
+	DeploymentEnvironment string    `json:"deploymentEnvironment,omitempty"`
+	ItemCount             int       `json:"itemCount"`
+	ReceivedAt            time.Time `json:"receivedAt"`
+}

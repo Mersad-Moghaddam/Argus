@@ -51,6 +51,13 @@ type TelemetryCredentialStore interface {
 	TouchTelemetryCredential(ctx context.Context, id int64, usedAt time.Time) error
 }
 
+// TelemetryIngressStore retains bounded, non-sensitive receiver diagnostics.
+// It must never be used as a high-volume time-series sample store.
+type TelemetryIngressStore interface {
+	RecordTelemetryIngress(ctx context.Context, record models.TelemetryIngressRecord) error
+	ListTelemetryIngress(ctx context.Context, projectID int64, limit int) ([]models.TelemetryIngressRecord, error)
+}
+
 // RouteStore persists monitored API routes.
 type RouteStore interface {
 	CreateRoute(ctx context.Context, route models.APIRoute) (int64, error)

@@ -54,7 +54,8 @@
 | 2h | Project environment visibility in authenticated UI | Complete | `0e04dbe`, `8b945e4`, `f451d18` |
 | 3a | OpenTelemetry provider lifecycle foundation | Complete | `6531814` |
 | 3b | Low-cardinality HTTP trace and metric instrumentation | Complete | `d6fd3b4`, `8e7c619` |
-| 3c | Tenant-bound telemetry ingestion credentials | Complete | Pending commit |
+| 3c | Tenant-bound telemetry ingestion credentials | Complete | Current checkpoint |
+| 3d | Authenticated OTLP/HTTP receiver and bounded ingestion diagnostics | Complete | Current checkpoint |
 | 4a | Hidden-state contract and motion-plan implementation | Complete | `3a326a1` |
 | 2 | Environments, endpoint canonicalization, safe synthetic migration | Planned | — |
 | 3 | Telemetry ingestion, metric storage, mapping, SLO and incidents | Planned | — |
@@ -92,6 +93,7 @@
 | 2026-07-28 | 3a | Added OpenTelemetry Go API/SDK providers with Argus service resource attributes and deterministic shutdown through the application lifecycle. Exporters and authenticated OTLP ingestion remain subsequent telemetry checkpoints. Focused observability/application/HTTP-platform compilation tests passed. | Complete |
 | 2026-07-28 | 3b | Added Fiber server spans plus request-count and duration-histogram metrics with method, normalized route template, response status, and duration only; raw URLs, query strings, IDs, and user data are not added as telemetry attributes. HTTP-platform and API tests passed. | Complete |
 | 2026-07-28 | 3c | Added editor-managed, one-time opaque OTLP credentials bound server-side to a project and environment. SHA-256 hashes are persisted; list responses expose only a short prefix; credentials have expiry, rate-limit configuration, rotation, revocation, and last-use tracking. Application and API tests cover binding, secret non-leakage, rotation, and revocation. | Complete |
+| 2026-07-28 | 3d | Added OTLP/HTTP protobuf endpoints for metrics and traces. They authenticate the opaque credential, derive project/environment only from its server-side binding, enforce payload/resource/item/rate bounds, and retain only allowlisted service and deployment-environment diagnostics. Raw attributes, measurements, span names, trace IDs, URLs, and payloads are never persisted in MySQL. Full Go tests passed. | Complete |
 | 2026-07-28 | 1b | Added authenticated session inventory and revoke-other-sessions controls. Only the current-session marker is returned; token hashes remain server-only. Revocation removes every sibling session while retaining the session used for the request. Application and API tests passed. | Complete |
 | 2026-07-28 | 1c | Added explicit Fiber read/write/idle timeouts, strict CSP and companion browser headers, a 256 KiB authentication/control payload guard, and per-IP authentication throttling with `429` responses. Platform, application, and HTTP API tests passed. | Complete |
 | 2026-07-28 | 1d | Moved registration/login out of the private Projects tab into dedicated `#/register` and `#/login` routes, with Register as the primary global guest action. Guest project navigation redirects to login and only accepts a constrained same-origin `#/projects/...` return target; header actions reflect the cookie-authenticated session. JavaScript syntax, diff checks, and focused domain/API tests passed. | Complete |

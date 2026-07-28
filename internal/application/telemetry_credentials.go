@@ -77,6 +77,24 @@ func (s *Service) ListTelemetryCredentials(ctx context.Context, projectID int64)
 	return s.telemetryCredentials.ListTelemetryCredentials(ctx, projectID)
 }
 
+func (s *Service) RecordTelemetryIngress(ctx context.Context, principal *models.TelemetryCredential, record models.TelemetryIngressRecord) error {
+	if principal == nil || principal.ID == 0 || record.ProjectID != principal.ProjectID || record.EnvironmentID != principal.EnvironmentID || record.CredentialID != principal.ID {
+		return domain.ErrInvalidInput
+	}
+	if record.SignalType != "metrics" && record.SignalType != "traces" {
+		return domain.ErrInvalidInput
+	}
+	if record.ItemCount < 0 || record.ItemCount > 10_000 {
+		return domain.ErrInvalidInput
+	}
+	record.ReceivedAt = time.Now().UTC()
+	return s.telemetryIngress.RecordTelemetryIngress(ctx, record)
+}
+
+func (s *Service) ListTelemetryIngress(ctx context.Context, projectID int64, limit int) ([]models.TelemetryIngressRecord, error) {
+	return s.telemetryIngress.ListTelemetryIngress(ctx, projectID, limit)
+}
+
 func (s *Service) RevokeTelemetryCredential(ctx context.Context, projectID, credentialID int64) error {
 	credential, err := s.telemetryCredentials.GetTelemetryCredentialByID(ctx, credentialID)
 	if err != nil {

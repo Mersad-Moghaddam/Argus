@@ -222,8 +222,21 @@ curl http://localhost:8080/api/projects \
 | --- | --- |
 | Auth | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
 | Projects | `GET/POST /api/projects`, `GET/PUT/DELETE /api/projects/:projectId`, archive and unarchive actions |
+| Telemetry credentials | Editor-only `GET/POST /api/projects/:projectId/telemetry-credentials`, plus credential `rotate` and `revoke` actions. Create and rotate responses show the opaque secret exactly once. |
 | Routes | Project-scoped list, create, update, delete, enable/disable, bulk create/delete, check history, and incidents |
 | Imports | Validate, preview, and commit OpenAPI 3.x or Swagger 2.0 JSON/YAML documents up to 10 MiB |
+
+### OTLP/HTTP ingestion
+
+Argus currently accepts OTLP protobuf exports at `POST /v1/metrics` and
+`POST /v1/traces`. Send `Content-Type: application/x-protobuf` (or
+`application/protobuf`) and `Authorization: Bearer <one-time-credential>`.
+The credential, not the telemetry resource, selects the project and
+environment. Resource metadata is treated as untrusted: only a bounded
+`service.name` and `deployment.environment.name` diagnostic is retained for
+mapping/freshness; raw attributes, URLs, measurements, span names, trace IDs,
+and payloads are not written to MySQL. Each credential has a configured expiry
+and per-minute request ceiling; requests above the ceiling receive `429`.
 
 OpenAPI imports resolve only local `$ref` pointers—Argus does not fetch external references. Import commits preserve user-owned monitoring configuration and disable, rather than delete, explicitly selected routes that disappeared from a specification.
 

@@ -38,6 +38,7 @@ type Stores struct {
 	Incidents            *RouteIncidentStore
 	Imports              *ImportStore
 	TelemetryCredentials *TelemetryCredentialStore
+	TelemetryIngress     *TelemetryIngressStore
 	Outbox               *OutboxStore
 	Legacy               LegacyStore
 }
@@ -52,6 +53,7 @@ func NewStores() *Stores {
 		Incidents:            NewRouteIncidentStore(),
 		Imports:              NewImportStore(),
 		TelemetryCredentials: NewTelemetryCredentialStore(),
+		TelemetryIngress:     NewTelemetryIngressStore(),
 		Outbox:               &OutboxStore{},
 	}
 }
@@ -144,6 +146,38 @@ func (f *TelemetryCredentialStore) TouchTelemetryCredential(_ context.Context, i
 func copyTelemetryCredential(in models.TelemetryCredential) models.TelemetryCredential {
 	in.TokenHash = append([]byte(nil), in.TokenHash...)
 	return in
+}
+
+type TelemetryIngressStore struct {
+	mu      sync.Mutex
+	nextID  int64
+	records []models.TelemetryIngressRecord
+}
+
+func NewTelemetryIngressStore() *TelemetryIngressStore { return &TelemetryIngressStore{} }
+
+func (f *TelemetryIngressStore) RecordTelemetryIngress(_ context.Context, record models.TelemetryIngressRecord) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	record.ID = f.nextID
+	f.records = append(f.records, record)
+	return nil
+}
+
+func (f *TelemetryIngressStore) ListTelemetryIngress(_ context.Context, projectID int64, limit int) ([]models.TelemetryIngressRecord, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	items := make([]models.TelemetryIngressRecord, 0, limit)
+	for i := len(f.records) - 1; i >= 0 && len(items) < limit; i-- {
+		if f.records[i].ProjectID == projectID {
+			items = append(items, f.records[i])
+		}
+	}
+	return items, nil
 }
 
 // ---------------------------------------------------------------- users
