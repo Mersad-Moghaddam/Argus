@@ -9,6 +9,9 @@ type APIRoute struct {
 	Method               string     `json:"method"`
 	Path                 string     `json:"path"`
 	BaseURL              string     `json:"baseUrl"`
+	CanonicalIdentity    string     `json:"canonicalIdentity,omitempty"`
+	CanonicalHash        []byte     `json:"-"`
+	CanonicalVersion     int        `json:"canonicalVersion,omitempty"`
 	OperationID          string     `json:"operationId,omitempty"`
 	Name                 string     `json:"name,omitempty"`
 	Summary              string     `json:"summary,omitempty"`

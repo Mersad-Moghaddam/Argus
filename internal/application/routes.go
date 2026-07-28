@@ -134,6 +134,9 @@ func (s *Service) buildRoute(project models.Project, input RouteInput, source st
 		Method:              method,
 		Path:                path,
 		BaseURL:             normalized.BaseURL,
+		CanonicalIdentity:   normalized.CanonicalIdentity,
+		CanonicalHash:       domain.CanonicalHash(normalized.CanonicalIdentity),
+		CanonicalVersion:    1,
 		Name:                strings.TrimSpace(input.Name),
 		Summary:             strings.TrimSpace(input.Summary),
 		Description:         strings.TrimSpace(input.Description),
@@ -217,6 +220,13 @@ func (s *Service) UpdateRoute(ctx context.Context, existing models.APIRoute, inp
 		}
 		existing.BaseURL = baseURL
 	}
+	normalized, err := domain.NormalizeEndpoint(existing.Method, existing.BaseURL, existing.Path)
+	if err != nil {
+		return models.APIRoute{}, err
+	}
+	existing.CanonicalIdentity = normalized.CanonicalIdentity
+	existing.CanonicalHash = domain.CanonicalHash(normalized.CanonicalIdentity)
+	existing.CanonicalVersion = 1
 	if raw := redactUnsafeHeaderKeysNoop(input.Headers); raw != "" || input.Headers == "" {
 		existing.Headers = raw
 	}

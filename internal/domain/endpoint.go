@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net"
@@ -12,6 +13,13 @@ import (
 
 	"golang.org/x/net/idna"
 )
+
+// CanonicalHash returns the fixed-width database lookup key for a canonical
+// endpoint identity. It is not an authentication token and is never exposed.
+func CanonicalHash(identity string) []byte {
+	sum := sha256.Sum256([]byte(identity))
+	return sum[:]
+}
 
 // ValidationError gives API callers a durable machine code while preserving a
 // plain English message for people. It unwraps ErrInvalidRoute so existing

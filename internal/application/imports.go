@@ -186,8 +186,16 @@ func (s *Service) CommitImport(ctx context.Context, project models.Project, jobI
 
 		switch item.Action {
 		case models.ImportActionCreate:
+			normalized, normalizeErr := domain.NormalizeEndpoint(item.Method, item.BaseURL, item.Path)
+			if normalizeErr != nil {
+				item.ValidationWarning = "route could not be canonically normalized, skipped"
+				skipped++
+				finalItems = append(finalItems, item)
+				continue
+			}
 			route := models.APIRoute{
-				ProjectID: project.ID, Method: item.Method, Path: item.Path, BaseURL: item.BaseURL,
+				ProjectID: project.ID, Method: normalized.Method, Path: normalized.RouteTemplate, BaseURL: normalized.BaseURL,
+				CanonicalIdentity: normalized.CanonicalIdentity, CanonicalHash: domain.CanonicalHash(normalized.CanonicalIdentity), CanonicalVersion: 1,
 				OperationID: item.OperationID, Summary: item.Summary, Description: item.Description,
 				Tags: item.Tags, Deprecated: item.Deprecated, SpecHash: item.SpecHash,
 				Parameters: item.Parameters, RequestBody: item.RequestBody, Responses: item.Responses, Security: item.Security,
@@ -221,6 +229,16 @@ func (s *Service) CommitImport(ctx context.Context, project models.Project, jobI
 			if item.BaseURL != "" {
 				existing.BaseURL = item.BaseURL
 			}
+			normalized, normalizeErr := domain.NormalizeEndpoint(existing.Method, existing.BaseURL, existing.Path)
+			if normalizeErr != nil {
+				item.ValidationWarning = "route could not be canonically normalized, skipped"
+				skipped++
+				finalItems = append(finalItems, item)
+				continue
+			}
+			existing.CanonicalIdentity = normalized.CanonicalIdentity
+			existing.CanonicalHash = domain.CanonicalHash(normalized.CanonicalIdentity)
+			existing.CanonicalVersion = 1
 			if updErr := s.routes.UpdateRouteImportedMetadata(ctx, *existing); updErr != nil {
 				item.ValidationWarning = fmt.Sprintf("update failed: %v", updErr)
 				skipped++

@@ -45,6 +45,9 @@ func TestCreateRouteNormalizesAndInheritsProjectDefaults(t *testing.T) {
 	if route.BaseURL != "https://api.example.com" {
 		t.Fatalf("base URL not normalized: %q", route.BaseURL)
 	}
+	if route.CanonicalIdentity != "GET https://api.example.com/v1/pets" || len(route.CanonicalHash) != 32 || route.CanonicalVersion != 1 {
+		t.Fatalf("canonical dual-write fields missing: %+v", route)
+	}
 	if route.MonitorIntervalSecs != 60 || route.TimeoutMS != 3000 || route.Retries != 1 {
 		t.Fatalf("project monitoring defaults not inherited: %+v", route)
 	}

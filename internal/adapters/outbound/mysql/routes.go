@@ -11,7 +11,7 @@ import (
 	"argus/internal/models"
 )
 
-const routeColumns = `id, project_id, method, path, base_url, operation_id, name, summary, description, tags, deprecated,
+const routeColumns = `id, project_id, method, path, base_url, canonical_identity, canonical_hash, canonical_version, operation_id, name, summary, description, tags, deprecated,
 	parameters, request_body, responses, security, headers, spec_hash, source, enabled,
 	monitor_interval_seconds, timeout_ms, retries, expected_status_range, failure_threshold, recovery_successes,
 	status, last_checked_at, last_status_code, last_latency_ms, last_failure_reason, consecutive_failures, consecutive_successes,
@@ -20,7 +20,7 @@ const routeColumns = `id, project_id, method, path, base_url, operation_id, name
 func scanRoute(row interface{ Scan(dest ...any) error }, rt *models.APIRoute) error {
 	var description, tags, parameters, requestBody, responses, security, headers, lastFailureReason sql.NullString
 	var lastChecked sql.NullTime
-	err := row.Scan(&rt.ID, &rt.ProjectID, &rt.Method, &rt.Path, &rt.BaseURL, &rt.OperationID, &rt.Name, &rt.Summary, &description, &tags, &rt.Deprecated,
+	err := row.Scan(&rt.ID, &rt.ProjectID, &rt.Method, &rt.Path, &rt.BaseURL, &rt.CanonicalIdentity, &rt.CanonicalHash, &rt.CanonicalVersion, &rt.OperationID, &rt.Name, &rt.Summary, &description, &tags, &rt.Deprecated,
 		&parameters, &requestBody, &responses, &security, &headers, &rt.SpecHash, &rt.Source, &rt.Enabled,
 		&rt.MonitorIntervalSecs, &rt.TimeoutMS, &rt.Retries, &rt.ExpectedStatusRange, &rt.FailureThreshold, &rt.RecoverySuccesses,
 		&rt.Status, &lastChecked, &rt.LastStatusCode, &rt.LastLatencyMS, &lastFailureReason, &rt.ConsecutiveFailures, &rt.ConsecutiveSuccesses,
@@ -63,12 +63,12 @@ func nullableJSON(s string) any {
 }
 
 func (r *Store) CreateRoute(ctx context.Context, route models.APIRoute) (int64, error) {
-	res, err := r.db.ExecContext(ctx, `INSERT INTO api_routes (project_id, method, path, base_url, operation_id, name, summary, description, tags, deprecated,
+	res, err := r.db.ExecContext(ctx, `INSERT INTO api_routes (project_id, method, path, base_url, canonical_identity, canonical_hash, canonical_version, operation_id, name, summary, description, tags, deprecated,
 			parameters, request_body, responses, security, headers, spec_hash, source, enabled,
 			monitor_interval_seconds, timeout_ms, retries, expected_status_range, failure_threshold, recovery_successes,
 			status, next_check_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		route.ProjectID, route.Method, route.Path, route.BaseURL, route.OperationID, route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		route.ProjectID, route.Method, route.Path, route.BaseURL, route.CanonicalIdentity, route.CanonicalHash, route.CanonicalVersion, route.OperationID, route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
 		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nullableJSON(route.Headers), route.SpecHash, route.Source, route.Enabled,
 		route.MonitorIntervalSecs, route.TimeoutMS, route.Retries, route.ExpectedStatusRange, route.FailureThreshold, route.RecoverySuccesses,
 		route.Status, route.NextCheckAt)
@@ -88,11 +88,11 @@ func (r *Store) BulkCreateRoutes(ctx context.Context, routes []models.APIRoute) 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	stmt, err := tx.PrepareContext(ctx, `INSERT INTO api_routes (project_id, method, path, base_url, operation_id, name, summary, description, tags, deprecated,
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO api_routes (project_id, method, path, base_url, canonical_identity, canonical_hash, canonical_version, operation_id, name, summary, description, tags, deprecated,
 			parameters, request_body, responses, security, headers, spec_hash, source, enabled,
 			monitor_interval_seconds, timeout_ms, retries, expected_status_range, failure_threshold, recovery_successes,
 			status, next_check_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return 0, err
 	}
@@ -100,7 +100,7 @@ func (r *Store) BulkCreateRoutes(ctx context.Context, routes []models.APIRoute) 
 
 	count := 0
 	for _, route := range routes {
-		if _, err = stmt.ExecContext(ctx, route.ProjectID, route.Method, route.Path, route.BaseURL, route.OperationID, route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
+		if _, err = stmt.ExecContext(ctx, route.ProjectID, route.Method, route.Path, route.BaseURL, route.CanonicalIdentity, route.CanonicalHash, route.CanonicalVersion, route.OperationID, route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
 			nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nullableJSON(route.Headers), route.SpecHash, route.Source, route.Enabled,
 			route.MonitorIntervalSecs, route.TimeoutMS, route.Retries, route.ExpectedStatusRange, route.FailureThreshold, route.RecoverySuccesses,
 			route.Status, route.NextCheckAt); err != nil {
@@ -118,12 +118,12 @@ func (r *Store) UpdateRoute(ctx context.Context, route models.APIRoute) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET name=?, summary=?, description=?, tags=?, deprecated=?,
 			parameters=?, request_body=?, responses=?, security=?, headers=?, spec_hash=?, enabled=?,
 			monitor_interval_seconds=?, timeout_ms=?, retries=?, expected_status_range=?, failure_threshold=?, recovery_successes=?,
-			base_url=?, updated_at=NOW()
+			base_url=?, canonical_identity=?, canonical_hash=?, canonical_version=?, updated_at=NOW()
 		WHERE id=?`,
 		route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
 		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nullableJSON(route.Headers), route.SpecHash, route.Enabled,
 		route.MonitorIntervalSecs, route.TimeoutMS, route.Retries, route.ExpectedStatusRange, route.FailureThreshold, route.RecoverySuccesses,
-		route.BaseURL, route.ID)
+		route.BaseURL, route.CanonicalIdentity, route.CanonicalHash, route.CanonicalVersion, route.ID)
 	return err
 }
 
@@ -134,10 +134,10 @@ func (r *Store) UpdateRoute(ctx context.Context, route models.APIRoute) error {
 // silently clobber a user's monitoring settings.
 func (r *Store) UpdateRouteImportedMetadata(ctx context.Context, route models.APIRoute) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET name=?, summary=?, description=?, tags=?, deprecated=?,
-			parameters=?, request_body=?, responses=?, security=?, spec_hash=?, base_url=?, updated_at=NOW()
+			parameters=?, request_body=?, responses=?, security=?, spec_hash=?, base_url=?, canonical_identity=?, canonical_hash=?, canonical_version=?, updated_at=NOW()
 		WHERE id=?`,
 		route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
-		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), route.SpecHash, route.BaseURL, route.ID)
+		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), route.SpecHash, route.BaseURL, route.CanonicalIdentity, route.CanonicalHash, route.CanonicalVersion, route.ID)
 	return err
 }
 
