@@ -83,7 +83,7 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 		AggregationWindow: cfg.RouteAggregateWindow,
 	}
 	processor := worker.NewProcessor(store, store, store, appService, asynqClient, notifier.NewHTTPNotifier(), logger, store, routeEvaluator, routeMonitorCfg)
-	processor.SetSLOEvaluator(worker.NewSLOEvaluator(store, metricReader, cfg.SLOStaleAfter))
+	processor.SetSLOEvaluator(worker.NewSLOEvaluator(store, metricReader, cfg.SLOStaleAfter, store))
 	workerRt, err := workerplatform.NewRuntime(cfg, processor, logger)
 	if err != nil {
 		_ = asynqClient.Close()

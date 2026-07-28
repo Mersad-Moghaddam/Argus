@@ -46,6 +46,7 @@
 | 1g | Secure password-recovery workflow and delivery boundary | Complete | Current checkpoint |
 | 3n | Project-scoped heartbeat monitors and idempotent job pings | Complete | Current checkpoint |
 | 3o | Source-aware route incident evidence and acknowledgement | Complete | Current checkpoint |
+| 3p | SLO state-transition notification outbox | Complete | Current checkpoint |
 | 1 | Identity, authorization, secure global shell | In progress | — |
 | 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | `8ab613a` |
 | 2b | Canonical endpoint pipeline and preview API | Complete | `580e1bb` |
@@ -133,3 +134,4 @@
 | 2026-07-29 | 1g | Added a generic password-recovery request/completion flow with 30-minute opaque tokens hashed at rest, atomic single-use consumption, password replacement, and revocation of every existing session. Reset tokens are delivered only through an optional operator-configured HTTPS webhook and never through API responses, browser storage, MySQL plaintext, or logs. Full Go regression tests, API/application recovery tests, JavaScript syntax, and diff checks passed. | Complete |
 | 2026-07-29 | 3n | Added project-bound heartbeat monitors for scheduled workloads. Editors issue or revoke one-time opaque tokens; only token hashes and hashed per-monitor idempotency keys reach MySQL. The unauthenticated receive boundary accepts a bounded outcome only, rejects revoked/unknown tokens, and duplicate retries cannot refresh liveness. The authenticated dashboard creates monitors, reveals the secret once, and explains healthy, late, missing, and revoked states. Full Go regression tests, frontend syntax, and diff checks passed. | Complete |
 | 2026-07-29 | 3o | Added source and source-key attribution, bounded evaluation evidence, and editor acknowledgement to project route incidents. Existing incidents migrate as `synthetic`; acknowledgement preserves visibility and does not interfere with automatic recovery. Application tests cover source/evidence, acknowledgement, and resolving an acknowledged incident. | Complete |
+| 2026-07-29 | 3p | Connected scheduled SLO evaluation to the transactional outbox. The evaluator emits a tenant-scoped notification only for state transitions, including unhealthy and recovery transitions; repeated identical evaluations are silent. Worker tests cover unhealthy, deduplicated repeat, and recovery delivery intents. | Complete |

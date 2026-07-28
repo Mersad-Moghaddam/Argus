@@ -2,6 +2,8 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"argus/internal/domain"
@@ -18,13 +20,18 @@ type SLOEvaluator struct {
 	store      ports.SLOStore
 	metrics    ports.SLOMetricsReader
 	staleAfter time.Duration
+	outbox     ports.OutboxStore
 }
 
-func NewSLOEvaluator(store ports.SLOStore, metrics ports.SLOMetricsReader, staleAfter time.Duration) *SLOEvaluator {
+func NewSLOEvaluator(store ports.SLOStore, metrics ports.SLOMetricsReader, staleAfter time.Duration, outboxes ...ports.OutboxStore) *SLOEvaluator {
 	if staleAfter <= 0 {
 		staleAfter = defaultSLOStaleAfter
 	}
-	return &SLOEvaluator{store: store, metrics: metrics, staleAfter: staleAfter}
+	var outbox ports.OutboxStore
+	if len(outboxes) > 0 {
+		outbox = outboxes[0]
+	}
+	return &SLOEvaluator{store: store, metrics: metrics, staleAfter: staleAfter, outbox: outbox}
 }
 
 func (e *SLOEvaluator) EvaluateAll(ctx context.Context, now time.Time) error {
@@ -68,8 +75,30 @@ func (e *SLOEvaluator) record(ctx context.Context, definition models.SLODefiniti
 		evaluation.ErrorBudgetRemaining = float64Pointer(result.ErrorBudgetRemaining)
 		evaluation.BurnRate = float64Pointer(result.BurnRate)
 	}
-	_, err := e.store.RecordSLOEvaluation(ctx, evaluation)
-	return err
+	prior, err := e.store.ListSLOEvaluations(ctx, definition.ProjectID, definition.ID, 1)
+	if err != nil {
+		return err
+	}
+	_, err = e.store.RecordSLOEvaluation(ctx, evaluation)
+	if err != nil || e.outbox == nil {
+		return err
+	}
+	previous := ""
+	if len(prior) > 0 {
+		previous = prior[0].Status
+	}
+	if previous == evaluation.Status {
+		return nil
+	}
+	eventType := "slo_state_changed"
+	if evaluation.Status == string(domain.SLOUnhealthy) {
+		eventType = "slo_unhealthy"
+	}
+	if previous == string(domain.SLOUnhealthy) && evaluation.Status == string(domain.SLOHealthy) {
+		eventType = "slo_recovered"
+	}
+	payload, _ := json.Marshal(map[string]any{"event": eventType, "projectId": definition.ProjectID, "sloId": definition.ID, "status": evaluation.Status, "previousStatus": previous, "evaluatedAt": now.Format(time.RFC3339)})
+	return e.outbox.AddEvent(ctx, eventType, definition.ID, fmt.Sprintf("slo:%d:state:%s:%s", definition.ID, evaluation.Status, now.UTC().Truncate(time.Minute).Format(time.RFC3339)), payload, now)
 }
 
 func float64Pointer(value float64) *float64 { return &value }

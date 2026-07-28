@@ -298,6 +298,11 @@ subsequent healthy evaluation resolves it normally. The source/evidence model
 is additive and is the compatibility bridge for SLO, heartbeat, agent, and
 pipeline incident producers.
 
+Scheduled SLO evaluation also writes transactional-outbox intents only when an
+SLO state changes. `slo_unhealthy` and `slo_recovered` are delivered through
+the existing retryable notification workflow; repeated identical evaluations
+do not generate notification noise.
+
 ## Architecture
 
 Argus follows a ports-and-adapters layout: business rules point inward, while HTTP, MySQL, Redis/Asynq, and outbound notifications remain replaceable edge concerns.
