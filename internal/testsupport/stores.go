@@ -136,6 +136,18 @@ func (f *AuthTokenStore) GetTokenByHash(_ context.Context, hash string) (*models
 	return nil, nil
 }
 
+func (f *AuthTokenStore) ListTokensByUser(_ context.Context, userID int64) ([]models.AuthToken, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []models.AuthToken{}
+	for _, token := range f.byHash {
+		if token.UserID == userID {
+			out = append(out, token)
+		}
+	}
+	return out, nil
+}
+
 func (f *AuthTokenStore) TouchToken(_ context.Context, _ int64, _ time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -148,6 +160,18 @@ func (f *AuthTokenStore) DeleteToken(_ context.Context, hash string) error {
 	defer f.mu.Unlock()
 	f.Deleted = append(f.Deleted, hash)
 	delete(f.byHash, hash)
+	return nil
+}
+
+func (f *AuthTokenStore) DeleteTokensByUserExcept(_ context.Context, userID int64, keepHash string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for hash, token := range f.byHash {
+		if token.UserID == userID && hash != keepHash {
+			f.Deleted = append(f.Deleted, hash)
+			delete(f.byHash, hash)
+		}
+	}
 	return nil
 }
 

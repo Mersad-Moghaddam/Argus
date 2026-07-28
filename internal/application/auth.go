@@ -95,6 +95,32 @@ func (s *Service) Logout(ctx context.Context, rawToken string) error {
 	return s.tokens.DeleteToken(ctx, hashToken(rawToken))
 }
 
+func (s *Service) ListSessions(ctx context.Context, userID int64, currentRawToken string) ([]models.AuthToken, error) {
+	tokens, err := s.tokens.ListTokensByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	currentHash := hashToken(currentRawToken)
+	now := time.Now().UTC()
+	visible := make([]models.AuthToken, 0, len(tokens))
+	for _, token := range tokens {
+		if now.After(token.ExpiresAt) {
+			continue
+		}
+		token.Current = subtle.ConstantTimeCompare([]byte(token.TokenHash), []byte(currentHash)) == 1
+		token.TokenHash = ""
+		visible = append(visible, token)
+	}
+	return visible, nil
+}
+
+func (s *Service) RevokeOtherSessions(ctx context.Context, userID int64, currentRawToken string) error {
+	if strings.TrimSpace(currentRawToken) == "" {
+		return ErrInvalidToken
+	}
+	return s.tokens.DeleteTokensByUserExcept(ctx, userID, hashToken(currentRawToken))
+}
+
 // Authenticate resolves a bearer token to its owning user, rejecting
 // expired or unknown tokens using a constant-time comparison for the hash
 // lookup key to reduce timing side-channels.

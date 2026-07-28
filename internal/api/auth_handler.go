@@ -33,6 +33,8 @@ func RegisterAuthRoutes(app fiber.Router, h *AuthHandler, guards ...fiber.Handle
 	app.Post("/auth/login", h.Login)
 	app.Post("/auth/logout", guarded(guards, h.Logout)...)
 	app.Get("/auth/me", guarded(guards[:1], h.Me)...)
+	app.Get("/auth/sessions", guarded(guards[:1], h.ListSessions)...)
+	app.Post("/auth/sessions/revoke-others", guarded(guards, h.RevokeOtherSessions)...)
 }
 
 type registerRequest struct {
@@ -79,14 +81,28 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 }
 
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
-	token := stripBearer(c.Get("Authorization"))
-	if token == "" {
-		token = c.Cookies(adapterhttp.SessionCookieName)
-	}
+	token := currentRawToken(c)
 	if err := h.service.Logout(c.UserContext(), token); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to logout"})
 	}
 	h.clearSession(c)
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *AuthHandler) ListSessions(c *fiber.Ctx) error {
+	userID, _ := c.Locals(adapterhttp.UserContextKey).(int64)
+	sessions, err := h.service.ListSessions(c.UserContext(), userID, currentRawToken(c))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list sessions"})
+	}
+	return c.JSON(fiber.Map{"sessions": sessions})
+}
+
+func (h *AuthHandler) RevokeOtherSessions(c *fiber.Ctx) error {
+	userID, _ := c.Locals(adapterhttp.UserContextKey).(int64)
+	if err := h.service.RevokeOtherSessions(c.UserContext(), userID, currentRawToken(c)); err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid or expired session"})
+	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -126,6 +142,14 @@ func stripBearer(header string) string {
 		return header[len(prefix):]
 	}
 	return header
+}
+
+func currentRawToken(c *fiber.Ctx) string {
+	token := stripBearer(c.Get("Authorization"))
+	if token == "" {
+		token = c.Cookies(adapterhttp.SessionCookieName)
+	}
+	return token
 }
 
 func authErrorResponse(c *fiber.Ctx, err error) error {

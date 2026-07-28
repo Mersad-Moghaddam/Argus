@@ -18,8 +18,10 @@ type UserStore interface {
 type AuthTokenStore interface {
 	CreateToken(ctx context.Context, token models.AuthToken) (int64, error)
 	GetTokenByHash(ctx context.Context, tokenHash string) (*models.AuthToken, error)
+	ListTokensByUser(ctx context.Context, userID int64) ([]models.AuthToken, error)
 	TouchToken(ctx context.Context, id int64, usedAt time.Time) error
 	DeleteToken(ctx context.Context, tokenHash string) error
+	DeleteTokensByUserExcept(ctx context.Context, userID int64, tokenHash string) error
 }
 
 // ProjectStore persists projects and their membership/authorization data.

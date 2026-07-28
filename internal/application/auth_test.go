@@ -161,6 +161,47 @@ func TestLogoutInvalidatesToken(t *testing.T) {
 	}
 }
 
+func TestSessionInventoryAndRevokeOthers(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	registered, err := h.service.Register(ctx, "sessions@example.com", "longenoughpassword", "")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	second, err := h.service.Login(ctx, "sessions@example.com", "longenoughpassword")
+	if err != nil {
+		t.Fatalf("second login: %v", err)
+	}
+	sessions, err := h.service.ListSessions(ctx, registered.User.ID, second.Token)
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("sessions = %d, want 2", len(sessions))
+	}
+	current := 0
+	for _, session := range sessions {
+		if session.Current {
+			current++
+		}
+		if session.TokenHash != "" {
+			t.Fatal("session token hash leaked")
+		}
+	}
+	if current != 1 {
+		t.Fatalf("current sessions = %d, want 1", current)
+	}
+	if err = h.service.RevokeOtherSessions(ctx, registered.User.ID, second.Token); err != nil {
+		t.Fatalf("revoke others: %v", err)
+	}
+	if _, err = h.service.Authenticate(ctx, registered.Token); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("old session must be revoked, got %v", err)
+	}
+	if _, err = h.service.Authenticate(ctx, second.Token); err != nil {
+		t.Fatalf("current session must remain valid: %v", err)
+	}
+}
+
 // TestRegisterDefaultsNameToEmail documents the fallback so the UI always has
 // something to show.
 func TestRegisterDefaultsNameToEmail(t *testing.T) {

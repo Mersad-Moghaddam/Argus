@@ -21,6 +21,7 @@ type AuthToken struct {
 	CreatedAt  time.Time  `json:"createdAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
 	ExpiresAt  time.Time  `json:"expiresAt"`
+	Current    bool       `json:"current,omitempty"`
 }
 
 const (
