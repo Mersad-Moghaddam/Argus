@@ -52,6 +52,10 @@ type RouteStore interface {
 	MarkRouteChecked(ctx context.Context, id int64, status string, statusCode, latencyMS int, failureReason string, consecutiveFailures, consecutiveSuccesses int, routeStatus string, checkedAt, nextCheckAt time.Time) error
 	RecordRouteCheck(ctx context.Context, check models.RouteCheck) error
 	ListRouteChecks(ctx context.Context, routeID int64, limit, offset int) ([]models.RouteCheck, error)
+	// AggregateCheckTimeseries returns bucketed check statistics for a
+	// project (or a single route within it). maxBuckets bounds the result so
+	// a wide range can never produce an unbounded response.
+	AggregateCheckTimeseries(ctx context.Context, projectID int64, routeID *int64, since time.Time, bucketSeconds, maxBuckets int) ([]models.MetricPoint, error)
 	AggregateRouteMetrics(ctx context.Context, since time.Time) error
 	AggregateProjectMetrics(ctx context.Context) error
 	PruneRouteChecks(ctx context.Context, before time.Time, batchSize int) (int64, error)

@@ -82,7 +82,11 @@ CREATE TABLE IF NOT EXISTS api_routes (
     failures_24h INT NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_route_method_path (project_id, method, path),
+    -- Prefix-indexed for the same reason as websites.url above: project_id (8)
+    -- + method (1) + path(700) * 4 bytes = 2809 bytes, inside InnoDB's
+    -- 3072-byte key limit under utf8mb4. A full VARCHAR(1024) column would
+    -- need 4105 bytes and the CREATE would fail.
+    UNIQUE KEY uq_route_method_path (project_id, method, path(700)),
     INDEX idx_routes_project_status (project_id, status),
     INDEX idx_routes_project_enabled (project_id, enabled),
     INDEX idx_routes_next_check_at (next_check_at),

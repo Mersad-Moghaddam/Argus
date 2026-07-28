@@ -609,6 +609,67 @@ func (f *RouteStore) ListRouteChecks(_ context.Context, routeID int64, limit, of
 	return pageSlice(out, limit, offset), nil
 }
 
+// AggregateCheckTimeseries buckets the recorded checks the same way the SQL
+// adapter does, so chart-facing behaviour can be asserted without a database.
+func (f *RouteStore) AggregateCheckTimeseries(_ context.Context, projectID int64, routeID *int64, since time.Time, bucketSeconds, maxBuckets int) ([]models.MetricPoint, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if bucketSeconds <= 0 {
+		bucketSeconds = 3600
+	}
+	if maxBuckets <= 0 {
+		maxBuckets = 500
+	}
+	type agg struct {
+		checks, failures, latencySum, latencyMax int
+	}
+	buckets := map[int64]*agg{}
+	for id, checks := range f.checks {
+		if routeID != nil && id != *routeID {
+			continue
+		}
+		for _, c := range checks {
+			if c.ProjectID != projectID || c.CheckedAt.Before(since) {
+				continue
+			}
+			key := c.CheckedAt.Unix() / int64(bucketSeconds) * int64(bucketSeconds)
+			b := buckets[key]
+			if b == nil {
+				b = &agg{}
+				buckets[key] = b
+			}
+			b.checks++
+			if c.Status == "down" {
+				b.failures++
+			}
+			b.latencySum += c.LatencyMS
+			if c.LatencyMS > b.latencyMax {
+				b.latencyMax = c.LatencyMS
+			}
+		}
+	}
+	keys := make([]int64, 0, len(buckets))
+	for k := range buckets {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+	out := make([]models.MetricPoint, 0, len(keys))
+	for _, k := range keys {
+		b := buckets[k]
+		point := models.MetricPoint{
+			BucketStart: time.Unix(k, 0).UTC(), Checks: b.checks, Failures: b.failures,
+			AvgLatencyMS: b.latencySum / b.checks, MaxLatencyMS: b.latencyMax,
+		}
+		point.UptimePct = float64(b.checks-b.failures) / float64(b.checks) * 100
+		out = append(out, point)
+	}
+	if len(out) > maxBuckets {
+		out = out[:maxBuckets]
+	}
+	return out, nil
+}
+
 func (f *RouteStore) AggregateRouteMetrics(context.Context, time.Time) error { return nil }
 func (f *RouteStore) AggregateProjectMetrics(context.Context) error          { return nil }
 func (f *RouteStore) PruneRouteChecks(context.Context, time.Time, int) (int64, error) {

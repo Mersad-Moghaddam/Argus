@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"argus/internal/application"
 	"argus/internal/models"
@@ -642,6 +643,93 @@ func TestListRoutesQueryParameters(t *testing.T) {
 	if len(page.Items) != 1 {
 		t.Fatalf("expected a page of 1, got %d", len(page.Items))
 	}
+}
+
+func TestMetricsTimeseriesEndpoint(t *testing.T) {
+	a := newTestAPI(t)
+	_, token := a.register(t, "metrics@example.com")
+	_, otherToken := a.register(t, "metrics-other@example.com")
+	project := a.createProject(t, token, "Metrics")
+	base := fmt.Sprintf("/api/projects/%d/metrics/timeseries", project.ID)
+
+	var route models.APIRoute
+	decode(t, a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/routes", project.ID), token,
+		map[string]any{"method": "GET", "path": "/charted", "baseUrl": "https://a.example"}), &route)
+
+	if err := a.stores.Routes.RecordRouteCheck(context.Background(), models.RouteCheck{
+		RouteID: route.ID, ProjectID: project.ID, Status: "up", StatusCode: 200,
+		LatencyMS: 80, CheckedAt: time.Now().UTC().Add(-2 * time.Minute),
+	}); err != nil {
+		t.Fatalf("seed check: %v", err)
+	}
+
+	t.Run("returns a bounded bucketed series", func(t *testing.T) {
+		var series application.MetricsTimeseries
+		decode(t, a.do(t, http.MethodGet, base+"?range=1h", token, nil), &series)
+		if series.Range != "1h" || series.BucketSeconds != 120 {
+			t.Fatalf("unexpected window: %+v", series.TimeseriesWindow)
+		}
+		if len(series.Points) != 1 || series.Points[0].Checks != 1 {
+			t.Fatalf("expected one bucket with one check, got %+v", series.Points)
+		}
+	})
+
+	t.Run("an unknown range falls back instead of failing", func(t *testing.T) {
+		var series application.MetricsTimeseries
+		decode(t, a.do(t, http.MethodGet, base+"?range=forever", token, nil), &series)
+		if series.Range != application.DefaultTimeseriesRange {
+			t.Fatalf("expected the default range, got %q", series.Range)
+		}
+	})
+
+	t.Run("routeId narrows the series", func(t *testing.T) {
+		resp := a.do(t, http.MethodGet, fmt.Sprintf("%s?range=1h&routeId=%d", base, route.ID), token, nil)
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("expected 200, got %d", resp.StatusCode)
+		}
+		_ = resp.Body.Close()
+	})
+
+	t.Run("a bad routeId is 400", func(t *testing.T) {
+		resp := a.do(t, http.MethodGet, base+"?routeId=abc", token, nil)
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", resp.StatusCode)
+		}
+		_ = resp.Body.Close()
+	})
+
+	t.Run("a routeId from another project is 404", func(t *testing.T) {
+		otherProject := a.createProject(t, otherToken, "Other Metrics")
+		var foreign models.APIRoute
+		decode(t, a.do(t, http.MethodPost, fmt.Sprintf("/api/projects/%d/routes", otherProject.ID), otherToken,
+			map[string]any{"method": "GET", "path": "/foreign", "baseUrl": "https://b.example"}), &foreign)
+
+		resp := a.do(t, http.MethodGet, fmt.Sprintf("%s?routeId=%d", base, foreign.ID), token, nil)
+		if resp.StatusCode != fiber.StatusNotFound {
+			t.Fatalf("expected 404 for a cross-project routeId, got %d", resp.StatusCode)
+		}
+		_ = resp.Body.Close()
+	})
+
+	t.Run("a non-member gets 404", func(t *testing.T) {
+		resp := a.do(t, http.MethodGet, base, otherToken, nil)
+		if resp.StatusCode != fiber.StatusNotFound {
+			t.Fatalf("expected 404, got %d", resp.StatusCode)
+		}
+		_ = resp.Body.Close()
+	})
+
+	t.Run("no token is 401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, base, nil)
+		resp, err := a.app.Test(req, -1)
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", resp.StatusCode)
+		}
+	})
 }
 
 // ------------------------------------------------------------ imports

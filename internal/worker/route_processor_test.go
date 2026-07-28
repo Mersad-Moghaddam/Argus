@@ -124,6 +124,9 @@ func (f *fakeRouteStore) RecordRouteCheck(context.Context, models.RouteCheck) er
 func (f *fakeRouteStore) ListRouteChecks(context.Context, int64, int, int) ([]models.RouteCheck, error) {
 	return nil, nil
 }
+func (f *fakeRouteStore) AggregateCheckTimeseries(context.Context, int64, *int64, time.Time, int, int) ([]models.MetricPoint, error) {
+	return nil, nil
+}
 
 // recordingEnqueuer captures enqueued tasks and can simulate asynq's
 // duplicate-task rejection.

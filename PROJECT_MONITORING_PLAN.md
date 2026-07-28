@@ -487,6 +487,104 @@ work.
   matches apply order) plus an opt-in up→up→down→up smoke test against a
   throwaway MySQL schema, gated on `MYSQL_TEST_DSN` so the suite stays green
   without a database.
-- **Section 8 (next)** — Frontend: auth panel, Projects tab with a hash
-  sub-router, projects list dashboard, project dashboard with charts and
-  route table, route detail page, import wizard, styles, docs.
+- **Section 8 (commit pending)** — Done. Added the read API the dashboard
+  charts need: `RouteStore.AggregateCheckTimeseries` (single grouped query
+  bucketing `route_checks` by a fixed width, covered by the existing
+  `(project_id, checked_at)` / `(route_id, checked_at)` indexes and capped at
+  500 buckets), `Service.ListMetricsTimeseries` (five named ranges — 1h/6h/
+  24h/7d/30d — each chosen to yield ≤ 56 buckets; an unknown range falls back
+  to 24h instead of erroring so a stale bookmark cannot break the page), and
+  `GET /api/projects/:id/metrics/timeseries?range=&routeId=` which verifies a
+  supplied `routeId` belongs to the project before exposing its data.
+
+  Frontend: new `frontend/projects.js` (self-contained IIFE, no framework and
+  no third-party JavaScript) plus an "API Projects" tab in `index.html` and
+  new component classes appended to `styles.css` using only the existing
+  design tokens. It reuses `app.js`'s `showToast`, `escapeHtml`,
+  `relativeTime`, `setButtonLoading` and `activateTab` rather than
+  duplicating them, and leaves every existing behaviour untouched. Contains:
+  a sign-in/registration gate storing its token under `argus_project_token`
+  (kept separate from the legacy `argus_api_key`), an `apiProjects()` fetch
+  helper that surfaces the server's JSON `error` field and returns to the gate
+  on 401; a `location.hash` sub-router (`#/projects`,
+  `#/projects/:id`, `#/projects/:id/routes/:routeId`, `#/projects/:id/import`)
+  with breadcrumbs so back/forward and refresh behave; the projects dashboard
+  (cards with route counts, per-state health chips, uptime, latency, failures,
+  open incidents and last-check time, plus search, status filter, create/edit
+  modal, archive/restore/delete with confirmation, pagination, empty, error
+  and skeleton states); the project dashboard (ten summary tiles, a range
+  picker driving two hand-rolled `<canvas>` charts for uptime and latency,
+  incident list with durations, and a route table with server-side search,
+  method/health/tag/enabled/deprecated filters, sortable columns,
+  pagination, row actions and bulk enable/disable/delete with bounded
+  concurrency); the route detail page (full configuration, collapsible
+  parameters/request body/responses/security blocks, health, 24h stats, a
+  status-code distribution, the recent check log and per-route incidents);
+  and the three-step import wizard (upload or paste with a client-side size
+  pre-check, a preview table with new/changed/unchanged/duplicate/removed
+  badges, per-conflict quick filters, per-row and bulk selection, paginated
+  at 100 rows so a 600-operation spec stays responsive, then a result
+  report). All destructive actions go through a confirmation modal; secrets
+  are never echoed into the edit form. Interactions use event delegation
+  rather than inline `onclick` string interpolation.
+
+  Docs: `USER_GUIDE.md` gained a full "Projects & API route monitoring"
+  section (sign-in and the role matrix, creating projects, the four ways to
+  add routes, the import wizard and its conflict badges, the re-import
+  guarantees, reading the dashboard, the health-state table, the incident
+  rule, how background checking works, the untrusted-URL threat model, the
+  complete project API reference and every `ROUTE_*` setting) plus migration
+  portability notes. `README.md` now describes both bounded contexts, the
+  updated package layout and the security posture.
+
+- **Section 9 (commit pending)** — Done. Ran the full stack against real
+  MySQL 8 and Redis and fixed every regression found. Three were real bugs
+  that would have prevented the app from starting on a stock MySQL server:
+
+  1. `websites.url VARCHAR(2083) NOT NULL UNIQUE` (pre-existing, `0001`) needs
+     an 8332-byte index under `utf8mb4`, over InnoDB's 3072-byte limit, so
+     `CREATE TABLE` failed outright. Now a 500-character prefix index.
+  2. `UNIQUE (project_id, method, path)` on `api_routes` (mine, `0005`) had the
+     same defect at 4105 bytes. Now a 700-character prefix on `path`.
+  3. `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` in `0003` is a MariaDB
+     extension and a **syntax error on MySQL 8** — the engine
+     `docker-compose.yml` actually ships. Rewritten as an
+     `information_schema` check plus `PREPARE`/`EXECUTE` per column, which is
+     idempotent on both engines. That exposed a second problem: session state
+     does not survive `database/sql`'s connection pool, so `ApplyMigrations`
+     now pins one connection per file. And a third: splitting the batch on a
+     naive `;` tore statements apart at semicolons inside comments, so the
+     splitter is now quote- and comment-aware (`SplitStatements`, 13 unit
+     tests).
+
+  Verified live against MySQL: migrations up → up → down → up clean;
+  register/login; project creation; a generated 600-operation OpenAPI 3.0
+  document (300 paths, component `$ref`s for parameters/schemas/responses,
+  path-level shared parameters, tags, security, request bodies, deprecated
+  flags) uploaded as multipart in 167 ms and parsed to exactly 600 preview
+  items, all correctly labelled `create`; committing a deliberate 450-of-600
+  selection created exactly 450 routes in 0.79 s and skipped 150; commit
+  replay returned 409. Search/filter/sort/paginate were exercised over the
+  450 real rows (13 filter combinations, 12 sort permutations, and a walk of
+  all 5 pages asserting every row was returned exactly once with no
+  duplicates). The worker then checked all 450 routes unprompted: at two
+  consecutive failures every route read `degraded`, and on the third all 450
+  flipped to `failing` with exactly 450 incidents opened — one per route, and
+  further failing cycles (2150 checks) opened no duplicates. The aggregation
+  job populated the cached project columns, and the timeseries endpoint
+  returned correctly bucketed data for every named range with an unknown
+  range falling back to 24h. Negative paths all confirmed: 401 without or
+  with a bad token, 404 for a non-member *with a byte-identical body to a
+  nonexistent project*, 400 for an invalid project ID / duplicate route /
+  malformed spec / valid-JSON-but-not-a-spec / empty spec, 413 for a 10 MB+
+  upload, 409 on commit replay, and both auth schemes proven mutually
+  inert (legacy key rejected on `/api/projects`, bearer token rejected on
+  `/api/websites`, legacy key still 200 on `/api/websites`). Finally, 16
+  routes were pointed at forbidden targets — loopback v4/v6, `localhost`, all
+  three RFC1918 ranges, AWS and GCP metadata, CGNAT, benchmark, unspecified,
+  a public hostname resolving to loopback, and the `file`/`gopher`/`ftp`
+  schemes plus embedded credentials — and every one failed closed with a
+  `blocked target address` reason and `lastStatusCode = 0`, proving no HTTP
+  exchange ever took place.
+
+- **Section 10 (next)** — Final report.

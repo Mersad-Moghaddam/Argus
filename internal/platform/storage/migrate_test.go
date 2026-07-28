@@ -23,6 +23,25 @@ func migrationsDir(t *testing.T) string {
 	return dir
 }
 
+func globOrFail(t *testing.T, dir, pattern string) []string {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(dir, pattern))
+	if err != nil {
+		t.Fatalf("glob %s: %v", pattern, err)
+	}
+	sort.Strings(files)
+	return files
+}
+
+func readFileOrFail(t *testing.T, path string) string {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(content)
+}
+
 // TestMigrationFilesArePairedAndOrdered runs without a database: it checks the
 // structural invariants ApplyMigrations depends on, so a missing or misnamed
 // file is caught in CI even where MySQL is unavailable.
@@ -50,11 +69,15 @@ func TestMigrationFilesArePairedAndOrdered(t *testing.T) {
 		if strings.TrimSpace(string(content)) == "" {
 			t.Errorf("migration %s is empty", filepath.Base(up))
 		}
-		// ApplyMigrations splits on ';', so a statement containing a literal
-		// semicolon inside a string or a stored routine body would be torn
-		// apart. Guard against that being introduced silently.
-		if strings.Contains(strings.ToUpper(string(content)), "DELIMITER") {
-			t.Errorf("migration %s uses DELIMITER, which the naive ';' splitter cannot handle", filepath.Base(up))
+		// ApplyMigrations splits on ';', so a stored routine body (which needs
+		// DELIMITER and contains embedded semicolons) would be torn apart.
+		// Only a statement-leading DELIMITER counts; the word may appear in a
+		// comment.
+		for _, line := range strings.Split(string(content), "\n") {
+			if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(line)), "DELIMITER ") {
+				t.Errorf("migration %s uses DELIMITER, which the naive ';' splitter cannot handle", filepath.Base(up))
+				break
+			}
 		}
 	}
 
@@ -86,7 +109,10 @@ func TestApplyMigrationsAgainstMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer db.Close()
+	// Registered first so it runs last: t.Cleanup is LIFO, and a deferred
+	// Close() would otherwise fire before the drop-tables cleanup below,
+	// leaving it to fail against a closed pool.
+	t.Cleanup(func() { _ = db.Close() })
 	if err = db.PingContext(ctx); err != nil {
 		t.Fatalf("ping %s: %v", dsn, err)
 	}

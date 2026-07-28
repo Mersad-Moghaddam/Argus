@@ -364,6 +364,51 @@ func (r *Store) ListRouteChecks(ctx context.Context, routeID int64, limit, offse
 	return out, rows.Err()
 }
 
+// AggregateCheckTimeseries buckets raw checks into fixed-width intervals in a
+// single grouped query. The (project_id, checked_at) and (route_id, checked_at)
+// indexes cover the WHERE clause, and maxBuckets caps the row count so a wide
+// requested range can never produce an unbounded response.
+func (r *Store) AggregateCheckTimeseries(ctx context.Context, projectID int64, routeID *int64, since time.Time, bucketSeconds, maxBuckets int) ([]models.MetricPoint, error) {
+	if bucketSeconds <= 0 {
+		bucketSeconds = 3600
+	}
+	if maxBuckets <= 0 || maxBuckets > 2000 {
+		maxBuckets = 500
+	}
+	query := `SELECT FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(checked_at) / ?) * ?) AS bucket_start,
+			COUNT(*) AS checks,
+			COALESCE(SUM(status = 'down'), 0) AS failures,
+			COALESCE(ROUND(AVG(latency_ms)), 0) AS avg_latency,
+			COALESCE(MAX(latency_ms), 0) AS max_latency
+		FROM route_checks
+		WHERE project_id = ? AND checked_at >= ?`
+	args := []any{bucketSeconds, bucketSeconds, projectID, since}
+	if routeID != nil {
+		query += ` AND route_id = ?`
+		args = append(args, *routeID)
+	}
+	query += ` GROUP BY bucket_start ORDER BY bucket_start ASC LIMIT ?`
+	args = append(args, maxBuckets)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []models.MetricPoint{}
+	for rows.Next() {
+		var p models.MetricPoint
+		if err = rows.Scan(&p.BucketStart, &p.Checks, &p.Failures, &p.AvgLatencyMS, &p.MaxLatencyMS); err != nil {
+			return nil, err
+		}
+		if p.Checks > 0 {
+			p.UptimePct = float64(p.Checks-p.Failures) / float64(p.Checks) * 100
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // AggregateRouteMetrics recomputes the 24h rolling window columns for every
 // route in a single batched UPDATE...JOIN, avoiding N+1 per-route queries.
 func (r *Store) AggregateRouteMetrics(ctx context.Context, since time.Time) error {
