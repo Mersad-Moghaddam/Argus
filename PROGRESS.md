@@ -52,8 +52,8 @@
 | 2f | Default production environment for each new project | Complete | `5982c00` |
 | 2g | Tenant-scoped project environment API | Complete | `d72bdfd`, `7d6855d`, `f89ea41` |
 | 2h | Project environment visibility in authenticated UI | Complete | `0e04dbe`, `8b945e4`, `f451d18` |
-| 3a | OpenTelemetry provider lifecycle foundation | Complete | Pending |
-| 3b | Low-cardinality HTTP trace and metric instrumentation | Complete | Pending |
+| 3a | OpenTelemetry provider lifecycle foundation | Complete | `6531814` |
+| 3b | Low-cardinality HTTP trace and metric instrumentation | Complete | `d6fd3b4`, `8e7c619` |
 | 4a | Hidden-state contract and motion-plan implementation | Complete | `3a326a1` |
 | 2 | Environments, endpoint canonicalization, safe synthetic migration | Planned | — |
 | 3 | Telemetry ingestion, metric storage, mapping, SLO and incidents | Planned | — |
