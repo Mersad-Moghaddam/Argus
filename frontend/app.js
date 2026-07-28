@@ -8,6 +8,7 @@ const el = {
   incidentsOverview: document.getElementById('incidentListOverview'),
   form: document.getElementById('monitorForm'),
   refreshBtn: document.getElementById('refreshBtn'),
+  refreshIndicator: document.getElementById('refreshIndicator'),
   refreshDot: document.getElementById('refreshDot'),
   apiKey: document.getElementById('apiKey'),
   saveKeyBtn: document.getElementById('saveKeyBtn'),
@@ -418,6 +419,10 @@ function showTableSkeleton(tbody, cols, rows = 4) {
 /* ---------------------------- Data refresh ---------------------------- */
 
 async function refresh({ silent = false } = {}) {
+	if (el.refreshIndicator) {
+		el.refreshIndicator.classList.add('is-refreshing');
+		el.refreshIndicator.setAttribute('aria-busy', 'true');
+	}
   if (!silent) {
     showTableSkeleton(el.table, 8);
     showTableSkeleton(el.pingTable, 6);
@@ -443,6 +448,10 @@ async function refresh({ silent = false } = {}) {
   renderStatusPages(statusPages);
   renderChecks(checks);
   countdown = AUTO_REFRESH_SECONDS;
+	if (el.refreshIndicator) {
+		el.refreshIndicator.classList.remove('is-refreshing');
+		el.refreshIndicator.removeAttribute('aria-busy');
+	}
 }
 
 /* ---------------------------- Delete confirmation modal ---------------------------- */

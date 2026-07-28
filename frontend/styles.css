@@ -138,18 +138,42 @@ hr {
   outline-offset: 2px;
 }
 
+/* A single hidden-state contract keeps inactive shells, dialogs, and form
+ * variants out of layout, focus order, and the accessibility tree. */
+.hidden,
+[hidden] {
+  display: none !important;
+}
+
 .tab-btn:focus-visible {
   outline-offset: -2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
+  html {
     scroll-behavior: auto !important;
+  }
+
+  .brand-mark::after,
+  .skeleton,
+  .refresh-dot,
+  .btn-spinner {
+    animation: none !important;
+  }
+
+  .toast,
+  .toast[data-entering="true"],
+  .toast.leaving,
+  .modal {
+    transform: none;
+  }
+
+  .toast {
+    transition: opacity 80ms linear;
+  }
+
+  button:active {
+    transform: none;
   }
 }
 
@@ -195,23 +219,10 @@ hr {
 .brand-mark::after {
   content: "";
   position: absolute;
-  inset: -5px;
+  inset: -4px;
   border-radius: 14px;
-  border: 1px solid var(--signal);
-  opacity: 0;
-  animation: sweep-ring 3.4s var(--ease-out) infinite;
-}
-
-@keyframes sweep-ring {
-  0% {
-    opacity: 0.55;
-    transform: scale(0.86);
-  }
-  70%,
-  100% {
-    opacity: 0;
-    transform: scale(1.22);
-  }
+  border: 1px solid color-mix(in srgb, var(--signal) 42%, transparent);
+  opacity: 1;
 }
 
 .brand-text h1 {
@@ -266,9 +277,8 @@ hr {
   transition: color var(--dur) var(--ease-out), background var(--dur) var(--ease-out);
 }
 
-.icon-btn-inline:hover {
-  color: var(--text);
-  background: var(--ink-raised-2);
+@media (hover: hover) and (pointer: fine) {
+  .icon-btn-inline:hover { color: var(--text); background: var(--ink-raised-2); }
 }
 
 /* ==========================================================================
@@ -291,9 +301,7 @@ button {
   transition: filter var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-out), background var(--dur) var(--ease-out);
 }
 
-button:hover {
-  filter: brightness(1.08);
-}
+@media (hover: hover) and (pointer: fine) { button:hover { filter: brightness(1.08); } }
 
 button:active {
   transform: scale(0.97);
@@ -312,10 +320,7 @@ button.secondary {
   border: 1px solid var(--line);
 }
 
-button.secondary:hover {
-  background: var(--line-soft);
-  filter: none;
-}
+@media (hover: hover) and (pointer: fine) { button.secondary:hover { background: var(--line-soft); filter: none; } }
 
 button.ghost {
   background: transparent;
@@ -324,21 +329,14 @@ button.ghost {
   padding: 9px 12px;
 }
 
-button.ghost:hover {
-  color: var(--text);
-  background: var(--ink-raised-2);
-  filter: none;
-}
+@media (hover: hover) and (pointer: fine) { button.ghost:hover { color: var(--text); background: var(--ink-raised-2); filter: none; } }
 
 button.danger {
   background: var(--down-soft);
   color: var(--down);
 }
 
-button.danger:hover {
-  background: var(--down);
-  color: #fff;
-}
+@media (hover: hover) and (pointer: fine) { button.danger:hover { background: var(--down); color: #fff; } }
 
 button.icon-only {
   padding: 9px;
@@ -548,9 +546,7 @@ label {
   transition: color var(--dur) var(--ease-out), background var(--dur) var(--ease-out);
 }
 
-.tab-btn:hover {
-  color: var(--text);
-}
+@media (hover: hover) and (pointer: fine) { .tab-btn:hover { color: var(--text); } }
 
 .tab-btn.active {
   color: var(--signal-ink);
@@ -567,18 +563,6 @@ label {
 
 .tab-panel.active {
   display: block;
-  animation: fade-in var(--dur-slow) var(--ease-out);
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 .grid {
@@ -1024,9 +1008,7 @@ td.url-cell {
   cursor: pointer;
 }
 
-.toast-close:hover {
-  color: var(--text);
-}
+@media (hover: hover) and (pointer: fine) { .toast-close:hover { color: var(--text); } }
 
 /* ==========================================================================
    Modal (confirm delete)
@@ -1140,8 +1122,12 @@ td.url-cell {
   border-radius: 50%;
   background: var(--ok);
   box-shadow: 0 0 0 0 var(--ok-soft);
-  animation: pulse 2s infinite;
+  animation: none;
   transition: background var(--dur) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .refresh-indicator.is-refreshing .refresh-dot { animation: pulse 1.2s var(--ease-out) infinite; }
 }
 
 .refresh-dot.is-down {
