@@ -15,6 +15,7 @@ type PrivateAgent struct {
 	TokenHash               []byte     `json:"-"`
 	Version                 string     `json:"version,omitempty"`
 	ExpectedIntervalSeconds int        `json:"expectedIntervalSeconds"`
+	LivenessState           string     `json:"-"`
 	Status                  string     `json:"status,omitempty"`
 	LastSeenAt              *time.Time `json:"lastSeenAt,omitempty"`
 	RevokedAt               *time.Time `json:"revokedAt,omitempty"`

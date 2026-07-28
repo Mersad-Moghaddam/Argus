@@ -85,6 +85,7 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	}
 	processor := worker.NewProcessor(store, store, store, appService, asynqClient, notifier.NewHTTPNotifier(), logger, store, routeEvaluator, routeMonitorCfg)
 	processor.SetSLOEvaluator(worker.NewSLOEvaluator(store, metricReader, cfg.SLOStaleAfter, store))
+	processor.SetAgentLivenessEvaluator(worker.NewAgentLivenessEvaluator(store, store))
 	workerRt, err := workerplatform.NewRuntime(cfg, processor, logger)
 	if err != nil {
 		_ = asynqClient.Close()

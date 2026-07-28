@@ -8,11 +8,11 @@ import (
 	"argus/internal/models"
 )
 
-const privateAgentColumns = `id,project_id,environment_id,created_by_user_id,name,token_prefix,token_hash,version,expected_interval_seconds,last_seen_at,revoked_at,created_at,updated_at`
+const privateAgentColumns = `id,project_id,environment_id,created_by_user_id,name,token_prefix,token_hash,version,expected_interval_seconds,liveness_state,last_seen_at,revoked_at,created_at,updated_at`
 
 func scanPrivateAgent(row interface{ Scan(dest ...any) error }, agent *models.PrivateAgent) error {
 	var seen, revoked sql.NullTime
-	if err := row.Scan(&agent.ID, &agent.ProjectID, &agent.EnvironmentID, &agent.CreatedByUserID, &agent.Name, &agent.TokenPrefix, &agent.TokenHash, &agent.Version, &agent.ExpectedIntervalSeconds, &seen, &revoked, &agent.CreatedAt, &agent.UpdatedAt); err != nil {
+	if err := row.Scan(&agent.ID, &agent.ProjectID, &agent.EnvironmentID, &agent.CreatedByUserID, &agent.Name, &agent.TokenPrefix, &agent.TokenHash, &agent.Version, &agent.ExpectedIntervalSeconds, &agent.LivenessState, &seen, &revoked, &agent.CreatedAt, &agent.UpdatedAt); err != nil {
 		return err
 	}
 	if seen.Valid {
@@ -22,6 +22,22 @@ func scanPrivateAgent(row interface{ Scan(dest ...any) error }, agent *models.Pr
 		agent.RevokedAt = &revoked.Time
 	}
 	return nil
+}
+func (r *Store) ListPrivateAgentsForEvaluation(ctx context.Context, limit, afterID int64) ([]models.PrivateAgent, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT `+privateAgentColumns+` FROM private_agents WHERE id>? ORDER BY id LIMIT ?`, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []models.PrivateAgent{}
+	for rows.Next() {
+		var a models.PrivateAgent
+		if err = scanPrivateAgent(rows, &a); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }
 func (r *Store) CreatePrivateAgent(ctx context.Context, agent models.PrivateAgent) (int64, error) {
 	result, err := r.db.ExecContext(ctx, `INSERT INTO private_agents (project_id,environment_id,created_by_user_id,name,token_prefix,token_hash,version,expected_interval_seconds) VALUES (?,?,?,?,?,?,?,?)`, agent.ProjectID, agent.EnvironmentID, agent.CreatedByUserID, agent.Name, agent.TokenPrefix, agent.TokenHash, agent.Version, agent.ExpectedIntervalSeconds)
@@ -64,4 +80,12 @@ func (r *Store) RevokePrivateAgent(ctx context.Context, id int64, at time.Time) 
 func (r *Store) TouchPrivateAgent(ctx context.Context, id int64, version string, at time.Time) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE private_agents SET last_seen_at=?,version=?,updated_at=UTC_TIMESTAMP() WHERE id=? AND revoked_at IS NULL`, at, version, id)
 	return err
+}
+func (r *Store) SetPrivateAgentLivenessState(ctx context.Context, id int64, state string) (bool, error) {
+	res, err := r.db.ExecContext(ctx, `UPDATE private_agents SET liveness_state=? WHERE id=? AND liveness_state<>?`, state, id, state)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }

@@ -95,9 +95,11 @@ type HeartbeatStore interface {
 type PrivateAgentStore interface {
 	CreatePrivateAgent(ctx context.Context, agent models.PrivateAgent) (int64, error)
 	ListPrivateAgents(ctx context.Context, projectID int64) ([]models.PrivateAgent, error)
+	ListPrivateAgentsForEvaluation(ctx context.Context, limit, afterID int64) ([]models.PrivateAgent, error)
 	GetPrivateAgentByHash(ctx context.Context, tokenHash []byte) (*models.PrivateAgent, error)
 	RevokePrivateAgent(ctx context.Context, id int64, revokedAt time.Time) error
 	TouchPrivateAgent(ctx context.Context, id int64, version string, seenAt time.Time) error
+	SetPrivateAgentLivenessState(ctx context.Context, id int64, state string) (bool, error)
 }
 
 // SLOStore persists versioned SLO policy and the bounded aggregate evidence

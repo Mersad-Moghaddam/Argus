@@ -100,6 +100,18 @@ func (f *PrivateAgentStore) ListPrivateAgents(_ context.Context, pid int64) ([]m
 	}
 	return out, nil
 }
+func (f *PrivateAgentStore) ListPrivateAgentsForEvaluation(_ context.Context, limit, afterID int64) ([]models.PrivateAgent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []models.PrivateAgent{}
+	for _, a := range f.byID {
+		if a.ID > afterID {
+			out = append(out, a)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return pageSlice(out, int(limit), 0), nil
+}
 func (f *PrivateAgentStore) GetPrivateAgentByHash(_ context.Context, h []byte) (*models.PrivateAgent, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -131,6 +143,17 @@ func (f *PrivateAgentStore) TouchPrivateAgent(_ context.Context, id int64, v str
 		f.byID[id] = a
 	}
 	return nil
+}
+func (f *PrivateAgentStore) SetPrivateAgentLivenessState(_ context.Context, id int64, state string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	a, ok := f.byID[id]
+	if !ok || a.LivenessState == state {
+		return false, nil
+	}
+	a.LivenessState = state
+	f.byID[id] = a
+	return true, nil
 }
 
 type HeartbeatStore struct {
