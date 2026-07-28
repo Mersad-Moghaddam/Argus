@@ -30,7 +30,7 @@
 | SEC-008 | Endpoint limits and server timeouts | HTTP platform | configuration and slow-client tests | In progress — explicit server timeouts, security headers, and auth control-payload limit landed; import-specific limits and slow-client integration evidence remain | Pending |
 | Threat model: tenant isolation | Scope every request, job, token, mapping, incident, and export | API, stores, workers | cross-tenant negative tests | Planned | — |
 | Threat model: SSRF | Preserve dial- and redirect-time address validation | worker, synthetic policy | redirect, DNS, IPv4/IPv6 test suite | Planned | — |
-| Migration | Additive, restartable, reversible changes and conflict reporting | migrations, backfill | fresh and legacy migration tests | In progress — additive schema and canonical dual-write for new/updated manual and imported routes landed; deterministic legacy backfill and cutover remain | Pending |
+| Migration | Additive, restartable, reversible changes and conflict reporting | migrations, backfill | fresh and legacy migration tests | In progress — additive schema, canonical dual-write, and an operator-run restartable legacy backfill/conflict workflow landed; cutover remains | Pending |
 
 ## Delivery roadmap
 
@@ -48,6 +48,7 @@
 | 2b | Canonical endpoint pipeline and preview API | Complete | Pending |
 | 2c | Additive environment and canonical-identity schema | Complete | Pending |
 | 2d | Canonical identity dual-write for route mutations | Complete | Pending |
+| 2e | Restartable legacy canonical-identity backfill command | Complete | Pending |
 | 4a | Hidden-state contract and motion-plan implementation | Complete | Pending |
 | 2 | Environments, endpoint canonicalization, safe synthetic migration | Planned | — |
 | 3 | Telemetry ingestion, metric storage, mapping, SLO and incidents | Planned | — |
@@ -77,6 +78,7 @@
 | 2026-07-28 | 2b | Added one IDNA-aware structured canonicalizer for manual routes, bulk input, OpenAPI import, updates, and worker fetch-target construction. It returns stable codes/fields, preserves the established trailing-slash identity policy, and is exposed through an editor-only normalization preview endpoint with duplicate, safety, traffic, and daily-request feedback. Domain, application, and API tests passed. | Complete |
 | 2026-07-28 | 2c | Added an ordered, reversible migration for project environments, nullable versioned canonical identity/hash fields, and an operator-visible collision ledger. It retains legacy route fields during the migration window. Storage migration parser tests passed; live MySQL smoke testing remains available through `MYSQL_TEST_DSN`. | Complete |
 | 2026-07-28 | 2d | Manual and OpenAPI-created/updated routes now persist canonical identity, a 32-byte SHA-256 lookup hash, and canonicalizer version `1`. The MySQL route store dual-writes and reads these fields. Focused domain, application, and API tests passed. | Complete |
+| 2026-07-28 | 2e | Added `cmd/backfill-endpoint-identity`: an operator-run, dry-run-capable, bounded batch backfill that uses the domain canonicalizer, records invalid legacy rows and exact canonical duplicates in the conflict ledger, and can safely resume. Command compilation and domain tests passed. | Complete |
 | 2026-07-28 | 1b | Added authenticated session inventory and revoke-other-sessions controls. Only the current-session marker is returned; token hashes remain server-only. Revocation removes every sibling session while retaining the session used for the request. Application and API tests passed. | Complete |
 | 2026-07-28 | 1c | Added explicit Fiber read/write/idle timeouts, strict CSP and companion browser headers, a 256 KiB authentication/control payload guard, and per-IP authentication throttling with `429` responses. Platform, application, and HTTP API tests passed. | Complete |
 | 2026-07-28 | 1d | Moved registration/login out of the private Projects tab into dedicated `#/register` and `#/login` routes, with Register as the primary global guest action. Guest project navigation redirects to login and only accepts a constrained same-origin `#/projects/...` return target; header actions reflect the cookie-authenticated session. JavaScript syntax, diff checks, and focused domain/API tests passed. | Complete |

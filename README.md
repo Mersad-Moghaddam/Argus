@@ -275,6 +275,22 @@ Domain policies + ports
 - Duplicate-column error `1060` is treated as an idempotent compatibility case.
 - Down migrations exist for controlled development rollback, but startup never applies them automatically.
 
+### Canonical endpoint identity backfill
+
+After migration `0006_endpoint_identity.up.sql` is applied, convert legacy API
+routes with the operator command below. Start with `-dry-run`; invalid legacy
+values and normalization collisions are recorded in
+`route_canonicalization_conflicts` for review, while valid rows are converted
+in bounded, restartable batches.
+
+```bash
+DATABASE_DSN='user:password@tcp(127.0.0.1:3306)/argus?parseTime=true' \
+  go run ./cmd/backfill-endpoint-identity -dry-run
+
+DATABASE_DSN='user:password@tcp(127.0.0.1:3306)/argus?parseTime=true' \
+  go run ./cmd/backfill-endpoint-identity -batch-size 200
+```
+
 Named Docker volumes retain both MySQL and Redis state across container restarts.
 
 ## Security model
