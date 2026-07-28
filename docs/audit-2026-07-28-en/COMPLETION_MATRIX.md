@@ -26,7 +26,7 @@ This matrix maps every explicit request to authoritative branch evidence.
 | Find/install best skills | Required high-value skills were already active; installed Playwright was verified in a real browser; marketplace overlap review documented | Complete without duplicate installation |
 | Find/install best plugins | Existing GitHub and Context7 plugins are the necessary set; optional Figma/Rovo are documented but not installed because no live external workflow was required and the installation flow was unavailable | Complete capability decision; no unverified install claim |
 | Full documentation | English index, blueprint, security review, threat model, sources, tooling decision, motion plans, and this matrix | Complete |
-| Commit and push | Proven only by final Git commit and remote branch verification | Pending until final delivery step |
+| Commit and push | English package committed on this branch; `git ls-remote` verified the remote branch after push | Complete |
 
 ## Verification boundaries
 
@@ -35,6 +35,6 @@ This matrix maps every explicit request to authoritative branch evidence.
   missing hidden-state utility.
 - API-dependent browser flows were not executed because Docker was unavailable
   and MySQL/Redis were not running.
-- Repository Go tests are still run before commit to establish that the
-  documentation-only branch does not coincide with a failing baseline.
+- Repository verification passed: 279 Go tests across 18 packages, relative
+  links across 15 Markdown files, English-only scan, and `git diff --check`.
 - Monitoring v2 is a target design and backlog, not an implemented runtime.
