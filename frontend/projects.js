@@ -19,10 +19,19 @@
     tab: document.getElementById('tab-projects'),
     panel: document.getElementById('panel-projects'),
     globalAuthPanel: document.getElementById('globalAuthPanel'),
+    globalAccountPanel: document.getElementById('globalAccountPanel'),
     guestActions: document.getElementById('accountGuestActions'),
     signedInActions: document.getElementById('accountSignedInActions'),
     globalUserLabel: document.getElementById('globalUserLabel'),
     globalSignOut: document.getElementById('globalSignOut'),
+    accountEmail: document.getElementById('accountEmail'),
+    accountPasswordForm: document.getElementById('accountPasswordForm'),
+    accountCurrentPassword: document.getElementById('accountCurrentPassword'),
+    accountNewPassword: document.getElementById('accountNewPassword'),
+    accountPasswordError: document.getElementById('accountPasswordError'),
+    accountPasswordSubmit: document.getElementById('accountPasswordSubmit'),
+    accountSessions: document.getElementById('accountSessions'),
+    accountRevokeOthers: document.getElementById('accountRevokeOthers'),
     authGate: document.getElementById('projAuthGate'),
     authForm: document.getElementById('projAuthForm'),
     authTitle: document.getElementById('projAuthTitle'),
@@ -80,6 +89,7 @@
     authReturnTo: null,
     sessionUser: null,
     sessionResolved: false,
+    account: { sessions: null, loading: false },
     // Projects list view.
     list: { search: '', status: '', offset: 0, limit: 24, loading: false, data: null, total: 0 },
     // Project detail view.
@@ -276,6 +286,7 @@
     const hash = window.location.hash.replace(/^#/, '');
     const [path, query = ''] = hash.split('?', 2);
     const parts = path.split('/').filter(Boolean);
+    if (parts.length === 1 && parts[0] === 'account') return { name: 'account' };
     if (parts.length === 1 && (parts[0] === 'login' || parts[0] === 'register')) {
       return {
         name: 'auth',
@@ -365,8 +376,19 @@
       return;
     }
 
-    document.body.classList.remove('auth-route');
+    if (parsed.name === 'account') {
+      if (!getUser()) {
+        if (!state.sessionResolved) restoreSession();
+        navigate(authHash('login'));
+        return;
+      }
+      renderAccount();
+      return;
+    }
+
+    document.body.classList.remove('identity-route');
     pel.globalAuthPanel.classList.add('hidden');
+    pel.globalAccountPanel.classList.add('hidden');
 
     if (pel.tab && !pel.tab.classList.contains('active') && typeof activateTab === 'function') {
       activateTab(pel.tab);
@@ -446,8 +468,9 @@
     stopAutoRefresh();
     pel.shell.classList.add('hidden');
     state.authReturnTo = validatedReturnTo(returnTo);
-    document.body.classList.add('auth-route');
+    document.body.classList.add('identity-route');
     pel.globalAuthPanel.classList.remove('hidden');
+    pel.globalAccountPanel.classList.add('hidden');
     pel.authGate.classList.remove('hidden');
     setAuthMode(mode);
   }
@@ -465,6 +488,61 @@
     pel.authSwitchPrompt.textContent = registering ? 'Already have an account?' : 'No account yet?';
     pel.authSwitch.textContent = registering ? 'Sign in instead' : 'Create one';
     hideFormError(pel.authError);
+  }
+
+  function renderAccount() {
+    stopAutoRefresh();
+    document.body.classList.add('identity-route');
+    pel.globalAuthPanel.classList.add('hidden');
+    pel.globalAccountPanel.classList.remove('hidden');
+    pel.shell.classList.add('hidden');
+    pel.accountEmail.textContent = (getUser() && (getUser().email || getUser().name)) || '';
+    hideFormError(pel.accountPasswordError);
+    loadAccountSessions();
+  }
+
+  function sessionTime(value) {
+    if (!value) return 'Not used yet';
+    if (typeof relativeTime === 'function') return relativeTime(value);
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Unknown time' : date.toLocaleString();
+  }
+
+  function renderAccountSessions() {
+    const sessions = state.account.sessions;
+    if (!sessions) {
+      pel.accountSessions.innerHTML = '<div class="empty-state"><span>Loading active sessions…</span></div>';
+      return;
+    }
+    if (!sessions.length) {
+      pel.accountSessions.innerHTML = '<div class="empty-state"><span>No active sessions found.</span></div>';
+      return;
+    }
+    pel.accountSessions.innerHTML = `<div class="account-session-list">${sessions.map((session) => `
+      <div class="account-session">
+        <div>
+          <strong>${escapeHtml(session.current ? 'This session' : (session.name || 'Session'))}</strong>
+          <span>Last active ${escapeHtml(sessionTime(session.lastUsedAt || session.createdAt))}</span>
+        </div>
+        ${session.current ? '<span class="badge status-up">Current</span>' : '<span class="badge status-pending">Active</span>'}
+      </div>`).join('')}</div>`;
+  }
+
+  async function loadAccountSessions() {
+    if (state.account.loading) return;
+    state.account.loading = true;
+    renderAccountSessions();
+    try {
+      const result = await apiProjects('/auth/sessions');
+      state.account.sessions = result.sessions || [];
+      renderAccountSessions();
+    } catch (err) {
+      if (!(err instanceof SessionExpired)) {
+        pel.accountSessions.innerHTML = `<div class="empty-state is-error"><strong>Could not load sessions</strong><span>${escapeHtml(err.message)}</span></div>`;
+      }
+    } finally {
+      state.account.loading = false;
+    }
   }
 
   function showFormError(node, message) {
@@ -517,6 +595,45 @@
       showFormError(pel.authError, `Network error: ${err.message}`);
     } finally {
       setButtonLoading(pel.authSubmit, false);
+    }
+  });
+
+  pel.accountPasswordForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.accountPasswordError);
+    setButtonLoading(pel.accountPasswordSubmit, true, 'Changing...');
+    try {
+      await apiProjects('/auth/password', {
+        method: 'POST',
+        body: JSON.stringify({
+          currentPassword: pel.accountCurrentPassword.value,
+          newPassword: pel.accountNewPassword.value,
+        }),
+      });
+      pel.accountCurrentPassword.value = '';
+      pel.accountNewPassword.value = '';
+      showToast('Password changed. Other sessions were signed out.', 'success');
+      state.account.sessions = null;
+      loadAccountSessions();
+    } catch (err) {
+      if (!(err instanceof SessionExpired)) showFormError(pel.accountPasswordError, err.message);
+    } finally {
+      setButtonLoading(pel.accountPasswordSubmit, false);
+    }
+  });
+
+  pel.accountRevokeOthers.addEventListener('click', async () => {
+    if (!window.confirm('Revoke every other active session?')) return;
+    setButtonLoading(pel.accountRevokeOthers, true, 'Revoking...');
+    try {
+      await apiProjects('/auth/sessions/revoke-others', { method: 'POST' });
+      state.account.sessions = null;
+      await loadAccountSessions();
+      showToast('Other active sessions were revoked.', 'success');
+    } catch (err) {
+      reportError('Could not revoke other sessions', err);
+    } finally {
+      setButtonLoading(pel.accountRevokeOthers, false);
     }
   });
 

@@ -1288,16 +1288,62 @@ footer.app-footer {
   padding: 24px 0;
 }
 
-body.auth-route .status-banner,
-body.auth-route .status-rail,
-body.auth-route .tabs,
-body.auth-route .tab-panel,
-body.auth-route .app-footer,
-body.auth-route .refresh-indicator,
-body.auth-route .api-key-field,
-body.auth-route #saveKeyBtn,
-body.auth-route #refreshBtn {
+body.identity-route .status-banner,
+body.identity-route .status-rail,
+body.identity-route .tabs,
+body.identity-route .tab-panel,
+body.identity-route .app-footer,
+body.identity-route .refresh-indicator,
+body.identity-route .api-key-field,
+body.identity-route #saveKeyBtn,
+body.identity-route #refreshBtn {
   display: none !important;
+}
+
+.account-card {
+  width: 100%;
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+.account-section + .account-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.account-section h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.account-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.account-session {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--ink-raised-2);
+}
+
+.account-session strong,
+.account-session span {
+  display: block;
+}
+
+.account-session span {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
 .proj-auth-card {
