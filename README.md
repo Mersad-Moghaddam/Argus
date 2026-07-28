@@ -326,10 +326,19 @@ curl --request POST http://localhost:8080/agent/heartbeat \
 The service returns the agent's server-bound project and environment identity;
 the agent must not select those values itself. Revocation immediately rejects
 the credential, and project non-members receive a non-enumerating response.
-This control plane currently establishes identity and liveness only: the
-packaged local executor, signed work configuration, and private result
-protocol are tracked as follow-up work. Argus does not reverse-connect or dial
-customer-private addresses.
+The included `argus-agent` process is an outbound-only liveness client:
+
+```bash
+ARGUS_AGENT_CONTROL_URL=https://argus.example.com \
+ARGUS_AGENT_TOKEN=argus_agent_... \
+go run ./cmd/argus-agent -heartbeat-interval=60s
+```
+
+It requires HTTPS except for loopback development, has a 10-second request
+timeout, validates a 15-second-to-24-hour heartbeat interval, and never logs
+the credential. The packaged local executor, signed work configuration, and
+private result protocol are tracked as follow-up work. Argus does not
+reverse-connect or dial customer-private addresses.
 
 ## Architecture
 
