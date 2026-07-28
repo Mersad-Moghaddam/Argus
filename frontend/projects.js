@@ -11,8 +11,6 @@
 (() => {
   'use strict';
 
-  const TOKEN_KEY = 'argus_project_token';
-  const USER_KEY = 'argus_project_user';
   const VIEW_REFRESH_SECONDS = 20;
   const ROUTE_PAGE_SIZE = 25;
   const PREVIEW_PAGE_SIZE = 100;
@@ -74,6 +72,8 @@
   const state = {
     route: { name: 'list' },
     authMode: 'login',
+    sessionUser: null,
+    sessionResolved: false,
     // Projects list view.
     list: { search: '', status: '', offset: 0, limit: 24, loading: false, data: null, total: 0 },
     // Project detail view.
@@ -105,26 +105,24 @@
 
   /* ------------------------------------------------------- auth + api client */
 
-  function getToken() {
-    return localStorage.getItem(TOKEN_KEY) || '';
-  }
-
   function getUser() {
-    try {
-      return JSON.parse(localStorage.getItem(USER_KEY) || 'null');
-    } catch {
-      return null;
-    }
+    return state.sessionUser || null;
   }
 
-  function setSession(token, user) {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(USER_KEY, JSON.stringify(user || null));
+  function setSession(user) {
+    state.sessionUser = user || null;
+    state.sessionResolved = true;
   }
 
   function clearSession() {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    state.sessionUser = null;
+    state.sessionResolved = true;
+  }
+
+  function csrfToken() {
+    const prefix = 'argus_csrf=';
+    const cookie = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(prefix));
+    return cookie ? cookie.slice(prefix.length) : '';
   }
 
   /** Raised when the server rejects our bearer token; the caller stops quietly. */
@@ -135,23 +133,20 @@
     }
   }
 
-  /**
-   * apiProjects mirrors app.js's api() helper but sends the project bearer
-   * token instead of the legacy X-API-Key, and surfaces the server's JSON
-   * "error" field as the thrown message so the UI can show something useful.
-   */
+  /** Cookie-authenticated project API client. The session identifier is
+   * HttpOnly and never appears in JavaScript storage or request headers. */
   async function apiProjects(path, options = {}) {
-    const token = getToken();
-    if (!token) throw new SessionExpired();
-
-    const headers = { Authorization: `Bearer ${token}`, ...(options.headers || {}) };
+    const headers = { ...(options.headers || {}) };
     if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
       headers['Content-Type'] = 'application/json';
+    }
+    if (!['GET', 'HEAD', 'OPTIONS'].includes((options.method || 'GET').toUpperCase())) {
+      headers['X-CSRF-Token'] = csrfToken();
     }
 
     let res;
     try {
-      res = await fetch(`/api${path}`, { ...options, headers });
+      res = await fetch(`/api${path}`, { ...options, headers, credentials: 'same-origin' });
     } catch (networkErr) {
       throw new Error(`Network error: ${networkErr.message}`);
     }
@@ -331,7 +326,8 @@
     state.route = parsed;
     renderCrumbs();
 
-    if (!getToken()) {
+    if (!getUser()) {
+      if (!state.sessionResolved) restoreSession();
       renderAuthGate();
       return;
     }
@@ -461,7 +457,7 @@
         showFormError(pel.authError, (payload && payload.error) || `Request failed (${res.status})`);
         return;
       }
-      setSession(payload.token, payload.user);
+      setSession(payload.user);
       pel.authPassword.value = '';
       showToast(registering ? 'Account created. Welcome to API Projects.' : 'Signed in.', 'success');
       navigate('#/projects');
@@ -483,6 +479,22 @@
     showToast('Signed out of API Projects.', 'info');
     renderAuthGate();
   });
+
+  async function restoreSession() {
+    if (state.sessionResolved) return;
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+      if (res.ok) {
+        const payload = await res.json();
+        setSession(payload.user);
+      } else {
+        clearSession();
+      }
+    } catch {
+      clearSession();
+    }
+    handleRoute();
+  }
 
   /* ------------------------------------------------------ projects list view */
 
@@ -2204,7 +2216,7 @@
     handleRoute();
   } else {
     setAuthMode('login');
-    if (!getToken()) {
+    if (!getUser()) {
       pel.authGate.classList.remove('hidden');
       pel.shell.classList.add('hidden');
     } else {
@@ -2212,4 +2224,5 @@
       pel.authGate.classList.add('hidden');
     }
   }
+  restoreSession();
 })();

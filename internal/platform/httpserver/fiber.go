@@ -20,7 +20,11 @@ import (
 // rejects oversized requests before they reach handler code.
 const maxUploadBytes = 15 * 1024 * 1024
 
-func NewFiberApp(service *application.Service, logStore *observability.LogStore, apiKey string) *fiber.App {
+func NewFiberApp(service *application.Service, logStore *observability.LogStore, apiKey string, authCookieSecure ...bool) *fiber.App {
+	cookieSecure := false
+	if len(authCookieSecure) > 0 {
+		cookieSecure = authCookieSecure[0]
+	}
 	app := fiber.New(fiber.Config{AppName: "Argus Distributed Uptime Checker", BodyLimit: maxUploadBytes})
 	app.Use(recover.New())
 	app.Use(helmet.New())
@@ -44,16 +48,16 @@ func NewFiberApp(service *application.Service, logStore *observability.LogStore,
 
 	// Project-based API route monitoring: separate bearer-token user auth,
 	// independent from the legacy API key.
-	authHandler := api.NewAuthHandler(service)
-	api.RegisterAuthRoutes(apiGroup, authHandler, adapterhttp.BearerAuth(service))
-
+	authHandler := api.NewAuthHandler(service, cookieSecure)
 	bearerGuard := adapterhttp.BearerAuth(service)
+	api.RegisterAuthRoutes(apiGroup, authHandler, bearerGuard, adapterhttp.CSRFProtect)
+
 	projectHandler := api.NewProjectHandler(service)
 	routeHandler := api.NewRouteHandler(service)
 	importHandler := api.NewImportHandler(service)
-	api.RegisterProjectRoutes(apiGroup, projectHandler, bearerGuard)
-	api.RegisterRouteRoutes(apiGroup, routeHandler, bearerGuard)
-	api.RegisterImportRoutes(apiGroup, importHandler, bearerGuard)
+	api.RegisterProjectRoutes(apiGroup, projectHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterRouteRoutes(apiGroup, routeHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterImportRoutes(apiGroup, importHandler, bearerGuard, adapterhttp.CSRFProtect)
 
 	app.Static("/", "./frontend", fiber.Static{
 		Compress:      true,

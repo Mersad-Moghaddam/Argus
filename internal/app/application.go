@@ -44,7 +44,7 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	}
 	store := mysql.NewStore(db)
 	appService := application.NewService(store, store, store, store, store, store, logger, store, store, store, store, store, store)
-	httpApp := httpserver.NewFiberApp(appService, logger, cfg.APIKey)
+	httpApp := httpserver.NewFiberApp(appService, logger, cfg.APIKey, cfg.AuthCookieSecure)
 	asynqClient := asynq.NewClient(workerplatform.RedisClientOptions(cfg))
 	routeEvaluator := worker.NewRouteEvaluator(worker.EvaluatorConfig{
 		AllowPrivateTargets: cfg.RouteAllowPrivateTargets,

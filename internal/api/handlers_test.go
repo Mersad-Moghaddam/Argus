@@ -177,6 +177,71 @@ func TestAuthEndpoints(t *testing.T) {
 	})
 }
 
+func TestBrowserSessionUsesHttpOnlyCookieAndCSRF(t *testing.T) {
+	a := newTestAPI(t)
+	resp := a.do(t, http.MethodPost, "/api/auth/register", "", map[string]string{
+		"email": "cookie@example.com", "password": "longenoughpassword", "name": "Cookie user",
+	})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected 201, got %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+	cookies := resp.Cookies()
+	_ = resp.Body.Close()
+	var session, csrf *http.Cookie
+	for _, cookie := range cookies {
+		switch cookie.Name {
+		case "argus_session":
+			session = cookie
+		case "argus_csrf":
+			csrf = cookie
+		}
+	}
+	if session == nil || !session.HttpOnly || session.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("expected HttpOnly SameSite=Lax session cookie, got %#v", session)
+	}
+	if csrf == nil || csrf.HttpOnly || csrf.Value == "" {
+		t.Fatalf("expected readable CSRF cookie, got %#v", csrf)
+	}
+
+	me := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	me.AddCookie(session)
+	meResp, err := a.app.Test(me, -1)
+	if err != nil {
+		t.Fatalf("cookie /auth/me: %v", err)
+	}
+	if meResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected cookie auth to work, got %d", meResp.StatusCode)
+	}
+	_ = meResp.Body.Close()
+
+	create := httptest.NewRequest(http.MethodPost, "/api/projects", strings.NewReader(`{"name":"Cookie project"}`))
+	create.Header.Set("Content-Type", "application/json")
+	create.AddCookie(session)
+	create.AddCookie(csrf)
+	missingCSRF, err := a.app.Test(create, -1)
+	if err != nil {
+		t.Fatalf("missing csrf request: %v", err)
+	}
+	if missingCSRF.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("expected 403 without CSRF, got %d", missingCSRF.StatusCode)
+	}
+	_ = missingCSRF.Body.Close()
+
+	create = httptest.NewRequest(http.MethodPost, "/api/projects", strings.NewReader(`{"name":"Cookie project"}`))
+	create.Header.Set("Content-Type", "application/json")
+	create.Header.Set("X-CSRF-Token", csrf.Value)
+	create.AddCookie(session)
+	create.AddCookie(csrf)
+	created, err := a.app.Test(create, -1)
+	if err != nil {
+		t.Fatalf("csrf request: %v", err)
+	}
+	if created.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected 201 with CSRF, got %d (%s)", created.StatusCode, bodyString(t, created))
+	}
+	_ = created.Body.Close()
+}
+
 func TestProjectRoutesRequireBearerToken(t *testing.T) {
 	a := newTestAPI(t)
 	_, token := a.register(t, "bearer@example.com")

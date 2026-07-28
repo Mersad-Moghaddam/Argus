@@ -152,7 +152,9 @@ syncKeywordFieldVisibility();
 /* ---------------------------- API helper ---------------------------- */
 
 async function api(path, options = {}) {
-  const key = localStorage.getItem('argus_api_key') || '';
+  // Legacy API credentials are intentionally memory-only. Browser storage is
+  // readable by injected scripts and must never hold a management secret.
+  const key = el.apiKey.value.trim();
   const res = await fetch(`/api${path}`, {
     ...options,
     headers: { 'Content-Type': 'application/json', 'X-API-Key': key, ...(options.headers || {}) },
@@ -613,8 +615,7 @@ el.maintenanceForm.addEventListener('submit', async (e) => {
 });
 
 el.saveKeyBtn.addEventListener('click', () => {
-  localStorage.setItem('argus_api_key', el.apiKey.value.trim());
-  showToast('API key saved in your browser.', 'success');
+  showToast('API key is available for this tab only.', 'success');
   refresh();
 });
 
@@ -633,6 +634,5 @@ setInterval(() => {
 /* ---------------------------- Init ---------------------------- */
 
 initTheme();
-el.apiKey.value = localStorage.getItem('argus_api_key') || '';
 el.refreshBtn.addEventListener('click', () => refresh());
 refresh();

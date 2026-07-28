@@ -23,6 +23,9 @@ type Config struct {
 	QueueDefaultWeight  int
 	DueCheckBatchSize   int
 	APIKey              string
+	// AuthCookieSecure must be enabled behind TLS in production. It remains
+	// configurable so local HTTP development and test clients keep working.
+	AuthCookieSecure bool
 
 	DBMaxOpenConns    int
 	DBMaxIdleConns    int
@@ -60,6 +63,7 @@ func Load() (Config, error) {
 	cfg.RouteMaxRedirects = mustInt("ROUTE_MAX_REDIRECTS", 5)
 	cfg.RouteAllowPrivateTargets = mustBool("ROUTE_ALLOW_PRIVATE_TARGETS", false)
 	cfg.RouteUserAgent = envOrDefault("ROUTE_USER_AGENT", "Argus-Monitor/1.0")
+	cfg.AuthCookieSecure = mustBool("AUTH_COOKIE_SECURE", false)
 
 	dbIndex, err := strconv.Atoi(envOrDefault("REDIS_DB", "0"))
 	if err != nil {

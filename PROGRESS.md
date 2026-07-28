@@ -23,7 +23,7 @@
 
 | Contract | Required outcome | Owner area | Acceptance evidence | Status | Commit |
 | --- | --- | --- | --- | --- | --- |
-| SEC-001, SEC-003, SEC-004, SEC-009 | Secure sessions; fail-closed auth; abuse limits; coalesced session activity | auth, HTTP middleware, MySQL | lifecycle, CSRF, rate-limit, negative-auth tests | Planned | — |
+| SEC-001, SEC-003, SEC-004, SEC-009 | Secure sessions; fail-closed auth; abuse limits; coalesced session activity | auth, HTTP middleware, MySQL | lifecycle, CSRF, rate-limit, negative-auth tests | In progress — browser session, CSRF, fail-closed legacy guard, and coalesced last-used writes landed; abuse limits and explicit server limits remain | Pending |
 | SEC-002, SEC-010, SEC-011 | CSP-safe DOM rendering and exclusive accessible UI state | frontend | browser and keyboard tests | Planned | — |
 | SEC-005, SEC-007 | Catalog/synthetic separation and canonical validation | routes, imports, worker | zero-import-traffic and normalization tests | Planned | — |
 | SEC-006 | Encrypted/rotatable synthetic secret references | secrets, migrations | redaction and rotation tests | Planned | — |
@@ -37,7 +37,8 @@
 | Checkpoint | Scope | Status | Commit |
 | --- | --- | --- | --- |
 | 0 | Branch, baseline evidence, architecture/traceability controls | In progress | — |
-| 1 | Identity, authorization, secure global shell | Planned | — |
+| 1a | Cookie session and browser credential hardening | Complete | Pending |
+| 1 | Identity, authorization, secure global shell | In progress | — |
 | 2 | Environments, endpoint canonicalization, safe synthetic migration | Planned | — |
 | 3 | Telemetry ingestion, metric storage, mapping, SLO and incidents | Planned | — |
 | 4 | Onboarding and all management views; accessibility and motion | Planned | — |
@@ -60,3 +61,4 @@
 | Date | Checkpoint | Evidence | Result |
 | --- | --- | --- | --- |
 | 2026-07-28 | 0 | `go test ./...` and `go test -race ./...` passed; `govulncheck ./...` passed; `git diff --check` passed. `staticcheck ./...` was not runnable through the mandated RTK wrapper (`./... matched no packages`) and remains a CI verification item. | Complete |
+| 2026-07-28 | 1a | Opaque server-stored session token is issued as an HttpOnly, SameSite=Lax cookie; browser mutations require a CSRF cookie/header match; project frontend no longer reads or persists bearer credentials; legacy API keys are memory-only and an unset legacy key fails closed. Focused Go and JavaScript syntax checks passed. | Complete |

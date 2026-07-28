@@ -27,6 +27,7 @@ var (
 var emailPattern = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 
 const tokenTTL = 30 * 24 * time.Hour
+const lastUsedWriteInterval = 15 * time.Minute
 
 // AuthResult bundles a user with the freshly-issued bearer token for it.
 type AuthResult struct {
@@ -120,7 +121,10 @@ func (s *Service) Authenticate(ctx context.Context, rawToken string) (*models.Us
 	if user == nil {
 		return nil, ErrInvalidToken
 	}
-	_ = s.tokens.TouchToken(ctx, token.ID, time.Now().UTC())
+	now := time.Now().UTC()
+	if token.LastUsedAt == nil || now.Sub(*token.LastUsedAt) >= lastUsedWriteInterval {
+		_ = s.tokens.TouchToken(ctx, token.ID, now)
+	}
 	user.PasswordHash = ""
 	return user, nil
 }
