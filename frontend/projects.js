@@ -111,6 +111,19 @@
     heartbeatSecretCopy: document.getElementById('projHeartbeatSecretCopy'),
     heartbeatSecretClose: document.getElementById('projHeartbeatSecretClose'),
 
+    agentModal: document.getElementById('projAgentModal'),
+    agentForm: document.getElementById('projAgentForm'),
+    agentName: document.getElementById('projAgentName'),
+    agentEnvironment: document.getElementById('projAgentEnvironment'),
+    agentInterval: document.getElementById('projAgentInterval'),
+    agentFormError: document.getElementById('projAgentFormError'),
+    agentCancel: document.getElementById('projAgentCancel'),
+    agentSubmit: document.getElementById('projAgentSubmit'),
+    agentSecretModal: document.getElementById('projAgentSecretModal'),
+    agentSecretValue: document.getElementById('projAgentSecretValue'),
+    agentSecretCopy: document.getElementById('projAgentSecretCopy'),
+    agentSecretClose: document.getElementById('projAgentSecretClose'),
+
     sloModal: document.getElementById('projSLOModal'),
     sloForm: document.getElementById('projSLOForm'),
     sloName: document.getElementById('projSLOName'),
@@ -179,6 +192,7 @@
       telemetryMappings: [],
       slos: [],
 	  heartbeats: [],
+      agents: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -199,7 +213,7 @@
   let modalReturnFocus = null;
   let confirmAction = null;
   const ONBOARDING_DRAFT_KEY = 'argus_project_onboarding_draft_v1';
-  const projectModals = [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.heartbeatModal, pel.heartbeatSecretModal, pel.sloModal, pel.telemetryMappingModal, pel.routeModal, pel.bulkModal, pel.confirmModal];
+  const projectModals = [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.heartbeatModal, pel.heartbeatSecretModal, pel.agentModal, pel.agentSecretModal, pel.sloModal, pel.telemetryMappingModal, pel.routeModal, pel.bulkModal, pel.confirmModal];
 
   /* ------------------------------------------------------- auth + api client */
 
@@ -532,6 +546,7 @@
       telemetryMappings: [],
       slos: [],
       heartbeats: [],
+	  agents: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -985,7 +1000,7 @@
     }
     try {
       const p = state.project;
-	  const [project, series, incidents, routes, environments, telemetryIngress, telemetryMappings, slos, heartbeats] = await Promise.all([
+	  const [project, series, incidents, routes, environments, telemetryIngress, telemetryMappings, slos, heartbeats, agents] = await Promise.all([
 		apiProjects(`/project/catalog/${id}`),
 		apiProjects(`/route/metrics/${id}${qs({ range: p.range })}`),
 		apiProjects(`/route/incidents/${id}${qs({ limit: 15 })}`),
@@ -995,6 +1010,7 @@
 		apiProjects(`/telemetry/mappings/${id}`),
 		apiProjects(`/slo/catalog/${id}`),
 		apiProjects(`/heartbeat/catalog/${id}`),
+		apiProjects(`/agent/catalog/${id}`),
       ]);
       state.project.project = project;
       state.project.series = series;
@@ -1006,6 +1022,7 @@
 	  state.project.telemetryMappings = telemetryMappings.items || [];
 	  state.project.slos = slos.items || [];
 	  state.project.heartbeats = heartbeats.items || [];
+	  state.project.agents = agents.items || [];
       renderCrumbs();
       renderProjectDetail();
     } catch (err) {
@@ -1115,6 +1132,12 @@
         <div class="card-header"><h2>Heartbeats</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-heartbeat">Create heartbeat</button>' : ''}</div>
         <p class="hint">Use a project-bound one-time token for jobs and scheduled workloads. Late and missing runs remain visible; duplicate retries do not refresh liveness.</p>
         ${heartbeatMonitorsHtml(state.project.heartbeats, canEdit)}
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Private agents</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-agent">Enroll agent</button>' : ''}</div>
+        <p class="hint">Agents report outbound liveness only. Argus never connects into your private network. The enrollment token is shown once and can be revoked at any time.</p>
+        ${privateAgentsHtml(state.project.agents, canEdit)}
       </section>
 
       <section class="card">
@@ -1333,6 +1356,15 @@
   function heartbeatMonitorsHtml(monitors, canEdit) {
     if (!monitors.length) return emptyPanel(ICON.route, 'No heartbeat monitors configured', 'Create a heartbeat for a job or scheduled workload, then send its first signed ping.');
     return `<div class="list">${monitors.map((monitor) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(monitor.name)}</span><span class="list-item-meta">every ${num(Math.round(monitor.expectedIntervalSeconds / 60))} min + ${num(Math.round(monitor.gracePeriodSeconds / 60))} min grace &middot; ${monitor.lastReceivedAt ? `last seen ${escapeHtml(relativeTime(monitor.lastReceivedAt))}` : 'no signal received'}</span></div><div class="row-actions"><span class="badge ${monitor.lastOutcome === 'healthy' ? 'status-up' : monitor.lastOutcome === 'late' ? 'route-degraded' : 'route-unknown'}">${escapeHtml(monitor.lastOutcome || 'missing')}</span>${canEdit && !monitor.revokedAt ? `<button class="danger sm" type="button" data-action="revoke-heartbeat" data-id="${monitor.id}">Revoke</button>` : ''}</div></div>`).join('')}</div>`;
+  }
+
+  function privateAgentsHtml(agents, canEdit) {
+    if (!agents.length) return emptyPanel(ICON.route, 'No private agents enrolled', 'Enroll an environment-local agent when a target cannot be safely reached from the public control plane.');
+    return `<div class="list">${agents.map((agent) => {
+      const tone = agent.status === 'healthy' ? 'status-up' : agent.status === 'stale' ? 'route-degraded' : agent.status === 'revoked' ? 'status-resolved' : 'route-unknown';
+      const interval = agent.expectedIntervalSeconds >= 60 ? `${num(Math.round(agent.expectedIntervalSeconds / 60))} min` : `${num(agent.expectedIntervalSeconds)} sec`;
+      return `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(agent.name)}</span><span class="list-item-meta">environment #${num(agent.environmentId)} &middot; every ${interval} &middot; ${agent.lastSeenAt ? `last seen ${escapeHtml(relativeTime(agent.lastSeenAt))}` : 'no signal received'}${agent.version ? ` &middot; version ${escapeHtml(agent.version)}` : ''}</span></div><div class="row-actions"><span class="badge ${tone}">${escapeHtml(agent.status || 'offline')}</span>${canEdit && !agent.revokedAt ? `<button class="danger sm" type="button" data-action="revoke-agent" data-id="${agent.id}">Revoke</button>` : ''}</div></div>`;
+    }).join('')}</div>`;
   }
 
   function formatDuration(msTotal) {
@@ -2485,6 +2517,40 @@
   pel.heartbeatSecretCopy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(pel.heartbeatSecretValue.value); showToast('Heartbeat token copied.', 'success'); } catch (_) { pel.heartbeatSecretValue.select(); document.execCommand('copy'); showToast('Heartbeat token selected for copying.', 'info'); } });
   pel.heartbeatSecretClose.addEventListener('click', closeHeartbeatSecret);
 
+  function openAgentModal() {
+    pel.agentForm.reset();
+    pel.agentInterval.value = '60';
+    pel.agentEnvironment.replaceChildren();
+    state.project.environments.forEach((environment) => {
+      const option = document.createElement('option');
+      option.value = String(environment.id);
+      option.textContent = environment.name;
+      pel.agentEnvironment.append(option);
+    });
+    const unavailable = !state.project.environments.length;
+    pel.agentSubmit.disabled = unavailable;
+    hideFormError(pel.agentFormError);
+    if (unavailable) showFormError(pel.agentFormError, 'Create an environment before enrolling an agent.');
+    openModal(pel.agentModal);
+  }
+  function closeAgentSecret() { closeModal(pel.agentSecretModal); pel.agentSecretValue.value = ''; }
+  pel.agentCancel.addEventListener('click', () => closeModal(pel.agentModal));
+  pel.agentForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const interval = Number(pel.agentInterval.value);
+    const environmentID = Number(pel.agentEnvironment.value);
+    if (!pel.agentName.value.trim() || !Number.isInteger(environmentID) || environmentID <= 0 || !Number.isInteger(interval) || interval < 15 || interval > 86400) {
+      showFormError(pel.agentFormError, 'Provide a name, environment, and a heartbeat interval from 15 seconds through 24 hours.'); return;
+    }
+    setButtonLoading(pel.agentSubmit, true, 'Creating...'); hideFormError(pel.agentFormError);
+    try {
+      const issued = await apiProjects(`/agent/catalog/${state.project.id}`, { method: 'POST', body: JSON.stringify({ name: pel.agentName.value.trim(), environmentId: environmentID, expectedIntervalSeconds: interval }) });
+      closeModal(pel.agentModal); pel.agentSecretValue.value = issued.enrollmentToken; openModal(pel.agentSecretModal); loadProjectDetail({ silent: true });
+    } catch (err) { if (!(err instanceof SessionExpired)) showFormError(pel.agentFormError, err.message); } finally { setButtonLoading(pel.agentSubmit, false); }
+  });
+  pel.agentSecretCopy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(pel.agentSecretValue.value); showToast('Agent token copied. Keep it out of source control.', 'success'); } catch (_) { pel.agentSecretValue.select(); document.execCommand('copy'); showToast('Agent token selected for copying.', 'info'); } });
+  pel.agentSecretClose.addEventListener('click', closeAgentSecret);
+
   pel.projectCancel.addEventListener('click', () => {
     saveOnboardingDraft();
     closeModal(pel.projectModal);
@@ -2879,6 +2945,15 @@
           askConfirm({ title: 'Revoke this heartbeat token?', body: 'The job using this token will no longer be able to report runs. Create a replacement heartbeat before changing the job configuration.', confirmLabel: 'Revoke heartbeat' }, async () => {
             await apiProjects(`/heartbeat/revoke/${state.project.id}/${id}`, { method: 'POST' });
             showToast('Heartbeat token revoked.', 'success'); loadProjectDetail({ silent: true });
+          });
+          break;
+        case 'create-agent':
+          openAgentModal();
+          break;
+        case 'revoke-agent':
+          askConfirm({ title: 'Revoke this private-agent token?', body: 'The agent will no longer be able to report liveness. Create a replacement agent and update its local secret before revoking this one.', confirmLabel: 'Revoke agent' }, async () => {
+            await apiProjects(`/agent/revoke/${state.project.id}/${id}`, { method: 'POST' });
+            showToast('Private-agent token revoked.', 'success'); loadProjectDetail({ silent: true });
           });
           break;
         case 'acknowledge-incident':

@@ -578,6 +578,30 @@
       </div>
     </div>
 
+    <div class="modal-overlay hidden" id="projAgentModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projAgentModalTitle" tabindex="-1">
+        <h3 id="projAgentModalTitle">Enroll private agent</h3>
+        <form id="projAgentForm" class="stack">
+          <div class="field"><label for="projAgentName">Agent name</label><input id="projAgentName" placeholder="Production edge" required maxlength="120" /></div>
+          <div class="field"><label for="projAgentEnvironment">Environment</label><select id="projAgentEnvironment" required></select></div>
+          <div class="field"><label for="projAgentInterval">Expected heartbeat (seconds)</label><input id="projAgentInterval" type="number" min="15" max="86400" value="60" required /></div>
+          <p class="hint">The agent sends an outbound HTTPS heartbeat only. Argus will never make a connection into this environment.</p>
+          <p class="proj-form-error hidden" id="projAgentFormError" role="alert"></p>
+          <div class="modal-actions"><button class="secondary" type="button" id="projAgentCancel">Cancel</button><button type="submit" id="projAgentSubmit">Create enrollment token</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="projAgentSecretModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projAgentSecretModalTitle" tabindex="-1">
+        <h3 id="projAgentSecretModalTitle">Save this agent token</h3>
+        <p class="hint">Copy it now. Argus stores only a hash and cannot show this token again.</p>
+        <div class="field"><label for="projAgentSecretValue">Enrollment token</label><input id="projAgentSecretValue" class="mono" readonly spellcheck="false" /></div>
+        <p class="proj-form-error inline" role="alert">Treat this like a password. Put it in the agent's local secret store, never source control or a target URL.</p>
+        <div class="modal-actions"><button class="secondary" type="button" id="projAgentSecretCopy">Copy token</button><button type="button" id="projAgentSecretClose">I saved it</button></div>
+      </div>
+    </div>
+
     <!-- SLO definition create -->
     <div class="modal-overlay hidden" id="projSLOModal">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projSLOModalTitle" tabindex="-1">
