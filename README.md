@@ -363,8 +363,11 @@ It requires HTTPS except for loopback development, has a 10-second request
 timeout, validates a 15-second-to-24-hour heartbeat interval, and never logs
 the credential. The project dashboard exposes enrollment, one-time token
 copying, last-seen/version, healthy/stale/offline/revoked state, and guarded
-revocation. The packaged local executor, signed work configuration, and
-private result protocol are tracked as follow-up work. Argus does not
+revocation. An agent may report a bounded `success` or `failure` outcome to
+`POST /agent/result` using its Bearer token and an `Idempotency-Key`; Argus
+derives project/environment identity from the token, deduplicates replays, and
+creates or resolves source-aware evidence. The packaged local executor and
+target execution remain follow-up work. Argus does not
 reverse-connect or dial customer-private addresses.
 
 ## Architecture
