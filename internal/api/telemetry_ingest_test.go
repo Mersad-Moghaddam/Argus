@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,11 +18,60 @@ import (
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
 )
+
+func TestOTLPGRPCTransportIngestsMetrics(t *testing.T) {
+	a := newTestAPI(t)
+	userID, token := a.register(t, "otlp-grpc-transport@example.com")
+	project := a.createProject(t, token, "OTLP gRPC transport")
+	environments, err := a.service.ListProjectEnvironments(context.Background(), project.ID)
+	if err != nil || len(environments) != 1 {
+		t.Fatalf("default environment: %v %+v", err, environments)
+	}
+	issued, err := a.service.CreateTelemetryCredential(context.Background(), project.ID, userID, application.CreateTelemetryCredentialInput{Name: "grpc transport", EnvironmentID: environments[0].ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	listener := bufconn.Listen(1024 * 1024)
+	server := grpc.NewServer()
+	metricsServer, tracesServer := api.NewTelemetryGRPCServers(api.NewTelemetryIngestHandler(a.service))
+	metricscollector.RegisterMetricsServiceServer(server, metricsServer)
+	tracecollector.RegisterTraceServiceServer(server, tracesServer)
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() {
+		server.Stop()
+		_ = listener.Close()
+	})
+
+	conn, err := grpc.DialContext(context.Background(), "bufnet", grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+		return listener.Dial()
+	}), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("dial bufconn: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	client := metricscollector.NewMetricsServiceClient(conn)
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "authorization", "Bearer "+issued.Token)
+	request := &metricscollector.ExportMetricsServiceRequest{ResourceMetrics: []*metricspb.ResourceMetrics{{
+		Resource:     resourceWithMetadata("grpc-client", "production", "https://forged.invalid"),
+		ScopeMetrics: []*metricspb.ScopeMetrics{{Metrics: []*metricspb.Metric{{Name: "rpc.server.duration"}}}},
+	}}}
+	if _, err = client.Export(ctx, request); err != nil {
+		t.Fatalf("transport metrics export: %v", err)
+	}
+	records, err := a.service.ListTelemetryIngress(context.Background(), project.ID, 10)
+	if err != nil || len(records) != 1 || records[0].ProjectID != project.ID || records[0].EnvironmentID != environments[0].ID || records[0].ServiceName != "grpc-client" {
+		t.Fatalf("transport record: %#v %v", records, err)
+	}
+}
 
 func TestOTLPGRPCIngestUsesCredentialBoundAttribution(t *testing.T) {
 	a := newTestAPI(t)
