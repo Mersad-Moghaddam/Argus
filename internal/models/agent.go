@@ -35,6 +35,7 @@ type PrivateAgentResult struct {
 	AgentID       int64     `json:"agentId"`
 	ProjectID     int64     `json:"projectId"`
 	EnvironmentID int64     `json:"environmentId"`
+	AssignmentID  *int64    `json:"assignmentId,omitempty"`
 	Outcome       string    `json:"outcome"`
 	Summary       string    `json:"summary,omitempty"`
 	ReceivedAt    time.Time `json:"receivedAt"`

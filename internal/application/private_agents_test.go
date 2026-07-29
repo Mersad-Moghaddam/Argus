@@ -57,7 +57,7 @@ func TestPrivateAgentResultsDriveAReplaySafeIncidentLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := h.service.RecordPrivateAgentResult(ctx, issued.EnrollmentToken, "1.2.3", "agent-result-failure-0001", "failure", "bounded failure")
+	created, err := h.service.RecordPrivateAgentResult(ctx, issued.EnrollmentToken, "1.2.3", "agent-result-failure-0001", 0, "failure", "bounded failure")
 	if err != nil || !created {
 		t.Fatalf("record failure: created=%t err=%v", created, err)
 	}
@@ -65,11 +65,11 @@ func TestPrivateAgentResultsDriveAReplaySafeIncidentLifecycle(t *testing.T) {
 	if err != nil || len(open) != 1 || open[0].Source != "private_agent_result" {
 		t.Fatalf("open result incident: %#v %v", open, err)
 	}
-	created, err = h.service.RecordPrivateAgentResult(ctx, issued.EnrollmentToken, "1.2.3", "agent-result-failure-0001", "failure", "bounded failure")
+	created, err = h.service.RecordPrivateAgentResult(ctx, issued.EnrollmentToken, "1.2.3", "agent-result-failure-0001", 0, "failure", "bounded failure")
 	if err != nil || created {
 		t.Fatalf("replay failure: created=%t err=%v", created, err)
 	}
-	created, err = h.service.RecordPrivateAgentResult(ctx, issued.EnrollmentToken, "1.2.3", "agent-result-success-0001", "success", "recovered")
+	created, err = h.service.RecordPrivateAgentResult(ctx, issued.EnrollmentToken, "1.2.3", "agent-result-success-0001", 0, "success", "recovered")
 	if err != nil || !created {
 		t.Fatalf("record recovery: created=%t err=%v", created, err)
 	}
@@ -77,7 +77,7 @@ func TestPrivateAgentResultsDriveAReplaySafeIncidentLifecycle(t *testing.T) {
 	if err != nil || len(resolved) != 1 || resolved[0].ResolvedAt == nil {
 		t.Fatalf("resolved result incident: %#v %v", resolved, err)
 	}
-	if _, err = h.service.RecordPrivateAgentResult(ctx, issued.EnrollmentToken, "1.2.3", "too-short", "success", ""); !errors.Is(err, ErrInvalidPrivateAgentResult) {
+	if _, err = h.service.RecordPrivateAgentResult(ctx, issued.EnrollmentToken, "1.2.3", "too-short", 0, "success", ""); !errors.Is(err, ErrInvalidPrivateAgentResult) {
 		t.Fatalf("invalid result error = %v", err)
 	}
 }

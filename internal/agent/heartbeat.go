@@ -123,11 +123,16 @@ func (c *Client) Heartbeat(ctx context.Context) error {
 
 // ReportResult sends bounded outcome evidence only; it never includes targets,
 // headers, request bodies, or local logs.
-func (c *Client) ReportResult(ctx context.Context, idempotencyKey, outcome, summary string) error {
+func (c *Client) ReportResult(ctx context.Context, idempotencyKey string, assignmentID int64, outcome, summary string) error {
 	if len(strings.TrimSpace(idempotencyKey)) < 16 || len(idempotencyKey) > 200 || (outcome != "success" && outcome != "failure") || len(summary) > 240 {
 		return errors.New("agent result is invalid")
 	}
-	body, err := json.Marshal(map[string]string{"outcome": outcome, "summary": summary, "version": c.version})
+	body, err := json.Marshal(struct {
+		AssignmentID int64  `json:"assignmentId,omitempty"`
+		Outcome      string `json:"outcome"`
+		Summary      string `json:"summary"`
+		Version      string `json:"version"`
+	}{AssignmentID: assignmentID, Outcome: outcome, Summary: summary, Version: c.version})
 	if err != nil {
 		return err
 	}

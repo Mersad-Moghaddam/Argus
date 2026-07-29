@@ -78,7 +78,7 @@ func runAssignments(ctx context.Context, client *agent.Client, assignments []age
 			outcome = "failure"
 		}
 		key := fmt.Sprintf("agent-assignment-%d-%d", assignment.ID, now.UnixNano())
-		if err := client.ReportResult(ctx, key, outcome, fmt.Sprintf("assignment %d: %s", assignment.ID, summary)); err != nil {
+		if err := client.ReportResult(ctx, key, assignment.ID, outcome, summary); err != nil {
 			log.Printf("agent assignment %d result delivery failed: %v", assignment.ID, err)
 		}
 	}

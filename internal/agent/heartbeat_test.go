@@ -65,10 +65,10 @@ func TestClientReportsBoundedResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = client.ReportResult(context.Background(), "agent-result-key-0001", "failure", "bounded failure"); err != nil {
+	if err = client.ReportResult(context.Background(), "agent-result-key-0001", 0, "failure", "bounded failure"); err != nil {
 		t.Fatal(err)
 	}
-	if err = client.ReportResult(context.Background(), "too-short", "failure", "bounded failure"); err == nil {
+	if err = client.ReportResult(context.Background(), "too-short", 0, "failure", "bounded failure"); err == nil {
 		t.Fatal("expected invalid result rejection")
 	}
 }

@@ -19,9 +19,10 @@ type agentHeartbeatRequest struct {
 	Version string `json:"version"`
 }
 type agentResultRequest struct {
-	Outcome string `json:"outcome"`
-	Summary string `json:"summary"`
-	Version string `json:"version"`
+	AssignmentID int64  `json:"assignmentId"`
+	Outcome      string `json:"outcome"`
+	Summary      string `json:"summary"`
+	Version      string `json:"version"`
 }
 
 type privateAgentRequest struct {
@@ -84,7 +85,7 @@ func (h *PrivateAgentHandler) Result(c *fiber.Ctx) error {
 	if !strings.HasPrefix(auth, p) {
 		return c.Status(401).JSON(fiber.Map{"error": "invalid agent credentials"})
 	}
-	created, err := h.service.RecordPrivateAgentResult(c.UserContext(), strings.TrimSpace(strings.TrimPrefix(auth, p)), req.Version, c.Get("Idempotency-Key"), req.Outcome, req.Summary)
+	created, err := h.service.RecordPrivateAgentResult(c.UserContext(), strings.TrimSpace(strings.TrimPrefix(auth, p)), req.Version, c.Get("Idempotency-Key"), req.AssignmentID, req.Outcome, req.Summary)
 	if errors.Is(err, application.ErrPrivateAgentNotFound) {
 		return c.Status(401).JSON(fiber.Map{"error": "invalid agent credentials"})
 	}

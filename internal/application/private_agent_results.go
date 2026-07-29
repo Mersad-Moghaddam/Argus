@@ -11,7 +11,7 @@ import (
 
 var ErrInvalidPrivateAgentResult = errors.New("invalid private agent result")
 
-func (s *Service) RecordPrivateAgentResult(ctx context.Context, token, version, idempotencyKey, outcome, summary string) (bool, error) {
+func (s *Service) RecordPrivateAgentResult(ctx context.Context, token, version, idempotencyKey string, assignmentID int64, outcome, summary string) (bool, error) {
 	if s.privateAgentResults == nil {
 		return false, errors.New("agent result service unavailable")
 	}
@@ -22,12 +22,38 @@ func (s *Service) RecordPrivateAgentResult(ctx context.Context, token, version, 
 	if err != nil {
 		return false, err
 	}
+	var assignment *models.PrivateAgentAssignment
+	if assignmentID > 0 {
+		if s.privateAgentAssignments == nil {
+			return false, ErrInvalidPrivateAgentResult
+		}
+		items, listErr := s.privateAgentAssignments.ListPrivateAgentAssignmentsForEnvironment(ctx, agent.ProjectID, agent.EnvironmentID)
+		if listErr != nil {
+			return false, listErr
+		}
+		for i := range items {
+			if items[i].ID == assignmentID && items[i].Enabled && items[i].RevokedAt == nil {
+				assignment = &items[i]
+				break
+			}
+		}
+		if assignment == nil {
+			return false, ErrInvalidPrivateAgentResult
+		}
+	}
 	now := time.Now().UTC()
-	created, err := s.privateAgentResults.RecordPrivateAgentResult(ctx, models.PrivateAgentResult{AgentID: agent.ID, ProjectID: agent.ProjectID, EnvironmentID: agent.EnvironmentID, Outcome: outcome, Summary: strings.TrimSpace(summary), ReceivedAt: now}, idempotencyKey)
+	result := models.PrivateAgentResult{AgentID: agent.ID, ProjectID: agent.ProjectID, EnvironmentID: agent.EnvironmentID, Outcome: outcome, Summary: strings.TrimSpace(summary), ReceivedAt: now}
+	if assignment != nil {
+		result.AssignmentID = &assignment.ID
+	}
+	created, err := s.privateAgentResults.RecordPrivateAgentResult(ctx, result, idempotencyKey)
 	if err != nil || !created || s.projectIncidents == nil {
 		return created, err
 	}
 	key := fmt.Sprintf("agent:%d:result", agent.ID)
+	if assignment != nil {
+		key = fmt.Sprintf("agent:%d:assignment:%d", agent.ID, assignment.ID)
+	}
 	open, err := s.projectIncidents.GetOpenProjectIncident(ctx, agent.ProjectID, "private_agent_result", key)
 	if err != nil {
 		return created, err
@@ -39,7 +65,13 @@ func (s *Service) RecordPrivateAgentResult(ctx context.Context, token, version, 
 		return created, err
 	}
 	if open == nil {
-		_, err = s.projectIncidents.CreateProjectIncident(ctx, models.ProjectIncident{ProjectID: agent.ProjectID, Source: "private_agent_result", SourceKey: key, Title: fmt.Sprintf("Private agent %q reported failure", agent.Name), Evidence: fmt.Sprintf(`{"agentId":%d,"outcome":"failure"}`, agent.ID), StartedAt: now})
+		title := fmt.Sprintf("Private agent %q reported failure", agent.Name)
+		evidence := fmt.Sprintf(`{"agentId":%d,"outcome":"failure"}`, agent.ID)
+		if assignment != nil {
+			title = fmt.Sprintf("Private agent assignment %q reported failure", assignment.Name)
+			evidence = fmt.Sprintf(`{"agentId":%d,"assignmentId":%d,"outcome":"failure"}`, agent.ID, assignment.ID)
+		}
+		_, err = s.projectIncidents.CreateProjectIncident(ctx, models.ProjectIncident{ProjectID: agent.ProjectID, Source: "private_agent_result", SourceKey: key, Title: title, Evidence: evidence, StartedAt: now})
 	}
 	return created, err
 }
