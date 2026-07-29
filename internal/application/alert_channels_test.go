@@ -15,6 +15,9 @@ func TestCreateAlertChannelRequiresSafeHTTPSWebhookTarget(t *testing.T) {
 		"https://user:secret@hooks.example.test/alert",
 		"https://hooks.example.test/alert#fragment",
 		"mailto:ops@example.test",
+		"https://localhost/alert",
+		"https://127.0.0.1/alert",
+		"https://169.254.169.254/latest/meta-data",
 	} {
 		if _, err := h.service.CreateAlertChannel(ctx, models.AlertChannel{Name: "ops", ChannelType: "webhook", Target: target, Enabled: true}); err == nil {
 			t.Fatalf("target %q was accepted", target)

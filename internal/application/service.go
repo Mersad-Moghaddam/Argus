@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -124,6 +125,13 @@ func (s *Service) CreateAlertChannel(ctx context.Context, channel models.AlertCh
 	target, err := url.Parse(channel.Target)
 	if err != nil || target.Scheme != "https" || target.Host == "" || target.User != nil || target.Fragment != "" {
 		return 0, errors.New("alert channel target must be an absolute HTTPS URL without userinfo or fragment")
+	}
+	host := strings.ToLower(strings.TrimSuffix(target.Hostname(), "."))
+	if host == "localhost" || host == "metadata.google.internal" || host == "metadata.goog" || host == "169.254.169.254" {
+		return 0, errors.New("alert channel target must not be a local or metadata endpoint")
+	}
+	if address, parseErr := netip.ParseAddr(host); parseErr == nil && (address.IsLoopback() || address.IsPrivate() || address.IsLinkLocalUnicast() || address.IsUnspecified()) {
+		return 0, errors.New("alert channel target must not be a local or private address")
 	}
 	return s.alerts.CreateAlertChannel(ctx, channel)
 }
