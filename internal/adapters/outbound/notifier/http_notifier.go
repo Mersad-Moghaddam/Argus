@@ -3,6 +3,7 @@ package notifier
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -21,19 +22,37 @@ func NewHTTPNotifier() *HTTPNotifier {
 }
 
 func (n *HTTPNotifier) Notify(ctx context.Context, channels []models.AlertChannel, payload []byte) error {
+	var firstErr error
 	for _, channel := range channels {
+		if !channel.Enabled {
+			continue
+		}
 		switch channel.ChannelType {
 		case "webhook", "slack":
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, channel.Target, bytes.NewReader(payload))
 			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
 				continue
 			}
 			req.Header.Set("Content-Type", "application/json")
 			resp, err := n.client.Do(req)
-			if err == nil && resp != nil {
+			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
+			}
+			if resp != nil {
 				resp.Body.Close()
+				if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+					if firstErr == nil {
+						firstErr = fmt.Errorf("notification endpoint returned HTTP %d", resp.StatusCode)
+					}
+				}
 			}
 		}
 	}
-	return nil
+	return firstErr
 }
