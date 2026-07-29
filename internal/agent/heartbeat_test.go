@@ -48,14 +48,15 @@ func TestClientReportsBoundedResult(t *testing.T) {
 			t.Fatalf("idempotency key %q", got)
 		}
 		var body struct {
-			Outcome string `json:"outcome"`
-			Summary string `json:"summary"`
-			Version string `json:"version"`
+			AssignmentID int64  `json:"assignmentId"`
+			Outcome      string `json:"outcome"`
+			Summary      string `json:"summary"`
+			Version      string `json:"version"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatal(err)
 		}
-		if body.Outcome != "failure" || body.Summary != "bounded failure" || body.Version != "1.2.3" {
+		if body.AssignmentID != 42 || body.Outcome != "failure" || body.Summary != "bounded failure" || body.Version != "1.2.3" {
 			t.Fatalf("body: %+v", body)
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -65,7 +66,7 @@ func TestClientReportsBoundedResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = client.ReportResult(context.Background(), "agent-result-key-0001", 0, "failure", "bounded failure"); err != nil {
+	if err = client.ReportResult(context.Background(), "agent-result-key-0001", 42, "failure", "bounded failure"); err != nil {
 		t.Fatal(err)
 	}
 	if err = client.ReportResult(context.Background(), "too-short", 0, "failure", "bounded failure"); err == nil {
