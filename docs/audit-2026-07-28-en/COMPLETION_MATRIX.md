@@ -30,11 +30,15 @@ This matrix maps every explicit request to authoritative branch evidence.
 
 ## Verification boundaries
 
-- The application source was reviewed but intentionally not changed.
+- This audit package records the pre-implementation review. The as-built v2
+  delivery evidence, including implementation checkpoints and verification
+  limits, is maintained in the repository-root `PROGRESS.md`.
 - A real browser validated rendered guest/auth semantics and revealed the
   missing hidden-state utility.
 - API-dependent browser flows were not executed because Docker was unavailable
   and MySQL/Redis were not running.
 - Repository verification passed: 279 Go tests across 18 packages, relative
   links across 15 Markdown files, English-only scan, and `git diff --check`.
-- Monitoring v2 is a target design and backlog, not an implemented runtime.
+- Monitoring v2 is now implemented incrementally on `feat/argus-v2`; consult
+  `PROGRESS.md` for requirement-by-requirement current status rather than
+  treating this historical audit snapshot as an implementation claim.
