@@ -2269,6 +2269,14 @@ apiProjects(`/agent/assignments/${id}`),
       p.textContent = detail;
       pel.projectReview.append(strong, p);
     }
+	if (!isEdit && step > 1) {
+		const activeStep = pel.projectForm.querySelector(`[data-project-step="${step}"]`);
+		const title = activeStep && activeStep.querySelector('legend, h4');
+		if (title) {
+			title.tabIndex = -1;
+			title.focus();
+		}
+	}
   }
 
   function finishOnboarding(project) {
