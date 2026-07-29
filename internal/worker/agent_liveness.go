@@ -14,12 +14,13 @@ import (
 // AgentLivenessEvaluator persists state transitions so repeated scheduler
 // passes do not generate notification noise.
 type AgentLivenessEvaluator struct {
-	agents ports.PrivateAgentStore
-	outbox ports.OutboxStore
+	agents    ports.PrivateAgentStore
+	incidents ports.ProjectIncidentStore
+	outbox    ports.OutboxStore
 }
 
-func NewAgentLivenessEvaluator(agents ports.PrivateAgentStore, outbox ports.OutboxStore) *AgentLivenessEvaluator {
-	return &AgentLivenessEvaluator{agents: agents, outbox: outbox}
+func NewAgentLivenessEvaluator(agents ports.PrivateAgentStore, incidents ports.ProjectIncidentStore, outbox ports.OutboxStore) *AgentLivenessEvaluator {
+	return &AgentLivenessEvaluator{agents: agents, incidents: incidents, outbox: outbox}
 }
 func (e *AgentLivenessEvaluator) EvaluateAll(ctx context.Context, now time.Time) error {
 	for after := int64(0); ; {
@@ -34,18 +35,57 @@ func (e *AgentLivenessEvaluator) EvaluateAll(ctx context.Context, now time.Time)
 			if err != nil {
 				return err
 			}
-			if !changed || e.outbox == nil {
+			if err = e.syncIncident(ctx, a, next, now); err != nil {
+				return err
+			}
+			if !changed {
 				continue
 			}
-			payload, _ := json.Marshal(map[string]any{"event": "agent_liveness_changed", "projectId": a.ProjectID, "agentId": a.ID, "status": next, "previousStatus": a.LivenessState, "evaluatedAt": now.Format(time.RFC3339)})
-			if err = e.outbox.AddEvent(ctx, "agent_liveness_changed", a.ID, fmt.Sprintf("agent:%d:liveness:%s:%s", a.ID, next, now.UTC().Truncate(time.Minute).Format(time.RFC3339)), payload, now); err != nil {
-				return err
+			if e.outbox != nil {
+				payload, _ := json.Marshal(map[string]any{"event": "agent_liveness_changed", "projectId": a.ProjectID, "agentId": a.ID, "status": next, "previousStatus": a.LivenessState, "evaluatedAt": now.Format(time.RFC3339)})
+				if err = e.outbox.AddEvent(ctx, "agent_liveness_changed", a.ID, fmt.Sprintf("agent:%d:liveness:%s:%s", a.ID, next, now.UTC().Truncate(time.Minute).Format(time.RFC3339)), payload, now); err != nil {
+					return err
+				}
 			}
 		}
 		if len(items) < 100 {
 			return nil
 		}
 	}
+}
+
+// syncIncident records one source-scoped incident for a private agent that is
+// no longer healthy. Revocation resolves any active incident because the
+// operator deliberately removed that liveness obligation.
+func (e *AgentLivenessEvaluator) syncIncident(ctx context.Context, agent models.PrivateAgent, state string, now time.Time) error {
+	if e.incidents == nil {
+		return nil
+	}
+	key := fmt.Sprintf("agent:%d", agent.ID)
+	open, err := e.incidents.GetOpenProjectIncident(ctx, agent.ProjectID, "private_agent", key)
+	if err != nil {
+		return err
+	}
+	if state == "healthy" || state == "revoked" {
+		if open != nil {
+			return e.incidents.ResolveProjectIncident(ctx, open.ID, now)
+		}
+		return nil
+	}
+	if open != nil {
+		return nil
+	}
+	evidence, _ := json.Marshal(map[string]any{
+		"agentId": agent.ID, "livenessState": state, "expectedIntervalSeconds": agent.ExpectedIntervalSeconds,
+		"lastSeenAt": agent.LastSeenAt, "evaluatedAt": now.Format(time.RFC3339),
+	})
+	_, err = e.incidents.CreateProjectIncident(ctx, models.ProjectIncident{
+		ProjectID: agent.ProjectID,
+		Source:    "private_agent", SourceKey: key,
+		Title:    fmt.Sprintf("Private agent %q is %s", agent.Name, state),
+		Evidence: string(evidence), StartedAt: now,
+	})
+	return err
 }
 func evaluatedAgentState(a models.PrivateAgent, now time.Time) string {
 	if a.RevokedAt != nil {

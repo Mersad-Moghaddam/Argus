@@ -45,6 +45,7 @@ type Stores struct {
 	SLOs                 *SLOStore
 	Heartbeats           *HeartbeatStore
 	PrivateAgents        *PrivateAgentStore
+	ProjectIncidents     *ProjectIncidentStore
 	Outbox               *OutboxStore
 	Legacy               LegacyStore
 }
@@ -66,6 +67,7 @@ func NewStores() *Stores {
 		SLOs:                 NewSLOStore(),
 		Heartbeats:           NewHeartbeatStore(),
 		PrivateAgents:        NewPrivateAgentStore(),
+		ProjectIncidents:     NewProjectIncidentStore(),
 		Outbox:               &OutboxStore{},
 	}
 }
@@ -1247,6 +1249,72 @@ func (f *RouteStore) PruneRouteChecks(context.Context, time.Time, int) (int64, e
 }
 
 // ---------------------------------------------------------------- incidents
+
+type ProjectIncidentStore struct {
+	mu     sync.Mutex
+	nextID int64
+	byID   map[int64]models.ProjectIncident
+}
+
+func NewProjectIncidentStore() *ProjectIncidentStore {
+	return &ProjectIncidentStore{byID: map[int64]models.ProjectIncident{}}
+}
+
+func (f *ProjectIncidentStore) GetOpenProjectIncident(_ context.Context, projectID int64, source, sourceKey string) (*models.ProjectIncident, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, incident := range f.byID {
+		if incident.ProjectID == projectID && incident.Source == source && incident.SourceKey == sourceKey && (incident.State == "open" || incident.State == "acknowledged") {
+			copy := incident
+			return &copy, nil
+		}
+	}
+	return nil, nil
+}
+
+func (f *ProjectIncidentStore) CreateProjectIncident(_ context.Context, incident models.ProjectIncident) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	incident.ID, incident.State = f.nextID, "open"
+	f.byID[incident.ID] = incident
+	return incident.ID, nil
+}
+
+func (f *ProjectIncidentStore) ResolveProjectIncident(_ context.Context, id int64, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	incident, ok := f.byID[id]
+	if ok && (incident.State == "open" || incident.State == "acknowledged") {
+		incident.State, incident.ResolvedAt = "resolved", &at
+		f.byID[id] = incident
+	}
+	return nil
+}
+
+func (f *ProjectIncidentStore) AcknowledgeProjectIncident(_ context.Context, projectID, id, userID int64, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	incident, ok := f.byID[id]
+	if ok && incident.ProjectID == projectID && incident.State == "open" {
+		incident.State, incident.AcknowledgedAt, incident.AcknowledgedByID = "acknowledged", &at, &userID
+		f.byID[id] = incident
+	}
+	return nil
+}
+
+func (f *ProjectIncidentStore) ListProjectIncidents(_ context.Context, projectID int64, state string, limit, offset int) ([]models.ProjectIncident, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []models.ProjectIncident{}
+	for _, incident := range f.byID {
+		if incident.ProjectID == projectID && (state == "" || incident.State == state) {
+			out = append(out, incident)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return pageSlice(out, limit, offset), nil
+}
 
 type RouteIncidentStore struct {
 	mu     sync.Mutex

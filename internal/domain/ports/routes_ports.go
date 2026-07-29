@@ -164,7 +164,7 @@ type ProjectIncidentStore interface {
 	CreateProjectIncident(ctx context.Context, incident models.ProjectIncident) (int64, error)
 	ResolveProjectIncident(ctx context.Context, id int64, resolvedAt time.Time) error
 	AcknowledgeProjectIncident(ctx context.Context, projectID, id, userID int64, acknowledgedAt time.Time) error
-	ListProjectIncidents(ctx context.Context, projectID, state string, limit, offset int) ([]models.ProjectIncident, error)
+	ListProjectIncidents(ctx context.Context, projectID int64, state string, limit, offset int) ([]models.ProjectIncident, error)
 }
 
 // ImportStore persists OpenAPI/Swagger import jobs.

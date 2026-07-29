@@ -49,6 +49,7 @@
 | 3p | SLO state-transition notification outbox | Complete | Current checkpoint |
 | 2i | AEAD boundary for synthetic request headers | In progress | Current checkpoint |
 | 3q | Private-agent identity and outbound liveness foundation | Complete | `3002b88` |
+| 3r | Private-agent generic incident lifecycle | Complete | Current checkpoint |
 | 1 | Identity, authorization, secure global shell | In progress | — |
 | 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | `8ab613a` |
 | 2b | Canonical endpoint pipeline and preview API | Complete | `580e1bb` |
@@ -141,3 +142,4 @@
 | 2026-07-29 | Regression checkpoint | `go test -race ./...` completed successfully after the identity, telemetry, heartbeat, incident, SLO-outbox, and encrypted-route-header checkpoints. | Complete |
 | 2026-07-29 | Static-analysis checkpoint | `staticcheck ./...` and `go vet ./...` completed successfully. `govulncheck ./...` could not query the public vulnerability database because `vuln.go.dev` returned HTTP 403; this is an external verification limitation, not a reported dependency finding. | Partial |
 | 2026-07-29 | 3q | Added a project/environment-bound private-agent control plane, dashboard management surface, and minimal outbound liveness client. Opaque agent enrollment tokens are hashed at rest; authorized editors can create/revoke agents through an accessible one-time-secret flow, while project members see healthy/stale/offline/revoked state, last-seen time, and version. A minute scheduler persists liveness transitions and emits deduplicated tenant-scoped outbox events. The bundled `argus-agent` reports only authenticated liveness/version over HTTPS (loopback HTTP is development-only). The central service receives no reverse-connect or private-network dial capability. Signed work configuration, private result protocol, target execution, and generic multi-source incidents remain subsequent work. | Complete |
+| 2026-07-29 | 3r | Completed the generic project-incident lifecycle for private-agent liveness. State transitions to stale or offline now open one source-scoped `private_agent` incident with bounded operational evidence; recovery and operator revocation resolve it. The evaluator keeps existing liveness-outbox events and does not open duplicates on repeated runs. Focused worker tests and full Go regression tests passed. | Complete |
