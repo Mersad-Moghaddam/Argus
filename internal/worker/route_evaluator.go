@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"argus/internal/domain"
 	"argus/internal/models"
 	"argus/internal/openapi"
 )
@@ -436,16 +437,30 @@ func parseRouteHeaders(raw string) map[string]string {
 // default, falling back to a type-appropriate synthetic value so templated
 // routes remain dispatchable.
 func BuildRouteURL(route models.APIRoute) (string, error) {
-	base := strings.TrimRight(strings.TrimSpace(route.BaseURL), "/")
-	if base == "" {
+	if strings.TrimSpace(route.BaseURL) == "" {
 		return "", errors.New("route has no base URL configured")
 	}
-	path := strings.TrimSpace(route.Path)
-	if path != "" && !strings.HasPrefix(path, "/") {
-		path = "/" + path
+	method := route.Method
+	if method == "" {
+		method = "GET"
 	}
-	resolved := substitutePathParams(path, decodeParameters(route.Parameters))
-	return base + resolved, nil
+	normalized, err := domain.NormalizeEndpoint(method, route.BaseURL, route.Path)
+	if err != nil {
+		return "", err
+	}
+	resolvedPath := substitutePathParams(normalized.RouteTemplate, decodeParameters(route.Parameters))
+	base, err := url.Parse(normalized.BaseURL)
+	if err != nil {
+		return "", err
+	}
+	if base.Path != "" && !strings.HasSuffix(base.Path, "/") {
+		base.Path += "/"
+	}
+	ref, err := url.Parse(strings.TrimPrefix(resolvedPath, "/"))
+	if err != nil {
+		return "", err
+	}
+	return base.ResolveReference(ref).String(), nil
 }
 
 func decodeParameters(raw string) []openapi.Parameter {

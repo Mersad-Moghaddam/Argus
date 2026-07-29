@@ -6,9 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
+	"argus/internal/agent"
 	"argus/internal/domain"
 	"argus/internal/domain/ports"
 	"argus/internal/models"
@@ -27,18 +31,44 @@ type Service struct {
 	logger      *observability.LogStore
 
 	// Project-based API route monitoring dependencies.
-	users          ports.UserStore
-	tokens         ports.AuthTokenStore
-	projects       ports.ProjectStore
-	routes         ports.RouteStore
-	routeIncidents ports.RouteIncidentStore
-	imports        ports.ImportStore
+	users                   ports.UserStore
+	tokens                  ports.AuthTokenStore
+	passwordRecovery        ports.PasswordRecoveryStore
+	recoveryDelivery        ports.RecoveryDelivery
+	projects                ports.ProjectStore
+	routes                  ports.RouteStore
+	routeIncidents          ports.RouteIncidentStore
+	imports                 ports.ImportStore
+	telemetryCredentials    ports.TelemetryCredentialStore
+	telemetryIngress        ports.TelemetryIngressStore
+	telemetryMappings       ports.TelemetryMappingStore
+	slos                    ports.SLOStore
+	heartbeats              ports.HeartbeatStore
+	privateAgents           ports.PrivateAgentStore
+	privateAgentResults     ports.PrivateAgentResultStore
+	privateAgentAssignments ports.PrivateAgentAssignmentStore
+	agentConfigSigner       *agent.ConfigurationSigner
+	projectIncidents        ports.ProjectIncidentStore
 }
 
 func NewService(monitors ports.MonitorStore, incidents ports.IncidentStore, maintenance ports.MaintenanceStore, statusPages ports.StatusPageStore, alerts ports.AlertChannelStore, outbox ports.OutboxStore, logger *observability.LogStore,
-	users ports.UserStore, tokens ports.AuthTokenStore, projects ports.ProjectStore, routes ports.RouteStore, routeIncidents ports.RouteIncidentStore, imports ports.ImportStore) *Service {
+	users ports.UserStore, tokens ports.AuthTokenStore, passwordRecovery ports.PasswordRecoveryStore, recoveryDelivery ports.RecoveryDelivery, projects ports.ProjectStore, routes ports.RouteStore, routeIncidents ports.RouteIncidentStore, imports ports.ImportStore, telemetryCredentials ports.TelemetryCredentialStore, telemetryIngress ports.TelemetryIngressStore, telemetryMappings ports.TelemetryMappingStore, slos ports.SLOStore, heartbeats ports.HeartbeatStore) *Service {
 	return &Service{monitors: monitors, incidents: incidents, maintenance: maintenance, statusPages: statusPages, alerts: alerts, outbox: outbox, logger: logger,
-		users: users, tokens: tokens, projects: projects, routes: routes, routeIncidents: routeIncidents, imports: imports}
+		users: users, tokens: tokens, passwordRecovery: passwordRecovery, recoveryDelivery: recoveryDelivery, projects: projects, routes: routes, routeIncidents: routeIncidents, imports: imports, telemetryCredentials: telemetryCredentials, telemetryIngress: telemetryIngress, telemetryMappings: telemetryMappings, slos: slos, heartbeats: heartbeats}
+}
+
+func (s *Service) SetPrivateAgentStore(store ports.PrivateAgentStore) { s.privateAgents = store }
+func (s *Service) SetPrivateAgentResultStore(store ports.PrivateAgentResultStore) {
+	s.privateAgentResults = store
+}
+func (s *Service) SetPrivateAgentAssignmentStore(store ports.PrivateAgentAssignmentStore) {
+	s.privateAgentAssignments = store
+}
+
+// SetProjectIncidentStore attaches the source-agnostic incident lifecycle.
+// It is optional during the additive migration so older callers remain valid.
+func (s *Service) SetProjectIncidentStore(store ports.ProjectIncidentStore) {
+	s.projectIncidents = store
 }
 
 type CreateMonitorInput struct {
@@ -90,6 +120,23 @@ func (s *Service) ListIncidents(ctx context.Context, websiteID *int64, state str
 	return s.incidents.ListIncidents(ctx, websiteID, state, limit, offset)
 }
 func (s *Service) CreateAlertChannel(ctx context.Context, channel models.AlertChannel) (int64, error) {
+	channel.Name = strings.TrimSpace(channel.Name)
+	channel.ChannelType = strings.ToLower(strings.TrimSpace(channel.ChannelType))
+	channel.Target = strings.TrimSpace(channel.Target)
+	if channel.Name == "" || len(channel.Name) > 120 || (channel.ChannelType != "webhook" && channel.ChannelType != "slack") {
+		return 0, errors.New("invalid alert channel")
+	}
+	target, err := url.Parse(channel.Target)
+	if err != nil || target.Scheme != "https" || target.Host == "" || target.User != nil || target.Fragment != "" {
+		return 0, errors.New("alert channel target must be an absolute HTTPS URL without userinfo or fragment")
+	}
+	host := strings.ToLower(strings.TrimSuffix(target.Hostname(), "."))
+	if host == "localhost" || host == "metadata.google.internal" || host == "metadata.goog" || host == "169.254.169.254" {
+		return 0, errors.New("alert channel target must not be a local or metadata endpoint")
+	}
+	if address, parseErr := netip.ParseAddr(host); parseErr == nil && (address.IsLoopback() || address.IsPrivate() || address.IsLinkLocalUnicast() || address.IsUnspecified()) {
+		return 0, errors.New("alert channel target must not be a local or private address")
+	}
 	return s.alerts.CreateAlertChannel(ctx, channel)
 }
 func (s *Service) CreateMaintenanceWindow(ctx context.Context, window models.MaintenanceWindow) (int64, error) {

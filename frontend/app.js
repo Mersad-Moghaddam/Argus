@@ -8,6 +8,7 @@ const el = {
   incidentsOverview: document.getElementById('incidentListOverview'),
   form: document.getElementById('monitorForm'),
   refreshBtn: document.getElementById('refreshBtn'),
+  refreshIndicator: document.getElementById('refreshIndicator'),
   refreshDot: document.getElementById('refreshDot'),
   apiKey: document.getElementById('apiKey'),
   saveKeyBtn: document.getElementById('saveKeyBtn'),
@@ -152,8 +153,10 @@ syncKeywordFieldVisibility();
 /* ---------------------------- API helper ---------------------------- */
 
 async function api(path, options = {}) {
-  const key = localStorage.getItem('argus_api_key') || '';
-  const res = await fetch(`/api${path}`, {
+  // Legacy API credentials are intentionally memory-only. Browser storage is
+  // readable by injected scripts and must never hold a management secret.
+  const key = el.apiKey.value.trim();
+	const res = await fetch(path, {
     ...options,
     headers: { 'Content-Type': 'application/json', 'X-API-Key': key, ...(options.headers || {}) },
   });
@@ -323,7 +326,7 @@ function renderStatusPages(statusPagesResult) {
   }
   el.statusPages.innerHTML = statusPagesResult
     .map((p) => {
-      const path = `/api/public/status/${p.slug}`;
+		const path = `/status/public/${p.slug}`;
       return `
       <li class="list-item">
         <div class="list-item-main">
@@ -416,16 +419,20 @@ function showTableSkeleton(tbody, cols, rows = 4) {
 /* ---------------------------- Data refresh ---------------------------- */
 
 async function refresh({ silent = false } = {}) {
+	if (el.refreshIndicator) {
+		el.refreshIndicator.classList.add('is-refreshing');
+		el.refreshIndicator.setAttribute('aria-busy', 'true');
+	}
   if (!silent) {
     showTableSkeleton(el.table, 8);
     showTableSkeleton(el.pingTable, 6);
   }
 
   const [websites, incidents, statusPages, checks] = await Promise.all([
-    api('/websites?limit=100&offset=0').catch((e) => ({ __error: e.message })),
-    api('/incidents?limit=20&offset=0').catch((e) => ({ __error: e.message })),
-    api('/status-pages?limit=50&offset=0').catch((e) => ({ __error: e.message })),
-    api('/checks?limit=100').catch((e) => ({ __error: e.message })),
+	api('/monitor/websites?limit=100&offset=0').catch((e) => ({ __error: e.message })),
+	api('/system/incidents?limit=20&offset=0').catch((e) => ({ __error: e.message })),
+	api('/status/pages?limit=50&offset=0').catch((e) => ({ __error: e.message })),
+	api('/system/checks?limit=100').catch((e) => ({ __error: e.message })),
   ]);
 
   if (websites.__error) {
@@ -441,6 +448,10 @@ async function refresh({ silent = false } = {}) {
   renderStatusPages(statusPages);
   renderChecks(checks);
   countdown = AUTO_REFRESH_SECONDS;
+	if (el.refreshIndicator) {
+		el.refreshIndicator.classList.remove('is-refreshing');
+		el.refreshIndicator.removeAttribute('aria-busy');
+	}
 }
 
 /* ---------------------------- Delete confirmation modal ---------------------------- */
@@ -496,7 +507,7 @@ el.confirmOkBtn.addEventListener('click', async () => {
   const id = pendingDeleteId;
   setButtonLoading(el.confirmOkBtn, true, 'Deleting...');
   try {
-    await api(`/websites/${id}`, { method: 'DELETE' });
+	await api(`/monitor/websites/${id}`, { method: 'DELETE' });
     showToast(`Monitor #${id} deleted.`, 'success');
     closeConfirmModal();
     refresh();
@@ -509,7 +520,7 @@ el.confirmOkBtn.addEventListener('click', async () => {
 
 async function sendHeartbeat(id) {
   try {
-    await api(`/websites/${id}/heartbeat`, { method: 'POST' });
+	await api(`/monitor/heartbeat/${id}`, { method: 'POST' });
     showToast(`Heartbeat accepted for #${id}.`, 'success');
     refresh();
   } catch (e) {
@@ -538,7 +549,7 @@ el.form.addEventListener('submit', async (e) => {
   const btn = document.getElementById('monitorSubmitBtn');
   setButtonLoading(btn, true, 'Adding...');
   try {
-    await api('/websites', { method: 'POST', body: JSON.stringify(payload) });
+	await api('/monitor/websites', { method: 'POST', body: JSON.stringify(payload) });
     el.form.reset();
     syncKeywordFieldVisibility();
     showToast('Monitor created successfully.', 'success');
@@ -560,7 +571,7 @@ el.channelForm.addEventListener('submit', async (e) => {
   const btn = document.getElementById('channelSubmitBtn');
   setButtonLoading(btn, true, 'Creating...');
   try {
-    await api('/alert-channels', { method: 'POST', body: JSON.stringify(payload) });
+	await api('/notification/channels', { method: 'POST', body: JSON.stringify(payload) });
     el.channelForm.reset();
     showToast('Alert channel created.', 'success');
   } catch (err) {
@@ -579,7 +590,7 @@ el.statusPageForm.addEventListener('submit', async (e) => {
   const btn = document.getElementById('statusPageSubmitBtn');
   setButtonLoading(btn, true, 'Creating...');
   try {
-    await api('/status-pages', { method: 'POST', body: JSON.stringify(payload) });
+	await api('/status/pages', { method: 'POST', body: JSON.stringify(payload) });
     el.statusPageForm.reset();
     showToast('Status page created.', 'success');
     refresh();
@@ -602,7 +613,7 @@ el.maintenanceForm.addEventListener('submit', async (e) => {
   const btn = document.getElementById('maintenanceSubmitBtn');
   setButtonLoading(btn, true, 'Creating...');
   try {
-    await api('/maintenance-windows', { method: 'POST', body: JSON.stringify(payload) });
+	await api('/notification/maintenance', { method: 'POST', body: JSON.stringify(payload) });
     el.maintenanceForm.reset();
     showToast('Maintenance window created.', 'success');
   } catch (err) {
@@ -613,8 +624,7 @@ el.maintenanceForm.addEventListener('submit', async (e) => {
 });
 
 el.saveKeyBtn.addEventListener('click', () => {
-  localStorage.setItem('argus_api_key', el.apiKey.value.trim());
-  showToast('API key saved in your browser.', 'success');
+  showToast('API key is available for this tab only.', 'success');
   refresh();
 });
 
@@ -633,6 +643,5 @@ setInterval(() => {
 /* ---------------------------- Init ---------------------------- */
 
 initTheme();
-el.apiKey.value = localStorage.getItem('argus_api_key') || '';
 el.refreshBtn.addEventListener('click', () => refresh());
 refresh();

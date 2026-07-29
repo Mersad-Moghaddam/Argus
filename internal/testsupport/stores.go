@@ -31,27 +31,570 @@ import (
 // Stores bundles one instance of every fake so a test can seed and assert on
 // them while handing the same values to application.NewService.
 type Stores struct {
-	Users     *UserStore
-	Tokens    *AuthTokenStore
-	Projects  *ProjectStore
-	Routes    *RouteStore
-	Incidents *RouteIncidentStore
-	Imports   *ImportStore
-	Outbox    *OutboxStore
-	Legacy    LegacyStore
+	Users                   *UserStore
+	Tokens                  *AuthTokenStore
+	PasswordRecovery        *PasswordRecoveryStore
+	RecoveryDelivery        *RecoveryDelivery
+	Projects                *ProjectStore
+	Routes                  *RouteStore
+	Incidents               *RouteIncidentStore
+	Imports                 *ImportStore
+	TelemetryCredentials    *TelemetryCredentialStore
+	TelemetryIngress        *TelemetryIngressStore
+	TelemetryMappings       *TelemetryMappingStore
+	SLOs                    *SLOStore
+	Heartbeats              *HeartbeatStore
+	PrivateAgents           *PrivateAgentStore
+	PrivateAgentResults     *PrivateAgentResultStore
+	PrivateAgentAssignments *PrivateAgentAssignmentStore
+	ProjectIncidents        *ProjectIncidentStore
+	Outbox                  *OutboxStore
+	Legacy                  LegacyStore
 }
 
 // NewStores returns a fresh, empty set of fakes.
 func NewStores() *Stores {
 	return &Stores{
-		Users:     NewUserStore(),
-		Tokens:    NewAuthTokenStore(),
-		Projects:  NewProjectStore(),
-		Routes:    NewRouteStore(),
-		Incidents: NewRouteIncidentStore(),
-		Imports:   NewImportStore(),
-		Outbox:    &OutboxStore{},
+		Users:                   NewUserStore(),
+		Tokens:                  NewAuthTokenStore(),
+		PasswordRecovery:        NewPasswordRecoveryStore(),
+		RecoveryDelivery:        &RecoveryDelivery{},
+		Projects:                NewProjectStore(),
+		Routes:                  NewRouteStore(),
+		Incidents:               NewRouteIncidentStore(),
+		Imports:                 NewImportStore(),
+		TelemetryCredentials:    NewTelemetryCredentialStore(),
+		TelemetryIngress:        NewTelemetryIngressStore(),
+		TelemetryMappings:       NewTelemetryMappingStore(),
+		SLOs:                    NewSLOStore(),
+		Heartbeats:              NewHeartbeatStore(),
+		PrivateAgents:           NewPrivateAgentStore(),
+		PrivateAgentResults:     NewPrivateAgentResultStore(),
+		PrivateAgentAssignments: NewPrivateAgentAssignmentStore(),
+		ProjectIncidents:        NewProjectIncidentStore(),
+		Outbox:                  &OutboxStore{},
 	}
+}
+
+type PrivateAgentResultStore struct {
+	mu   sync.Mutex
+	keys map[string]struct{}
+}
+
+func NewPrivateAgentResultStore() *PrivateAgentResultStore {
+	return &PrivateAgentResultStore{keys: map[string]struct{}{}}
+}
+func (f *PrivateAgentResultStore) RecordPrivateAgentResult(_ context.Context, r models.PrivateAgentResult, key string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	k := strconv.FormatInt(r.AgentID, 10) + ":" + key
+	if _, ok := f.keys[k]; ok {
+		return false, nil
+	}
+	f.keys[k] = struct{}{}
+	return true, nil
+}
+
+type PrivateAgentAssignmentStore struct {
+	mu     sync.Mutex
+	nextID int64
+	byID   map[int64]models.PrivateAgentAssignment
+}
+
+func NewPrivateAgentAssignmentStore() *PrivateAgentAssignmentStore {
+	return &PrivateAgentAssignmentStore{byID: map[int64]models.PrivateAgentAssignment{}}
+}
+func (f *PrivateAgentAssignmentStore) CreatePrivateAgentAssignment(_ context.Context, assignment models.PrivateAgentAssignment) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	assignment.ID = f.nextID
+	f.byID[assignment.ID] = assignment
+	return assignment.ID, nil
+}
+func (f *PrivateAgentAssignmentStore) ListPrivateAgentAssignments(_ context.Context, projectID int64) ([]models.PrivateAgentAssignment, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := []models.PrivateAgentAssignment{}
+	for _, assignment := range f.byID {
+		if assignment.ProjectID == projectID {
+			items = append(items, assignment)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	return items, nil
+}
+func (f *PrivateAgentAssignmentStore) ListPrivateAgentAssignmentsForEnvironment(ctx context.Context, projectID, environmentID int64) ([]models.PrivateAgentAssignment, error) {
+	items, err := f.ListPrivateAgentAssignments(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	filtered := items[:0]
+	for _, assignment := range items {
+		if assignment.EnvironmentID == environmentID {
+			filtered = append(filtered, assignment)
+		}
+	}
+	return filtered, nil
+}
+func (f *PrivateAgentAssignmentStore) RevokePrivateAgentAssignment(_ context.Context, projectID, id int64, revokedAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	assignment, ok := f.byID[id]
+	if !ok || assignment.ProjectID != projectID {
+		return nil
+	}
+	assignment.Enabled = false
+	assignment.RevokedAt = &revokedAt
+	f.byID[id] = assignment
+	return nil
+}
+
+// ---------------------------------------------------------------- heartbeats
+
+type PrivateAgentStore struct {
+	mu     sync.Mutex
+	nextID int64
+	byID   map[int64]models.PrivateAgent
+}
+
+func NewPrivateAgentStore() *PrivateAgentStore {
+	return &PrivateAgentStore{byID: map[int64]models.PrivateAgent{}}
+}
+func (f *PrivateAgentStore) CreatePrivateAgent(_ context.Context, a models.PrivateAgent) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	a.ID = f.nextID
+	f.byID[a.ID] = a
+	return a.ID, nil
+}
+func (f *PrivateAgentStore) ListPrivateAgents(_ context.Context, pid int64) ([]models.PrivateAgent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []models.PrivateAgent{}
+	for _, a := range f.byID {
+		if a.ProjectID == pid {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+func (f *PrivateAgentStore) ListPrivateAgentsForEvaluation(_ context.Context, limit, afterID int64) ([]models.PrivateAgent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []models.PrivateAgent{}
+	for _, a := range f.byID {
+		if a.ID > afterID {
+			out = append(out, a)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return pageSlice(out, int(limit), 0), nil
+}
+func (f *PrivateAgentStore) GetPrivateAgentByHash(_ context.Context, h []byte) (*models.PrivateAgent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, a := range f.byID {
+		if string(a.TokenHash) == string(h) {
+			x := a
+			return &x, nil
+		}
+	}
+	return nil, nil
+}
+func (f *PrivateAgentStore) RevokePrivateAgent(_ context.Context, id int64, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	a, ok := f.byID[id]
+	if ok && a.RevokedAt == nil {
+		a.RevokedAt = &at
+		f.byID[id] = a
+	}
+	return nil
+}
+func (f *PrivateAgentStore) TouchPrivateAgent(_ context.Context, id int64, v string, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	a, ok := f.byID[id]
+	if ok && a.RevokedAt == nil {
+		a.LastSeenAt = &at
+		a.Version = v
+		f.byID[id] = a
+	}
+	return nil
+}
+func (f *PrivateAgentStore) SetPrivateAgentLivenessState(_ context.Context, id int64, state string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	a, ok := f.byID[id]
+	if !ok || a.LivenessState == state {
+		return false, nil
+	}
+	a.LivenessState = state
+	f.byID[id] = a
+	return true, nil
+}
+
+type HeartbeatStore struct {
+	mu       sync.Mutex
+	nextID   int64
+	byID     map[int64]models.HeartbeatMonitor
+	receipts map[int64]map[string]struct{}
+}
+
+func NewHeartbeatStore() *HeartbeatStore {
+	return &HeartbeatStore{byID: map[int64]models.HeartbeatMonitor{}, receipts: map[int64]map[string]struct{}{}}
+}
+func (f *HeartbeatStore) CreateHeartbeatMonitor(_ context.Context, monitor models.HeartbeatMonitor) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	monitor.ID = f.nextID
+	monitor.CreatedAt = time.Now().UTC()
+	monitor.UpdatedAt = monitor.CreatedAt
+	f.byID[monitor.ID] = monitor
+	return monitor.ID, nil
+}
+func (f *HeartbeatStore) ListHeartbeatMonitors(_ context.Context, projectID int64) ([]models.HeartbeatMonitor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := []models.HeartbeatMonitor{}
+	for _, monitor := range f.byID {
+		if monitor.ProjectID == projectID {
+			items = append(items, copyHeartbeatMonitor(monitor))
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID > items[j].ID })
+	return items, nil
+}
+func (f *HeartbeatStore) ListHeartbeatMonitorsForEvaluation(_ context.Context, limit int, afterID int64) ([]models.HeartbeatMonitor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := []models.HeartbeatMonitor{}
+	for _, monitor := range f.byID {
+		if monitor.ID > afterID {
+			items = append(items, copyHeartbeatMonitor(monitor))
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	return pageSlice(items, limit, 0), nil
+}
+func (f *HeartbeatStore) GetHeartbeatMonitorByID(_ context.Context, id int64) (*models.HeartbeatMonitor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	monitor, ok := f.byID[id]
+	if !ok {
+		return nil, nil
+	}
+	copied := copyHeartbeatMonitor(monitor)
+	return &copied, nil
+}
+func (f *HeartbeatStore) GetHeartbeatMonitorByHash(_ context.Context, hash []byte) (*models.HeartbeatMonitor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, monitor := range f.byID {
+		if string(monitor.TokenHash) == string(hash) {
+			copied := copyHeartbeatMonitor(monitor)
+			return &copied, nil
+		}
+	}
+	return nil, nil
+}
+func (f *HeartbeatStore) RevokeHeartbeatMonitor(_ context.Context, id int64, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	monitor, ok := f.byID[id]
+	if !ok || monitor.RevokedAt != nil {
+		return nil
+	}
+	monitor.RevokedAt = &at
+	monitor.UpdatedAt = at
+	f.byID[id] = monitor
+	return nil
+}
+func (f *HeartbeatStore) TouchHeartbeatMonitor(_ context.Context, id int64, at time.Time, outcome string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	monitor, ok := f.byID[id]
+	if !ok || monitor.RevokedAt != nil {
+		return nil
+	}
+	monitor.LastReceivedAt = &at
+	monitor.LastOutcome = outcome
+	monitor.UpdatedAt = at
+	f.byID[id] = monitor
+	return nil
+}
+func (f *HeartbeatStore) RecordHeartbeatReceipt(_ context.Context, receipt models.HeartbeatReceipt) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	keys := f.receipts[receipt.MonitorID]
+	if keys == nil {
+		keys = map[string]struct{}{}
+		f.receipts[receipt.MonitorID] = keys
+	}
+	if _, exists := keys[receipt.IdempotencyKey]; exists {
+		return false, nil
+	}
+	keys[receipt.IdempotencyKey] = struct{}{}
+	return true, nil
+}
+func copyHeartbeatMonitor(in models.HeartbeatMonitor) models.HeartbeatMonitor {
+	in.TokenHash = append([]byte(nil), in.TokenHash...)
+	return in
+}
+
+// ---------------------------------------------------------------- telemetry credentials
+
+type TelemetryCredentialStore struct {
+	mu     sync.Mutex
+	nextID int64
+	byID   map[int64]models.TelemetryCredential
+}
+
+func NewTelemetryCredentialStore() *TelemetryCredentialStore {
+	return &TelemetryCredentialStore{byID: map[int64]models.TelemetryCredential{}}
+}
+
+func (f *TelemetryCredentialStore) CreateTelemetryCredential(_ context.Context, credential models.TelemetryCredential) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	credential.ID = f.nextID
+	credential.CreatedAt = time.Now().UTC()
+	credential.UpdatedAt = credential.CreatedAt
+	f.byID[credential.ID] = credential
+	return credential.ID, nil
+}
+
+func (f *TelemetryCredentialStore) ListTelemetryCredentials(_ context.Context, projectID int64) ([]models.TelemetryCredential, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := make([]models.TelemetryCredential, 0)
+	for _, credential := range f.byID {
+		if credential.ProjectID == projectID {
+			items = append(items, copyTelemetryCredential(credential))
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID > items[j].ID })
+	return items, nil
+}
+
+func (f *TelemetryCredentialStore) GetTelemetryCredentialByID(_ context.Context, id int64) (*models.TelemetryCredential, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	credential, ok := f.byID[id]
+	if !ok {
+		return nil, nil
+	}
+	copied := copyTelemetryCredential(credential)
+	return &copied, nil
+}
+
+func (f *TelemetryCredentialStore) GetTelemetryCredentialByHash(_ context.Context, tokenHash []byte) (*models.TelemetryCredential, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, credential := range f.byID {
+		if string(credential.TokenHash) == string(tokenHash) {
+			copied := copyTelemetryCredential(credential)
+			return &copied, nil
+		}
+	}
+	return nil, nil
+}
+
+func (f *TelemetryCredentialStore) RevokeTelemetryCredential(_ context.Context, id int64, revokedAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	credential, ok := f.byID[id]
+	if !ok || credential.RevokedAt != nil {
+		return nil
+	}
+	credential.RevokedAt = &revokedAt
+	credential.UpdatedAt = revokedAt
+	f.byID[id] = credential
+	return nil
+}
+
+func (f *TelemetryCredentialStore) TouchTelemetryCredential(_ context.Context, id int64, usedAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	credential, ok := f.byID[id]
+	if !ok || credential.RevokedAt != nil {
+		return nil
+	}
+	credential.LastUsedAt = &usedAt
+	credential.UpdatedAt = usedAt
+	f.byID[id] = credential
+	return nil
+}
+
+func copyTelemetryCredential(in models.TelemetryCredential) models.TelemetryCredential {
+	in.TokenHash = append([]byte(nil), in.TokenHash...)
+	return in
+}
+
+type TelemetryIngressStore struct {
+	mu      sync.Mutex
+	nextID  int64
+	records []models.TelemetryIngressRecord
+}
+
+type TelemetryMappingStore struct {
+	mu     sync.Mutex
+	nextID int64
+	items  []models.TelemetryRouteMapping
+}
+
+func NewTelemetryMappingStore() *TelemetryMappingStore { return &TelemetryMappingStore{} }
+func (f *TelemetryMappingStore) CreateTelemetryRouteMapping(_ context.Context, m models.TelemetryRouteMapping) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	m.ID = f.nextID
+	m.CreatedAt = time.Now().UTC()
+	m.UpdatedAt = m.CreatedAt
+	f.items = append(f.items, m)
+	return m.ID, nil
+}
+func (f *TelemetryMappingStore) ListTelemetryRouteMappings(_ context.Context, pid int64) ([]models.TelemetryRouteMapping, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []models.TelemetryRouteMapping{}
+	for i := len(f.items) - 1; i >= 0; i-- {
+		if f.items[i].ProjectID == pid {
+			out = append(out, f.items[i])
+		}
+	}
+	return out, nil
+}
+func (f *TelemetryMappingStore) DeleteTelemetryRouteMapping(_ context.Context, pid, id int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := f.items[:0]
+	for _, m := range f.items {
+		if m.ID != id || m.ProjectID != pid {
+			out = append(out, m)
+		}
+	}
+	f.items = out
+	return nil
+}
+
+type SLOStore struct {
+	mu          sync.Mutex
+	nextID      int64
+	nextEvalID  int64
+	definitions map[int64]models.SLODefinition
+	evaluations []models.SLOEvaluation
+}
+
+func NewSLOStore() *SLOStore { return &SLOStore{definitions: map[int64]models.SLODefinition{}} }
+func (f *SLOStore) CreateSLODefinition(_ context.Context, definition models.SLODefinition) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, existing := range f.definitions {
+		if existing.ProjectID == definition.ProjectID && existing.Name == definition.Name {
+			return 0, domain.ErrInvalidInput
+		}
+	}
+	f.nextID++
+	definition.ID, definition.Version = f.nextID, 1
+	definition.CreatedAt = time.Now().UTC()
+	definition.UpdatedAt = definition.CreatedAt
+	f.definitions[definition.ID] = definition
+	return definition.ID, nil
+}
+func (f *SLOStore) GetSLODefinition(_ context.Context, projectID, id int64) (*models.SLODefinition, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	item, ok := f.definitions[id]
+	if !ok || item.ProjectID != projectID {
+		return nil, nil
+	}
+	return &item, nil
+}
+func (f *SLOStore) ListSLODefinitions(_ context.Context, projectID int64) ([]models.SLODefinition, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := []models.SLODefinition{}
+	for _, item := range f.definitions {
+		if item.ProjectID == projectID {
+			items = append(items, item)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID > items[j].ID })
+	return items, nil
+}
+func (f *SLOStore) ListSLODefinitionsForEvaluation(_ context.Context, limit, afterID int64) ([]models.SLODefinition, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	items := []models.SLODefinition{}
+	for _, item := range f.definitions {
+		if item.ID > afterID {
+			items = append(items, item)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	if int64(len(items)) > limit {
+		items = items[:int(limit)]
+	}
+	return items, nil
+}
+func (f *SLOStore) RecordSLOEvaluation(_ context.Context, evaluation models.SLOEvaluation) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextEvalID++
+	evaluation.ID = f.nextEvalID
+	f.evaluations = append(f.evaluations, evaluation)
+	return evaluation.ID, nil
+}
+func (f *SLOStore) ListSLOEvaluations(_ context.Context, projectID, sloID int64, limit int) ([]models.SLOEvaluation, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	items := []models.SLOEvaluation{}
+	for i := len(f.evaluations) - 1; i >= 0 && len(items) < limit; i-- {
+		if item := f.evaluations[i]; item.ProjectID == projectID && item.SLOID == sloID {
+			items = append(items, item)
+		}
+	}
+	return items, nil
+}
+
+func NewTelemetryIngressStore() *TelemetryIngressStore { return &TelemetryIngressStore{} }
+
+func (f *TelemetryIngressStore) RecordTelemetryIngress(_ context.Context, record models.TelemetryIngressRecord) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	record.ID = f.nextID
+	f.records = append(f.records, record)
+	return nil
+}
+
+func (f *TelemetryIngressStore) ListTelemetryIngress(_ context.Context, projectID int64, limit int) ([]models.TelemetryIngressRecord, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	items := make([]models.TelemetryIngressRecord, 0, limit)
+	for i := len(f.records) - 1; i >= 0 && len(items) < limit; i-- {
+		if f.records[i].ProjectID == projectID {
+			items = append(items, f.records[i])
+		}
+	}
+	return items, nil
 }
 
 // ---------------------------------------------------------------- users
@@ -103,6 +646,22 @@ func (f *UserStore) GetUserByID(_ context.Context, id int64) (*models.User, erro
 	return nil, nil
 }
 
+func (f *UserStore) UpdateUserPassword(_ context.Context, id int64, passwordHash string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Err != nil {
+		return f.Err
+	}
+	user, ok := f.byID[id]
+	if !ok {
+		return nil
+	}
+	user.PasswordHash = passwordHash
+	user.UpdatedAt = time.Now().UTC()
+	f.byID[id] = user
+	return nil
+}
+
 // ---------------------------------------------------------------- tokens
 
 type AuthTokenStore struct {
@@ -111,6 +670,71 @@ type AuthTokenStore struct {
 	byHash  map[string]models.AuthToken
 	Touched int
 	Deleted []string
+}
+
+// PasswordRecoveryStore is an in-memory atomic consume implementation for
+// recovery workflow tests. It mirrors the MySQL used_at predicate.
+type PasswordRecoveryStore struct {
+	mu     sync.Mutex
+	nextID int64
+	byHash map[string]models.PasswordRecoveryToken
+}
+
+// RecoveryDelivery records reset deliveries without retaining them in a
+// production store. Tests use the raw token to exercise one-time completion.
+type RecoveryDelivery struct {
+	mu        sync.Mutex
+	Email     string
+	Token     string
+	ExpiresAt time.Time
+	Err       error
+}
+
+func (f *RecoveryDelivery) DeliverPasswordRecovery(_ context.Context, email, token string, expiresAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Err != nil {
+		return f.Err
+	}
+	f.Email, f.Token, f.ExpiresAt = email, token, expiresAt
+	return nil
+}
+
+func NewPasswordRecoveryStore() *PasswordRecoveryStore {
+	return &PasswordRecoveryStore{byHash: map[string]models.PasswordRecoveryToken{}}
+}
+
+func (f *PasswordRecoveryStore) CreatePasswordRecoveryToken(_ context.Context, token models.PasswordRecoveryToken) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	token.ID = f.nextID
+	token.CreatedAt = time.Now().UTC()
+	f.byHash[token.TokenHash] = token
+	return token.ID, nil
+}
+
+func (f *PasswordRecoveryStore) ConsumePasswordRecoveryToken(_ context.Context, hash string, usedAt time.Time) (*models.PasswordRecoveryToken, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	token, ok := f.byHash[hash]
+	if !ok || token.UsedAt != nil || !token.ExpiresAt.After(usedAt) {
+		return nil, nil
+	}
+	token.UsedAt = &usedAt
+	f.byHash[hash] = token
+	return &token, nil
+}
+
+func (f *PasswordRecoveryStore) DeletePasswordRecoveryTokensByUser(_ context.Context, userID int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for hash, token := range f.byHash {
+		if token.UserID == userID {
+			delete(f.byHash, hash)
+		}
+	}
+	return nil
 }
 
 func NewAuthTokenStore() *AuthTokenStore {
@@ -136,6 +760,18 @@ func (f *AuthTokenStore) GetTokenByHash(_ context.Context, hash string) (*models
 	return nil, nil
 }
 
+func (f *AuthTokenStore) ListTokensByUser(_ context.Context, userID int64) ([]models.AuthToken, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []models.AuthToken{}
+	for _, token := range f.byHash {
+		if token.UserID == userID {
+			out = append(out, token)
+		}
+	}
+	return out, nil
+}
+
 func (f *AuthTokenStore) TouchToken(_ context.Context, _ int64, _ time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -148,6 +784,18 @@ func (f *AuthTokenStore) DeleteToken(_ context.Context, hash string) error {
 	defer f.mu.Unlock()
 	f.Deleted = append(f.Deleted, hash)
 	delete(f.byHash, hash)
+	return nil
+}
+
+func (f *AuthTokenStore) DeleteTokensByUserExcept(_ context.Context, userID int64, keepHash string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for hash, token := range f.byHash {
+		if token.UserID == userID && hash != keepHash {
+			f.Deleted = append(f.Deleted, hash)
+			delete(f.byHash, hash)
+		}
+	}
 	return nil
 }
 
@@ -173,21 +821,22 @@ func (f *AuthTokenStore) Count() int {
 // ---------------------------------------------------------------- projects
 
 type ProjectStore struct {
-	mu      sync.Mutex
-	nextID  int64
-	byID    map[int64]models.Project
-	members map[string]models.ProjectMember // "projectID:userID"
+	mu           sync.Mutex
+	nextID       int64
+	byID         map[int64]models.Project
+	members      map[string]models.ProjectMember // "projectID:userID"
+	environments map[int64][]models.ProjectEnvironment
 }
 
 func NewProjectStore() *ProjectStore {
-	return &ProjectStore{byID: map[int64]models.Project{}, members: map[string]models.ProjectMember{}}
+	return &ProjectStore{byID: map[int64]models.Project{}, members: map[string]models.ProjectMember{}, environments: map[int64][]models.ProjectEnvironment{}}
 }
 
 func memberKey(projectID, userID int64) string {
 	return strconv.FormatInt(projectID, 10) + ":" + strconv.FormatInt(userID, 10)
 }
 
-func (f *ProjectStore) CreateProject(_ context.Context, project models.Project, ownerUserID int64) (int64, error) {
+func (f *ProjectStore) CreateProject(_ context.Context, project models.Project, environment models.ProjectEnvironment, ownerUserID int64) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.nextID++
@@ -196,7 +845,39 @@ func (f *ProjectStore) CreateProject(_ context.Context, project models.Project, 
 	project.CreatedAt = time.Now().UTC()
 	f.byID[project.ID] = project
 	f.members[memberKey(project.ID, ownerUserID)] = models.ProjectMember{ProjectID: project.ID, UserID: ownerUserID, Role: models.ProjectRoleOwner}
+	environment.ID, environment.ProjectID, environment.IsDefault = 1, project.ID, true
+	f.environments[project.ID] = []models.ProjectEnvironment{environment}
 	return project.ID, nil
+}
+
+func (f *ProjectStore) ListProjectEnvironments(_ context.Context, projectID int64) ([]models.ProjectEnvironment, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]models.ProjectEnvironment(nil), f.environments[projectID]...), nil
+}
+
+func (f *ProjectStore) CreateProjectEnvironment(_ context.Context, env models.ProjectEnvironment) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := f.environments[env.ProjectID]
+	env.ID = int64(len(items) + 1)
+	f.environments[env.ProjectID] = append(items, env)
+	return env.ID, nil
+}
+
+func (f *ProjectStore) UpdateProjectEnvironment(_ context.Context, env models.ProjectEnvironment) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := f.environments[env.ProjectID]
+	for i := range items {
+		if items[i].ID == env.ID {
+			env.IsDefault = items[i].IsDefault
+			items[i] = env
+			f.environments[env.ProjectID] = items
+			return nil
+		}
+	}
+	return nil
 }
 
 func (f *ProjectStore) UpdateProject(_ context.Context, project models.Project) error {
@@ -277,10 +958,13 @@ func (f *ProjectStore) AddProjectMember(_ context.Context, member models.Project
 // ---------------------------------------------------------------- routes
 
 type RouteStore struct {
-	mu     sync.Mutex
-	nextID int64
-	byID   map[int64]models.APIRoute
-	checks map[int64][]models.RouteCheck
+	mu      sync.Mutex
+	nextID  int64
+	byID    map[int64]models.APIRoute
+	checks  map[int64][]models.RouteCheck
+	budgets map[string]int
+	skips   []SyntheticSkip
+	leases  map[string]syntheticLease
 
 	// UpdateMetadataFailFor injects a storage failure for a specific route so
 	// partial-failure reporting can be tested.
@@ -291,9 +975,23 @@ type RouteStore struct {
 	ListErr error
 }
 
+// SyntheticSkip is compact test-only evidence of scheduler shedding.
+type SyntheticSkip struct {
+	RouteID, ProjectID int64
+	Reason             string
+	SkippedAt          time.Time
+}
+
+type syntheticLease struct {
+	projectID int64
+	expiresAt time.Time
+}
+
 func NewRouteStore() *RouteStore {
 	return &RouteStore{
 		byID: map[int64]models.APIRoute{}, checks: map[int64][]models.RouteCheck{},
+		budgets:               map[string]int{},
+		leases:                map[string]syntheticLease{},
 		UpdateMetadataFailFor: map[int64]error{},
 	}
 }
@@ -571,6 +1269,98 @@ func (f *RouteStore) ListDueRoutes(_ context.Context, now time.Time, limit int, 
 	return out, nil
 }
 
+func (f *RouteStore) ReserveSyntheticBudget(_ context.Context, projectID int64, day time.Time, requests, projectLimit, globalLimit int) (bool, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if projectID <= 0 || requests <= 0 || projectLimit <= 0 || globalLimit <= 0 {
+		return false, "invalid_budget", domain.ErrInvalidRoute
+	}
+	window := day.UTC().Format("2006-01-02")
+	globalKey, projectKey := "global:"+window, "project:"+strconv.FormatInt(projectID, 10)+":"+window
+	if f.budgets[globalKey]+requests > globalLimit {
+		return false, "global_daily_budget", nil
+	}
+	if f.budgets[projectKey]+requests > projectLimit {
+		return false, "project_daily_budget", nil
+	}
+	f.budgets[globalKey] += requests
+	f.budgets[projectKey] += requests
+	return true, "", nil
+}
+
+func (f *RouteStore) ReleaseSyntheticBudget(_ context.Context, projectID int64, day time.Time, requests int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if projectID <= 0 || requests <= 0 {
+		return domain.ErrInvalidRoute
+	}
+	window := day.UTC().Format("2006-01-02")
+	globalKey, projectKey := "global:"+window, "project:"+strconv.FormatInt(projectID, 10)+":"+window
+	f.budgets[globalKey] -= requests
+	if f.budgets[globalKey] < 0 {
+		f.budgets[globalKey] = 0
+	}
+	f.budgets[projectKey] -= requests
+	if f.budgets[projectKey] < 0 {
+		f.budgets[projectKey] = 0
+	}
+	return nil
+}
+
+func (f *RouteStore) AcquireSyntheticLease(_ context.Context, projectID int64, leaseKey string, now, expiresAt time.Time, projectLimit, globalLimit int) (bool, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for key, lease := range f.leases {
+		if !lease.expiresAt.After(now) {
+			delete(f.leases, key)
+		}
+	}
+	if _, exists := f.leases[leaseKey]; exists {
+		return false, "project_concurrency", nil
+	}
+	globalActive, projectActive := 0, 0
+	for _, lease := range f.leases {
+		globalActive++
+		if lease.projectID == projectID {
+			projectActive++
+		}
+	}
+	if globalActive >= globalLimit {
+		return false, "global_concurrency", nil
+	}
+	if projectActive >= projectLimit {
+		return false, "project_concurrency", nil
+	}
+	f.leases[leaseKey] = syntheticLease{projectID: projectID, expiresAt: expiresAt}
+	return true, "", nil
+}
+
+func (f *RouteStore) ReleaseSyntheticLease(_ context.Context, leaseKey string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.leases, leaseKey)
+	return nil
+}
+
+func (f *RouteStore) RecordSyntheticSkip(_ context.Context, routeID, projectID int64, reason string, skippedAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.skips = append(f.skips, SyntheticSkip{RouteID: routeID, ProjectID: projectID, Reason: reason, SkippedAt: skippedAt})
+	return nil
+}
+
+func (f *RouteStore) DeferRouteCheck(_ context.Context, routeID int64, nextCheckAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	route, ok := f.byID[routeID]
+	if !ok {
+		return domain.ErrRouteNotFound
+	}
+	route.NextCheckAt = nextCheckAt
+	f.byID[routeID] = route
+	return nil
+}
+
 func (f *RouteStore) MarkRouteChecked(_ context.Context, id int64, _ string, statusCode, latencyMS int, failureReason string, consecutiveFailures, consecutiveSuccesses int, routeStatus string, checkedAt, nextCheckAt time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -678,6 +1468,72 @@ func (f *RouteStore) PruneRouteChecks(context.Context, time.Time, int) (int64, e
 
 // ---------------------------------------------------------------- incidents
 
+type ProjectIncidentStore struct {
+	mu     sync.Mutex
+	nextID int64
+	byID   map[int64]models.ProjectIncident
+}
+
+func NewProjectIncidentStore() *ProjectIncidentStore {
+	return &ProjectIncidentStore{byID: map[int64]models.ProjectIncident{}}
+}
+
+func (f *ProjectIncidentStore) GetOpenProjectIncident(_ context.Context, projectID int64, source, sourceKey string) (*models.ProjectIncident, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, incident := range f.byID {
+		if incident.ProjectID == projectID && incident.Source == source && incident.SourceKey == sourceKey && (incident.State == "open" || incident.State == "acknowledged") {
+			copy := incident
+			return &copy, nil
+		}
+	}
+	return nil, nil
+}
+
+func (f *ProjectIncidentStore) CreateProjectIncident(_ context.Context, incident models.ProjectIncident) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	incident.ID, incident.State = f.nextID, "open"
+	f.byID[incident.ID] = incident
+	return incident.ID, nil
+}
+
+func (f *ProjectIncidentStore) ResolveProjectIncident(_ context.Context, id int64, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	incident, ok := f.byID[id]
+	if ok && (incident.State == "open" || incident.State == "acknowledged") {
+		incident.State, incident.ResolvedAt = "resolved", &at
+		f.byID[id] = incident
+	}
+	return nil
+}
+
+func (f *ProjectIncidentStore) AcknowledgeProjectIncident(_ context.Context, projectID, id, userID int64, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	incident, ok := f.byID[id]
+	if ok && incident.ProjectID == projectID && incident.State == "open" {
+		incident.State, incident.AcknowledgedAt, incident.AcknowledgedByID = "acknowledged", &at, &userID
+		f.byID[id] = incident
+	}
+	return nil
+}
+
+func (f *ProjectIncidentStore) ListProjectIncidents(_ context.Context, projectID int64, state string, limit, offset int) ([]models.ProjectIncident, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []models.ProjectIncident{}
+	for _, incident := range f.byID {
+		if incident.ProjectID == projectID && (state == "" || incident.State == state) {
+			out = append(out, incident)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return pageSlice(out, limit, offset), nil
+}
+
 type RouteIncidentStore struct {
 	mu     sync.Mutex
 	nextID int64
@@ -696,7 +1552,7 @@ func (f *RouteIncidentStore) GetOpenRouteIncident(_ context.Context, routeID int
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, inc := range f.byID {
-		if inc.RouteID == routeID && inc.State == "open" {
+		if inc.RouteID == routeID && (inc.State == "open" || inc.State == "acknowledged") {
 			copied := inc
 			return &copied, nil
 		}
@@ -704,16 +1560,40 @@ func (f *RouteIncidentStore) GetOpenRouteIncident(_ context.Context, routeID int
 	return nil, nil
 }
 
-func (f *RouteIncidentStore) CreateRouteIncident(_ context.Context, routeID, projectID int64, reason string, startedAt time.Time) (int64, error) {
+func (f *RouteIncidentStore) CreateRouteIncident(_ context.Context, routeID, projectID int64, source, sourceKey, reason, evidence string, startedAt time.Time) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.nextID++
 	f.Openings++
 	f.byID[f.nextID] = models.RouteIncident{
-		ID: f.nextID, RouteID: routeID, ProjectID: projectID, State: "open",
-		StartedAt: startedAt, LastFailureReason: reason, FailureCount: 1,
+		ID: f.nextID, RouteID: routeID, ProjectID: projectID, State: "open", Source: source, SourceKey: sourceKey,
+		StartedAt: startedAt, LastFailureReason: reason, Evidence: evidence, FailureCount: 1,
 	}
 	return f.nextID, nil
+}
+
+func (f *RouteIncidentStore) GetRouteIncident(_ context.Context, projectID, incidentID int64) (*models.RouteIncident, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	incident, ok := f.byID[incidentID]
+	if !ok || incident.ProjectID != projectID {
+		return nil, nil
+	}
+	copy := incident
+	return &copy, nil
+}
+
+func (f *RouteIncidentStore) AcknowledgeRouteIncident(_ context.Context, incidentID, userID int64, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	incident, ok := f.byID[incidentID]
+	if !ok || incident.State != "open" {
+		return nil
+	}
+	incident.State, incident.AcknowledgedAt = "acknowledged", &at
+	incident.AcknowledgedByID = &userID
+	f.byID[incidentID] = incident
+	return nil
 }
 
 func (f *RouteIncidentStore) ResolveRouteIncident(_ context.Context, incidentID int64, resolvedAt time.Time) error {
@@ -757,7 +1637,7 @@ func (f *RouteIncidentStore) OpenCount() int {
 	defer f.mu.Unlock()
 	n := 0
 	for _, inc := range f.byID {
-		if inc.State == "open" {
+		if inc.State == "open" || inc.State == "acknowledged" {
 			n++
 		}
 	}

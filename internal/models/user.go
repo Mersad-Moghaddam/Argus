@@ -21,6 +21,19 @@ type AuthToken struct {
 	CreatedAt  time.Time  `json:"createdAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
 	ExpiresAt  time.Time  `json:"expiresAt"`
+	Current    bool       `json:"current,omitempty"`
+}
+
+// PasswordRecoveryToken is an opaque, single-use reset credential. Only its
+// SHA-256 hash is persisted; raw values are handed directly to a configured
+// delivery integration and are never returned from the control-plane API.
+type PasswordRecoveryToken struct {
+	ID        int64      `json:"id"`
+	UserID    int64      `json:"userId"`
+	TokenHash string     `json:"-"`
+	ExpiresAt time.Time  `json:"expiresAt"`
+	UsedAt    *time.Time `json:"usedAt,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
 }
 
 const (

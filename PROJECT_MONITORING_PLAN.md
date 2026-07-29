@@ -1,5 +1,10 @@
 # Project-Based API Monitoring — Implementation Plan
 
+> Current route taxonomy: Argus control-plane routes use
+> `/family/purpose[/optional]`, without `/api`. Earlier checkpoint narrative
+> below retains the paths that existed when it was written; use the **API
+> surface** section as the current contract.
+
 This document tracks the full scope of work needed to extend Argus (currently
 a single-tenant website/heartbeat/TLS uptime monitor) into a multi-project API
 route monitoring platform, without breaking existing behavior. It exists so
@@ -39,7 +44,7 @@ Follow the existing hexagonal layout exactly:
 Existing website/heartbeat/TLS monitoring, its API routes, DB tables and the
 single global `X-API-Key` protection remain fully intact and untouched. The
 new project/route subsystem is additive and uses its own bearer-token user
-auth, mounted under `/api/projects...` and `/api/auth...`.
+auth, mounted under `/project/...` and `/identity/...`.
 
 ## Data model (new tables)
 
@@ -643,36 +648,36 @@ stock MySQL 8 server (details in Section 9 above): prefix indexes on
 
 ### API surface
 
-New, bearer-authenticated. Legacy `/api/websites|checks|incidents|logs|
-status-pages|alert-channels|maintenance-windows|public/status/:slug` are
-unchanged and still `X-API-Key`-protected.
+New, bearer-authenticated routes are grouped by family and purpose. The
+legacy monitor surface remains `X-API-Key`-protected at
+`/monitor`, `/system`, `/notification`, and `/status`.
 
 ```
-POST   /api/auth/register | login | logout          GET /api/auth/me
+POST   /identity/register | login | logout           GET /identity/profile
 
-GET    /api/projects?search=&status=&limit=&offset=
-POST   /api/projects
-GET    /api/projects/:projectId
-PUT    /api/projects/:projectId
-POST   /api/projects/:projectId/archive | unarchive
-DELETE /api/projects/:projectId
+GET    /project/catalog?search=&status=&limit=&offset=
+POST   /project/catalog
+GET    /project/catalog/:projectId
+PUT    /project/catalog/:projectId
+POST   /project/archive/:projectId | /project/restore/:projectId
+DELETE /project/catalog/:projectId
 
-GET    /api/projects/:projectId/routes?search=&method=&status=&tag=&enabled=
-                                      &deprecated=&sortBy=&sortDir=&limit=&offset=
-POST   /api/projects/:projectId/routes
-POST   /api/projects/:projectId/routes/bulk | bulk-delete
-GET    /api/projects/:projectId/routes/:routeId
-PUT    /api/projects/:projectId/routes/:routeId
-POST   /api/projects/:projectId/routes/:routeId/enable | disable
-DELETE /api/projects/:projectId/routes/:routeId
-GET    /api/projects/:projectId/routes/:routeId/checks?limit=&offset=
+GET    /route/catalog/:projectId?search=&method=&status=&tag=&enabled=
+                                   &deprecated=&sortBy=&sortDir=&limit=&offset=
+POST   /route/catalog/:projectId
+POST   /route/bulk/:projectId | /route/removal/:projectId
+GET    /route/catalog/:projectId/:routeId
+PUT    /route/catalog/:projectId/:routeId
+POST   /route/enable/:projectId/:routeId | /route/disable/:projectId/:routeId
+DELETE /route/catalog/:projectId/:routeId
+GET    /route/checks/:projectId/:routeId?limit=&offset=
 
-GET    /api/projects/:projectId/incidents?routeId=&state=&limit=&offset=
-GET    /api/projects/:projectId/metrics/timeseries?range=1h|6h|24h|7d|30d&routeId=
+GET    /route/incidents/:projectId?routeId=&state=&limit=&offset=
+GET    /route/metrics/:projectId?range=1h|6h|24h|7d|30d&routeId=
 
-POST   /api/projects/:projectId/imports/validate     (multipart file, or JSON paste)
-GET    /api/projects/:projectId/imports/:jobId
-POST   /api/projects/:projectId/imports/:jobId/commit
+POST   /import/validation/:projectId                  (multipart file, or JSON paste)
+GET    /import/job/:projectId/:jobId
+POST   /import/commit/:projectId/:jobId
 ```
 
 Status codes: `401` missing/invalid token, `404` non-member **and**

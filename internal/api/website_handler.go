@@ -28,10 +28,10 @@ type createWebsiteRequest struct {
 }
 
 func RegisterWebsiteRoutes(app fiber.Router, h *WebsiteHandler, guards ...fiber.Handler) {
-	app.Get("/websites", guarded(guards, h.ListWebsites)...)
-	app.Post("/websites", guarded(guards, h.CreateWebsite)...)
-	app.Delete("/websites/:id", guarded(guards, h.DeleteWebsite)...)
-	app.Post("/websites/:id/heartbeat", guarded(guards, h.MarkHeartbeat)...)
+	app.Get("/monitor/websites", guarded(guards, h.ListWebsites)...)
+	app.Post("/monitor/websites", guarded(guards, h.CreateWebsite)...)
+	app.Delete("/monitor/websites/:id", guarded(guards, h.DeleteWebsite)...)
+	app.Post("/monitor/heartbeat/:id", guarded(guards, h.MarkHeartbeat)...)
 }
 
 func (h *WebsiteHandler) CreateWebsite(c *fiber.Ctx) error {

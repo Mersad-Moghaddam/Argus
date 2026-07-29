@@ -13,10 +13,13 @@ const (
 	TypeDispatchOutbox   = "outbox:dispatch"
 
 	// Project-based API route monitoring tasks.
-	TypeEnqueueDueRouteChecks = "route:enqueue_due_checks"
-	TypeCheckRoute            = "route:check"
-	TypeAggregateRouteMetrics = "route:aggregate_metrics"
-	TypePruneRouteChecks      = "route:prune_checks"
+	TypeEnqueueDueRouteChecks     = "route:enqueue_due_checks"
+	TypeCheckRoute                = "route:check"
+	TypeAggregateRouteMetrics     = "route:aggregate_metrics"
+	TypePruneRouteChecks          = "route:prune_checks"
+	TypeEvaluateSLOs              = "slo:evaluate"
+	TypeEvaluateAgentLiveness     = "agent:evaluate_liveness"
+	TypeEvaluateHeartbeatLiveness = "heartbeat:evaluate_liveness"
 )
 
 type CheckWebsitePayload struct {
@@ -44,7 +47,12 @@ func NewEnqueueDueRouteChecksTask() *asynq.Task {
 func NewAggregateRouteMetricsTask() *asynq.Task {
 	return asynq.NewTask(TypeAggregateRouteMetrics, nil)
 }
-func NewPruneRouteChecksTask() *asynq.Task { return asynq.NewTask(TypePruneRouteChecks, nil) }
+func NewPruneRouteChecksTask() *asynq.Task      { return asynq.NewTask(TypePruneRouteChecks, nil) }
+func NewEvaluateSLOsTask() *asynq.Task          { return asynq.NewTask(TypeEvaluateSLOs, nil) }
+func NewEvaluateAgentLivenessTask() *asynq.Task { return asynq.NewTask(TypeEvaluateAgentLiveness, nil) }
+func NewEvaluateHeartbeatLivenessTask() *asynq.Task {
+	return asynq.NewTask(TypeEvaluateHeartbeatLiveness, nil)
+}
 
 func NewCheckWebsiteTask(payload CheckWebsitePayload) (*asynq.Task, error) {
 	body, err := json.Marshal(payload)

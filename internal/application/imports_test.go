@@ -238,8 +238,8 @@ func TestCommitImportCreatesSelectedRoutes(t *testing.T) {
 		if r.Source != "import" {
 			t.Fatalf("imported routes must be marked as such, got %q", r.Source)
 		}
-		if !r.Enabled {
-			t.Fatal("imported routes should be enabled by default")
+		if r.Enabled {
+			t.Fatal("imported catalog routes must be disabled by default")
 		}
 		if r.MonitorIntervalSecs != project.DefaultIntervalSeconds || r.TimeoutMS != project.DefaultTimeoutMS {
 			t.Fatalf("imported routes must inherit project defaults: %+v", r)
@@ -387,14 +387,14 @@ func TestReimportAddsUpdatesAndDetectsRemovals(t *testing.T) {
 		t.Fatalf("re-import overwrote user headers: %q", after.Headers)
 	}
 
-	// The removed route still exists and is still enabled, because the user
+	// The removed route still exists and stays catalog-only, because the user
 	// did not select it.
 	stale, err := h.service.GetRoute(ctx, mustRouteID(t, h, project, "DELETE", "/pets/{petId}"))
 	if err != nil || stale == nil {
 		t.Fatalf("a route removed from the spec must not be deleted: %v", err)
 	}
-	if !stale.Enabled {
-		t.Fatal("an unselected removal must not disable the route")
+	if stale.Enabled {
+		t.Fatal("an unselected removal must remain catalog-only")
 	}
 }
 
@@ -441,10 +441,10 @@ func TestReimportDisablesRemovedRoutesWhenExplicitlySelected(t *testing.T) {
 			t.Fatalf("%s %s should report the disabled state, got %q", key[0], key[1], route.Status)
 		}
 	}
-	// The surviving route is untouched.
+	// The surviving route remains catalog-only.
 	survivor, err := h.service.GetRoute(ctx, mustRouteID(t, h, project, "GET", "/pets"))
-	if err != nil || survivor == nil || !survivor.Enabled {
-		t.Fatalf("the route still in the spec must stay enabled: %+v (%v)", survivor, err)
+	if err != nil || survivor == nil || survivor.Enabled {
+		t.Fatalf("the route still in the spec must remain disabled: %+v (%v)", survivor, err)
 	}
 }
 

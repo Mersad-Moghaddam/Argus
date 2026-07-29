@@ -28,6 +28,17 @@
         </div>
       </div>
       <div class="top-actions">
+        <div class="account-actions" aria-label="Account">
+          <div id="accountGuestActions" class="account-action-group">
+            <a class="account-action account-login" id="globalLogin" href="#/login">Log in</a>
+            <a class="account-action account-register" id="globalRegister" href="#/register">Register</a>
+          </div>
+          <div id="accountSignedInActions" class="account-action-group hidden">
+            <span class="account-user" id="globalUserLabel"></span>
+            <a class="account-action account-login" id="globalAccount" href="#/account">Account</a>
+            <button class="ghost sm" id="globalSignOut" type="button">Sign out</button>
+          </div>
+        </div>
         <div class="refresh-indicator" id="refreshIndicator" title="Auto-refreshes every 30s">
           <span class="refresh-dot" id="refreshDot"></span>
           <span id="refreshCountdown">auto-refresh 30s</span>
@@ -74,6 +85,96 @@
           <span class="status-value" id="statIncidents">&ndash;</span>
           <span class="status-label">Open incidents</span>
         </div>
+      </section>
+
+      <section id="globalAuthPanel" class="global-auth-panel hidden" aria-labelledby="projAuthTitle">
+        <div id="projAuthGate" class="proj-auth-gate">
+          <section class="card proj-auth-card">
+            <div class="card-header">
+              <h2 id="projAuthTitle">Sign in to Argus</h2>
+            </div>
+            <p class="card-subtitle" id="projAuthIntro">Sign in to create and manage private monitoring projects.</p>
+            <form id="projAuthForm" class="stack" autocomplete="on">
+              <div class="field" id="projAuthNameField" hidden>
+                <label for="projAuthName">Display name</label>
+                <input id="projAuthName" autocomplete="name" placeholder="Ada Lovelace" />
+              </div>
+              <div class="field">
+                <label for="projAuthEmail">Email</label>
+                <input id="projAuthEmail" type="email" autocomplete="email" placeholder="you@example.com" required />
+              </div>
+              <div class="field">
+                <label for="projAuthPassword">Password</label>
+                <input id="projAuthPassword" type="password" autocomplete="current-password" placeholder="At least 8 characters" required minlength="8" />
+              </div>
+              <p class="proj-form-error hidden" id="projAuthError" role="alert"></p>
+              <button type="submit" id="projAuthSubmit">Sign in</button>
+              <p class="hint">
+                <span id="projAuthSwitchPrompt">No account yet?</span>
+                <button type="button" class="link-btn" id="projAuthSwitch">Create one</button>
+              </p>
+              <button type="button" class="link-btn" id="projForgotPassword">Forgot your password?</button>
+            </form>
+          </section>
+        </div>
+        <div id="projRecoveryGate" class="proj-auth-gate hidden">
+          <section class="card proj-auth-card">
+            <div class="card-header"><h2>Recover your account</h2></div>
+            <p class="card-subtitle">Enter your email. If recovery is available for the account, instructions will be delivered securely.</p>
+            <form id="projRecoveryRequestForm" class="stack" autocomplete="on">
+              <div class="field"><label for="projRecoveryEmail">Email</label><input id="projRecoveryEmail" type="email" autocomplete="email" required /></div>
+              <p class="proj-form-error hidden" id="projRecoveryRequestError" role="alert"></p>
+              <button type="submit" id="projRecoveryRequestSubmit">Send recovery instructions</button>
+            </form>
+            <form id="projRecoveryCompleteForm" class="stack hidden" autocomplete="on">
+              <div class="field"><label for="projRecoveryToken">Recovery token</label><input id="projRecoveryToken" autocomplete="one-time-code" required /></div>
+              <div class="field"><label for="projRecoveryNewPassword">New password</label><input id="projRecoveryNewPassword" type="password" autocomplete="new-password" minlength="8" required /></div>
+              <p class="proj-form-error hidden" id="projRecoveryCompleteError" role="alert"></p>
+              <button type="submit" id="projRecoveryCompleteSubmit">Set new password</button>
+            </form>
+            <p class="hint"><a class="btn-link" href="#/login">Back to sign in</a></p>
+          </section>
+        </div>
+      </section>
+
+      <section id="globalAccountPanel" class="global-auth-panel hidden" aria-labelledby="accountTitle">
+        <section class="card account-card">
+          <div class="card-header">
+            <div>
+              <h2 id="accountTitle">Account security</h2>
+              <p class="card-subtitle" id="accountEmail"></p>
+            </div>
+            <a class="btn-link" href="#/projects">Back to projects</a>
+          </div>
+
+          <div class="account-section">
+            <h3>Change password</h3>
+            <p class="hint">Changing your password signs out every other session.</p>
+            <form id="accountPasswordForm" class="stack" autocomplete="on">
+              <div class="field">
+                <label for="accountCurrentPassword">Current password</label>
+                <input id="accountCurrentPassword" type="password" autocomplete="current-password" required />
+              </div>
+              <div class="field">
+                <label for="accountNewPassword">New password</label>
+                <input id="accountNewPassword" type="password" autocomplete="new-password" minlength="8" required />
+              </div>
+              <p class="proj-form-error hidden" id="accountPasswordError" role="alert"></p>
+              <button type="submit" id="accountPasswordSubmit">Change password</button>
+            </form>
+          </div>
+
+          <div class="account-section">
+            <div class="card-header">
+              <div>
+                <h3>Sessions</h3>
+                <p class="hint">Review active sessions and end all sessions except this one.</p>
+              </div>
+              <button class="secondary sm" id="accountRevokeOthers" type="button">Revoke other sessions</button>
+            </div>
+            <div id="accountSessions" aria-live="polite"></div>
+          </div>
+        </section>
       </section>
 
       <nav class="tabs" role="tablist" aria-label="Sections">
@@ -287,39 +388,6 @@
 
       <!-- API Projects: project-based API route monitoring -->
       <section class="tab-panel" id="panel-projects" role="tabpanel" aria-labelledby="tab-projects" tabindex="0">
-        <!-- Sign-in gate. The project API uses its own bearer-token accounts,
-             independent from the legacy X-API-Key above. -->
-        <div id="projAuthGate" class="proj-auth-gate hidden">
-          <section class="card proj-auth-card">
-            <div class="card-header">
-              <h2 id="projAuthTitle">Sign in to API Projects</h2>
-            </div>
-            <p class="card-subtitle" id="projAuthIntro">
-              API route monitoring uses its own account, separate from the uptime dashboard's API key.
-            </p>
-            <form id="projAuthForm" class="stack" autocomplete="on">
-              <div class="field" id="projAuthNameField" hidden>
-                <label for="projAuthName">Display name</label>
-                <input id="projAuthName" autocomplete="name" placeholder="Ada Lovelace" />
-              </div>
-              <div class="field">
-                <label for="projAuthEmail">Email</label>
-                <input id="projAuthEmail" type="email" autocomplete="email" placeholder="you@example.com" required />
-              </div>
-              <div class="field">
-                <label for="projAuthPassword">Password</label>
-                <input id="projAuthPassword" type="password" autocomplete="current-password" placeholder="At least 8 characters" required minlength="8" />
-              </div>
-              <p class="proj-form-error hidden" id="projAuthError" role="alert"></p>
-              <button type="submit" id="projAuthSubmit">Sign in</button>
-              <p class="hint">
-                <span id="projAuthSwitchPrompt">No account yet?</span>
-                <button type="button" class="link-btn" id="projAuthSwitch">Create one</button>
-              </p>
-            </form>
-          </section>
-        </div>
-
         <!-- Authenticated shell. Views are swapped by the hash sub-router. -->
         <div id="projShell" class="hidden">
           <div class="proj-topline">
@@ -345,14 +413,70 @@
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projProjectModalTitle" tabindex="-1">
         <h3 id="projProjectModalTitle">New project</h3>
         <form id="projProjectForm" class="stack">
+          <ol class="wizard-steps project-onboarding-steps" id="projProjectSteps" aria-label="Project setup progress">
+            <li class="wizard-step is-active" aria-current="step"><span class="wizard-step-num">1</span>Project</li>
+            <li class="wizard-step"><span class="wizard-step-num">2</span>Source</li>
+            <li class="wizard-step"><span class="wizard-step-num">3</span>Connect</li>
+            <li class="wizard-step"><span class="wizard-step-num">4</span>Verify</li>
+            <li class="wizard-step"><span class="wizard-step-num">5</span>SLO</li>
+            <li class="wizard-step"><span class="wizard-step-num">6</span>Notify</li>
+            <li class="wizard-step"><span class="wizard-step-num">7</span>Complete</li>
+          </ol>
+          <div class="project-onboarding-step" data-project-step="1">
           <div class="field">
             <label for="projFormName">Name</label>
-            <input id="projFormName" placeholder="Payments API" required maxlength="255" />
+            <input id="projFormName" autocomplete="organization" placeholder="Payments API" required maxlength="255" />
           </div>
           <div class="field">
             <label for="projFormDescription">Description</label>
             <input id="projFormDescription" placeholder="Public checkout endpoints" maxlength="2000" />
           </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="projFormEnvironmentName">Initial environment</label>
+              <input id="projFormEnvironmentName" autocomplete="off" value="production" placeholder="production" maxlength="120" />
+            </div>
+            <div class="field">
+              <label for="projFormEnvironmentBaseUrl">Base URL <span class="hint">(optional)</span></label>
+              <input id="projFormEnvironmentBaseUrl" type="url" autocomplete="url" placeholder="https://api.example.com" maxlength="2083" />
+            </div>
+          </div>
+          <p class="hint">Start with the service or product you want to understand. Monitoring traffic is not created in this step.</p>
+          </div>
+          <fieldset class="project-onboarding-step hidden" data-project-step="2">
+            <legend>How should Argus observe this project?</legend>
+            <p class="hint">Choose a starting point. You can add every other source later.</p>
+            <div class="source-options" role="radiogroup" aria-label="Monitoring source">
+              <label class="source-option"><input type="radio" name="projSource" value="telemetry" checked /><span><strong>OpenTelemetry <em>Recommended</em></strong><small>Passive production telemetry with no requests sent to your service.</small></span></label>
+              <label class="source-option"><input type="radio" name="projSource" value="openapi" /><span><strong>OpenAPI catalog</strong><small>Import endpoint definitions only. Argus sends no requests during import.</small></span></label>
+              <label class="source-option"><input type="radio" name="projSource" value="synthetic" /><span><strong>Synthetic check</strong><small>Create a deliberate, disabled GET or HEAD canary after setup.</small></span></label>
+              <label class="source-option"><input type="radio" name="projSource" value="heartbeat" /><span><strong>Heartbeat</strong><small>Use a push signal for scheduled jobs and workers.</small></span></label>
+              <label class="source-option"><input type="radio" name="projSource" value="sample" /><span><strong>Sample data</strong><small>Guided, non-production evaluation data only. It never represents your service health.</small></span></label>
+              <label class="source-option"><input type="radio" name="projSource" value="later" /><span><strong>Do this later</strong><small>Create the project without connecting a monitoring signal.</small></span></label>
+            </div>
+          </fieldset>
+          <section class="project-onboarding-step hidden" data-project-step="3" aria-labelledby="projOnboardingReviewTitle">
+            <h4 id="projOnboardingReviewTitle">Connect your selected source</h4>
+            <div id="projOnboardingReview" class="onboarding-review"></div>
+            <p class="hint">Argus will create the initial environment you chose. It will not make an outbound request or enable a synthetic check.</p>
+          </section>
+          <section class="project-onboarding-step hidden" data-project-step="4" aria-labelledby="projOnboardingNextTitle">
+            <h4 id="projOnboardingNextTitle">Verify your signal</h4>
+            <div id="projOnboardingVerification" class="onboarding-review"></div>
+          </section>
+          <section class="project-onboarding-step hidden" data-project-step="5" aria-labelledby="projOnboardingSLOTitle">
+            <h4 id="projOnboardingSLOTitle">Create a starter SLO</h4>
+            <div id="projOnboardingSLO" class="onboarding-review"></div>
+          </section>
+          <section class="project-onboarding-step hidden" data-project-step="6" aria-labelledby="projOnboardingNotificationTitle">
+            <h4 id="projOnboardingNotificationTitle">Choose an incident notification path</h4>
+            <div id="projOnboardingNotification" class="onboarding-review"></div>
+          </section>
+          <section class="project-onboarding-step hidden" data-project-step="7" aria-labelledby="projOnboardingCompleteTitle">
+            <h4 id="projOnboardingCompleteTitle">Setup summary</h4>
+            <div id="projOnboardingNext" class="onboarding-review"></div>
+          </section>
+          <div id="projProjectAdvanced" class="project-advanced hidden">
           <div class="field-row">
             <div class="field">
               <label for="projFormInterval">Check interval (s)</label>
@@ -378,10 +502,217 @@
             </div>
           </div>
           <p class="hint">These become the defaults for new routes. Existing routes keep their own settings.</p>
+          </div>
           <p class="proj-form-error hidden" id="projProjectFormError" role="alert"></p>
           <div class="modal-actions">
             <button class="secondary" type="button" id="projProjectCancel">Cancel</button>
-            <button type="submit" id="projProjectSubmit">Save project</button>
+            <button class="secondary hidden" type="button" id="projProjectBack">Back</button>
+            <button type="submit" id="projProjectSubmit">Continue</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Environment create -->
+    <div class="modal-overlay hidden" id="projEnvironmentModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projEnvironmentModalTitle" tabindex="-1">
+        <h3 id="projEnvironmentModalTitle">Add environment</h3>
+        <form id="projEnvironmentForm" class="stack">
+          <div class="field">
+            <label for="projEnvironmentName">Name</label>
+            <input id="projEnvironmentName" autocomplete="off" placeholder="Staging" required maxlength="120" />
+          </div>
+          <div class="field">
+            <label for="projEnvironmentBaseUrl">Base URL <span class="hint">(optional)</span></label>
+            <input id="projEnvironmentBaseUrl" type="url" autocomplete="url" placeholder="https://api.example.com" maxlength="2083" />
+          </div>
+          <p class="hint">The base URL is normalized before it is saved. Leave it empty until this environment has a public target.</p>
+          <p class="proj-form-error hidden" id="projEnvironmentFormError" role="alert"></p>
+          <div class="modal-actions">
+            <button class="secondary" type="button" id="projEnvironmentCancel">Cancel</button>
+            <button type="submit" id="projEnvironmentSubmit">Create environment</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Telemetry credential create and one-time secret reveal -->
+    <div class="modal-overlay hidden" id="projTelemetryCredentialModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projTelemetryCredentialModalTitle" tabindex="-1">
+        <h3 id="projTelemetryCredentialModalTitle">Create telemetry credential</h3>
+        <form id="projTelemetryCredentialForm" class="stack">
+          <div class="field">
+            <label for="projTelemetryCredentialName">Credential name</label>
+            <input id="projTelemetryCredentialName" autocomplete="off" placeholder="Production collector" required maxlength="120" />
+          </div>
+          <div class="field">
+            <label for="projTelemetryCredentialEnvironment">Environment</label>
+            <select id="projTelemetryCredentialEnvironment" required></select>
+          </div>
+          <div class="field">
+            <label for="projTelemetryCredentialExpiry">Expires after (days)</label>
+            <input id="projTelemetryCredentialExpiry" type="number" min="1" max="365" value="90" required />
+          </div>
+          <p class="hint">This credential can write metrics and traces only for the selected environment. The secret is shown once and cannot be recovered.</p>
+          <p class="proj-form-error hidden" id="projTelemetryCredentialFormError" role="alert"></p>
+          <div class="modal-actions">
+            <button class="secondary" type="button" id="projTelemetryCredentialCancel">Cancel</button>
+            <button type="submit" id="projTelemetryCredentialSubmit">Create credential</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="projTelemetrySecretModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projTelemetrySecretModalTitle" tabindex="-1">
+        <h3 id="projTelemetrySecretModalTitle">Save this telemetry secret</h3>
+        <p class="hint">Copy it now. Argus stores only a hash and cannot show this secret again.</p>
+        <div class="field">
+          <label for="projTelemetrySecretValue">OTLP bearer credential</label>
+          <input id="projTelemetrySecretValue" class="mono" readonly spellcheck="false" aria-describedby="projTelemetrySecretWarning" />
+        </div>
+        <p id="projTelemetrySecretWarning" class="proj-form-error inline" role="alert">Treat this value like a password. Do not put it in source control or browser storage.</p>
+        <div class="modal-actions">
+          <button class="secondary" type="button" id="projTelemetrySecretCopy">Copy secret</button>
+          <button type="button" id="projTelemetrySecretClose">I saved it</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLO definition create -->
+    <div class="modal-overlay hidden" id="projHeartbeatModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projHeartbeatModalTitle" tabindex="-1">
+        <h3 id="projHeartbeatModalTitle">Create heartbeat monitor</h3>
+        <form id="projHeartbeatForm" class="stack">
+          <div class="field"><label for="projHeartbeatName">Name</label><input id="projHeartbeatName" placeholder="Nightly backup" required maxlength="120" /></div>
+          <div class="field"><label for="projHeartbeatEnvironment">Environment</label><select id="projHeartbeatEnvironment" required></select></div>
+          <div class="field-row"><div class="field"><label for="projHeartbeatInterval">Expected interval (minutes)</label><input id="projHeartbeatInterval" type="number" min="1" max="10080" value="5" required /></div><div class="field"><label for="projHeartbeatGrace">Grace period (minutes)</label><input id="projHeartbeatGrace" type="number" min="1" max="10080" value="5" required /></div></div>
+          <p class="hint">The generated token is shown once. Send it as a Bearer token with a unique Idempotency-Key for each job run; Argus stores no job payload or logs.</p>
+          <p class="proj-form-error hidden" id="projHeartbeatFormError" role="alert"></p>
+          <div class="modal-actions"><button class="secondary" type="button" id="projHeartbeatCancel">Cancel</button><button type="submit" id="projHeartbeatSubmit">Create heartbeat</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="projHeartbeatSecretModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projHeartbeatSecretModalTitle" tabindex="-1">
+        <h3 id="projHeartbeatSecretModalTitle">Save this heartbeat token</h3>
+        <p class="hint">Argus stores only a hash. This token cannot be shown again.</p>
+        <div class="field"><label for="projHeartbeatSecretValue">Bearer token</label><input id="projHeartbeatSecretValue" class="mono" readonly spellcheck="false" /></div>
+        <p class="hint">POST to <code>/heartbeat/ping</code> with this Bearer token and a fresh <code>Idempotency-Key</code> for each run.</p>
+        <div class="modal-actions"><button class="secondary" type="button" id="projHeartbeatSecretCopy">Copy token</button><button type="button" id="projHeartbeatSecretClose">I saved it</button></div>
+      </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="projAgentModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projAgentModalTitle" tabindex="-1">
+        <h3 id="projAgentModalTitle">Enroll private agent</h3>
+        <form id="projAgentForm" class="stack">
+          <div class="field"><label for="projAgentName">Agent name</label><input id="projAgentName" placeholder="Production edge" required maxlength="120" /></div>
+          <div class="field"><label for="projAgentEnvironment">Environment</label><select id="projAgentEnvironment" required></select></div>
+          <div class="field"><label for="projAgentInterval">Expected heartbeat (seconds)</label><input id="projAgentInterval" type="number" min="15" max="86400" value="60" required /></div>
+          <p class="hint">The agent sends an outbound HTTPS heartbeat only. Argus will never make a connection into this environment.</p>
+          <p class="proj-form-error hidden" id="projAgentFormError" role="alert"></p>
+          <div class="modal-actions"><button class="secondary" type="button" id="projAgentCancel">Cancel</button><button type="submit" id="projAgentSubmit">Create enrollment token</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="projAgentSecretModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projAgentSecretModalTitle" tabindex="-1">
+        <h3 id="projAgentSecretModalTitle">Save this agent token</h3>
+        <p class="hint">Copy it now. Argus stores only a hash and cannot show this token again.</p>
+        <div class="field"><label for="projAgentSecretValue">Enrollment token</label><input id="projAgentSecretValue" class="mono" readonly spellcheck="false" /></div>
+        <p class="proj-form-error inline" role="alert">Treat this like a password. Put it in the agent's local secret store, never source control or a target URL.</p>
+        <div class="modal-actions"><button class="secondary" type="button" id="projAgentSecretCopy">Copy token</button><button type="button" id="projAgentSecretClose">I saved it</button></div>
+      </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="projAgentAssignmentModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projAgentAssignmentModalTitle" tabindex="-1">
+        <h3 id="projAgentAssignmentModalTitle">Create private-agent assignment</h3>
+        <form id="projAgentAssignmentForm" class="stack">
+          <div class="field"><label for="projAgentAssignmentName">Name</label><input id="projAgentAssignmentName" placeholder="Internal readiness" required maxlength="120" /></div>
+          <div class="field"><label for="projAgentAssignmentEnvironment">Environment</label><select id="projAgentAssignmentEnvironment" required></select></div>
+          <div class="field"><label for="projAgentAssignmentRoute">Catalog route</label><select id="projAgentAssignmentRoute" required></select></div>
+          <div class="field-row"><div class="field"><label for="projAgentAssignmentMethod">Method</label><select id="projAgentAssignmentMethod"><option>GET</option><option>HEAD</option></select></div><div class="field"><label for="projAgentAssignmentTarget">Private target</label><input id="projAgentAssignmentTarget" placeholder="http://service.internal/ready" required maxlength="2083" /></div></div>
+          <div class="field-row"><div class="field"><label for="projAgentAssignmentInterval">Interval (seconds)</label><input id="projAgentAssignmentInterval" type="number" min="15" max="86400" value="60" required /></div><div class="field"><label for="projAgentAssignmentTimeout">Timeout (ms)</label><input id="projAgentAssignmentTimeout" type="number" min="200" max="60000" value="5000" required /></div></div>
+          <p class="hint">Only a signed GET or HEAD assignment reaches the environment-local agent. Argus never dials this private target.</p>
+          <p class="proj-form-error hidden" id="projAgentAssignmentFormError" role="alert"></p>
+          <div class="modal-actions"><button class="secondary" type="button" id="projAgentAssignmentCancel">Cancel</button><button type="submit" id="projAgentAssignmentSubmit">Create assignment</button></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- SLO definition create -->
+    <div class="modal-overlay hidden" id="projSLOModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projSLOModalTitle" tabindex="-1">
+        <h3 id="projSLOModalTitle">Create service-level objective</h3>
+        <form id="projSLOForm" class="stack">
+          <div class="field">
+            <label for="projSLOName">Name</label>
+            <input id="projSLOName" placeholder="API availability" required maxlength="160" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="projSLOKind">Indicator</label>
+              <select id="projSLOKind"><option value="availability">Availability</option><option value="latency">Latency</option></select>
+            </div>
+            <div class="field">
+              <label for="projSLOTarget">Target (%)</label>
+              <input id="projSLOTarget" type="number" min="1" max="99.999" step="0.001" value="99.9" required />
+            </div>
+          </div>
+          <div class="field hidden" id="projSLOLatencyField">
+            <label for="projSLOLatencyThreshold">Latency threshold (ms)</label>
+            <input id="projSLOLatencyThreshold" type="number" min="1" value="500" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="projSLOWindowDays">Rolling window (days)</label>
+              <input id="projSLOWindowDays" type="number" min="1" max="90" value="30" required />
+            </div>
+            <div class="field">
+              <label for="projSLOMinEvents">Minimum events</label>
+              <input id="projSLOMinEvents" type="number" min="0" value="100" required />
+            </div>
+          </div>
+          <p class="hint">Argus evaluates SLOs from tenant-scoped telemetry. Missing or low-volume data is shown as no data, never as healthy.</p>
+          <p class="proj-form-error hidden" id="projSLOFormError" role="alert"></p>
+          <div class="modal-actions">
+            <button class="secondary" type="button" id="projSLOCancel">Cancel</button>
+            <button type="submit" id="projSLOSubmit">Create SLO</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Telemetry route mapping create -->
+    <div class="modal-overlay hidden" id="projTelemetryMappingModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projTelemetryMappingModalTitle" tabindex="-1">
+        <h3 id="projTelemetryMappingModalTitle">Map telemetry to a route</h3>
+        <form id="projTelemetryMappingForm" class="stack">
+          <div class="field">
+            <label for="projTelemetryMappingEnvironment">Environment</label>
+            <select id="projTelemetryMappingEnvironment" required></select>
+          </div>
+          <div class="field">
+            <label for="projTelemetryMappingService">Service name</label>
+            <input id="projTelemetryMappingService" autocomplete="off" placeholder="checkout-api" required maxlength="160" />
+          </div>
+          <div class="field">
+            <label for="projTelemetryMappingDeployment">Deployment environment <span class="hint">(optional)</span></label>
+            <input id="projTelemetryMappingDeployment" autocomplete="off" placeholder="production" maxlength="160" />
+          </div>
+          <div class="field">
+            <label for="projTelemetryMappingRoute">Catalog route</label>
+            <select id="projTelemetryMappingRoute" required></select>
+          </div>
+          <p class="hint">Argus matches only this project-scoped environment, service identity, and route template. It never trusts a caller-supplied project identifier from telemetry.</p>
+          <p class="proj-form-error hidden" id="projTelemetryMappingFormError" role="alert"></p>
+          <div class="modal-actions">
+            <button class="secondary" type="button" id="projTelemetryMappingCancel">Cancel</button>
+            <button type="submit" id="projTelemetryMappingSubmit">Create mapping</button>
           </div>
         </form>
       </div>
@@ -456,9 +787,10 @@
             <span>Mark as deprecated</span>
           </label>
           <label class="proj-checkbox">
-            <input type="checkbox" id="projRouteEnabled" checked />
-            <span>Monitoring enabled</span>
+            <input type="checkbox" id="projRouteEnabled" />
+            <span>Enable safe synthetic monitoring</span>
           </label>
+          <p class="hint" id="projRouteBudget" aria-live="polite"></p>
           <p class="proj-form-error hidden" id="projRouteFormError" role="alert"></p>
           <div class="modal-actions">
             <button class="secondary" type="button" id="projRouteCancel">Cancel</button>

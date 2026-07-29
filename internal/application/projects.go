@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,6 +13,66 @@ import (
 	"argus/internal/domain"
 	"argus/internal/models"
 )
+
+type CreateEnvironmentInput struct{ Name, BaseURL string }
+
+func (s *Service) ListProjectEnvironments(ctx context.Context, projectID int64) ([]models.ProjectEnvironment, error) {
+	return s.projects.ListProjectEnvironments(ctx, projectID)
+}
+
+func (s *Service) CreateProjectEnvironment(ctx context.Context, projectID int64, input CreateEnvironmentInput) (models.ProjectEnvironment, error) {
+	env, err := normalizedEnvironment(projectID, input)
+	if err != nil {
+		return models.ProjectEnvironment{}, err
+	}
+	id, err := s.projects.CreateProjectEnvironment(ctx, env)
+	if err != nil {
+		return models.ProjectEnvironment{}, err
+	}
+	env.ID = id
+	return env, nil
+}
+
+func (s *Service) UpdateProjectEnvironment(ctx context.Context, projectID, environmentID int64, input CreateEnvironmentInput) (models.ProjectEnvironment, error) {
+	items, err := s.projects.ListProjectEnvironments(ctx, projectID)
+	if err != nil {
+		return models.ProjectEnvironment{}, err
+	}
+	for _, existing := range items {
+		if existing.ID == environmentID {
+			env, normalizeErr := normalizedEnvironment(projectID, input)
+			if normalizeErr != nil {
+				return models.ProjectEnvironment{}, normalizeErr
+			}
+			env.ID, env.IsDefault = existing.ID, existing.IsDefault
+			if err = s.projects.UpdateProjectEnvironment(ctx, env); err != nil {
+				return models.ProjectEnvironment{}, err
+			}
+			return env, nil
+		}
+	}
+	return models.ProjectEnvironment{}, domain.ErrProjectNotFound
+}
+
+func normalizedEnvironment(projectID int64, input CreateEnvironmentInput) (models.ProjectEnvironment, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return models.ProjectEnvironment{}, domain.ErrInvalidInput
+	}
+	base, _, err := domain.NormalizeBaseURL(input.BaseURL)
+	if err != nil && strings.TrimSpace(input.BaseURL) != "" {
+		return models.ProjectEnvironment{}, err
+	}
+	origin := ""
+	if base != "" {
+		parsed, parseErr := url.Parse(base)
+		if parseErr != nil {
+			return models.ProjectEnvironment{}, domain.ErrInvalidInput
+		}
+		origin = parsed.Scheme + "://" + parsed.Host
+	}
+	return models.ProjectEnvironment{ProjectID: projectID, Name: name, CanonicalBaseURL: base, CanonicalOrigin: origin}, nil
+}
 
 var (
 	ErrProjectNameRequired = errors.New("project name is required")
@@ -27,6 +88,8 @@ var roleRank = map[string]int{models.ProjectRoleViewer: 1, models.ProjectRoleEdi
 type CreateProjectInput struct {
 	Name                     string
 	Description              string
+	EnvironmentName          string
+	EnvironmentBaseURL       string
 	DefaultIntervalSeconds   int
 	DefaultTimeoutMS         int
 	DefaultRetries           int
@@ -50,7 +113,15 @@ func (s *Service) CreateProject(ctx context.Context, ownerUserID int64, input Cr
 		FailureThreshold:         orDefault(input.FailureThreshold, domain.DefaultFailureThreshold, 1, 20),
 		RecoverySuccessThreshold: orDefault(input.RecoverySuccessThreshold, domain.DefaultRecoverySuccesses, 1, 20),
 	}
-	id, err := s.projects.CreateProject(ctx, project, ownerUserID)
+	environmentName := strings.TrimSpace(input.EnvironmentName)
+	if environmentName == "" {
+		environmentName = "production"
+	}
+	environment, err := normalizedEnvironment(0, CreateEnvironmentInput{Name: environmentName, BaseURL: input.EnvironmentBaseURL})
+	if err != nil {
+		return models.Project{}, err
+	}
+	id, err := s.projects.CreateProject(ctx, project, environment, ownerUserID)
 	if err != nil {
 		return models.Project{}, err
 	}

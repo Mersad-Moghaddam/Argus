@@ -53,7 +53,7 @@ From the **Overview** tab:
 API equivalent:
 
 ```http
-POST /api/websites
+POST /monitor/websites
 Content-Type: application/json
 X-API-Key: <key>
 
@@ -80,10 +80,15 @@ X-API-Key: <key>
 - Expects periodic heartbeat call:
 
 ```http
-POST /api/websites/:id/heartbeat
+POST /monitor/heartbeat/:id
 ```
 
 - If heartbeats stop beyond grace time, monitor turns down.
+
+For API Project heartbeats, Argus evaluates liveness every minute. A late or
+missing run creates one operational incident; the next unique receipt resolves
+it. The job's reported success/failure outcome remains
+separate from the liveness state.
 
 ### TLS expiry monitor
 - Checks cert expiration.
@@ -100,7 +105,7 @@ POST /api/websites/:id/heartbeat
 ### Add alert channel
 
 ```http
-POST /api/alert-channels
+POST /notification/channels
 {
   "name": "Ops Webhook",
   "channelType": "webhook",
@@ -120,7 +125,7 @@ Supported channel types:
 Mute alerts during planned work:
 
 ```http
-POST /api/maintenance-windows
+POST /notification/maintenance
 {
   "websiteId": 1,
   "startsAt": "2026-04-04T10:00:00Z",
@@ -141,7 +146,7 @@ During active window:
 ### Create status page
 
 ```http
-POST /api/status-pages
+POST /status/pages
 {
   "slug": "public-status",
   "title": "Public Service Status"
@@ -151,19 +156,19 @@ POST /api/status-pages
 ### Read public status page
 
 ```http
-GET /api/public/status/public-status
+GET /status/public/public-status
 ```
 
 ---
 
 ## 7. Common endpoints
 
-- `GET /api/websites?limit=100&offset=0`
-- `GET /api/checks?limit=100` (latest ping/check history)
-- `DELETE /api/websites/:id`
-- `GET /api/incidents?limit=100&offset=0`
-- `GET /api/status-pages?limit=100&offset=0`
-- `GET /api/logs`
+- `GET /monitor/websites?limit=100&offset=0`
+- `GET /system/checks?limit=100` (latest ping/check history)
+- `DELETE /monitor/websites/:id`
+- `GET /system/incidents?limit=100&offset=0`
+- `GET /status/pages?limit=100&offset=0`
+- `GET /system/logs`
 
 ---
 
@@ -182,22 +187,31 @@ GET /api/public/status/public-status
 ## 9. Projects & API route monitoring
 
 The **API Projects** tab monitors individual API operations rather than whole sites. It is a separate
-bounded context: its own tables, its own accounts, and its own `/api/projects...` routes. Everything
+bounded context: its own tables, its own accounts, and its own `/project/...` routes. Everything
 in sections 1–8 keeps working exactly as before and is unaffected.
 
 ### 9.1 Sign in
 
-API Projects uses email/password accounts and opaque bearer tokens, independent from the global
-`API_KEY` used by the uptime dashboard. Open the **API Projects** tab and create an account; the
-token is stored in `localStorage` under `argus_project_token` and sent as
-`Authorization: Bearer <token>`. Tokens are valid for 30 days and can be revoked with **Sign out**.
+API Projects uses email/password accounts and an opaque, server-stored browser session, independent
+from the legacy `API_KEY` used by the uptime dashboard. Register or log in from the global header.
+The browser receives an HttpOnly, SameSite=Lax session cookie plus a CSRF cookie; it never stores a
+project credential in Web Storage. Sessions are valid for 30 days and can be reviewed or revoked
+from **Account**.
 
 ```http
-POST /api/auth/register   { "email": "you@example.com", "password": "at-least-8-chars", "name": "You" }
-POST /api/auth/login      { "email": "you@example.com", "password": "at-least-8-chars" }
-POST /api/auth/logout     Authorization: Bearer <token>
-GET  /api/auth/me         Authorization: Bearer <token>
+POST /identity/register   { "email": "you@example.com", "password": "at-least-8-chars", "name": "You" }
+POST /identity/login      { "email": "you@example.com", "password": "at-least-8-chars" }
+POST /identity/logout     Cookie: argus_session=...; X-CSRF-Token: ...
+GET  /identity/profile    Cookie: argus_session=...
+POST /identity/recovery/request { "email": "you@example.com" }
+POST /identity/recovery/complete { "token": "one-time-token", "newPassword": "new-passphrase" }
 ```
+
+Use **Forgot your password?** from the login page to begin recovery. The request response is
+identical for every address, and Argus stores only a hash of the short-lived, single-use token.
+Recovery delivery is an operator-configured HTTPS webhook (`RECOVERY_DELIVERY_URL`); it must send
+the token to a verified account channel. When no delivery integration is configured, Argus safely
+accepts the request without disclosing whether an account exists, but cannot complete recovery.
 
 Whoever creates a project becomes its **owner**. Roles are `owner` > `editor` > `viewer`:
 
@@ -213,11 +227,22 @@ does not exist — so project IDs cannot be probed.
 
 ### 9.2 Create a project
 
-Click **New project**. The interval, timeout, retries and incident thresholds you set here become the
+Click **New project**. The authenticated source-aware flow first asks for the project identity and
+an initial environment (with an optional canonical base URL), then
+asks how it should be observed: **OpenTelemetry** (recommended), an **OpenAPI catalog**, a disabled
+**Synthetic check**, a **Heartbeat**, clearly labeled non-production **Sample data**, or **Do this later**. It preserves a non-sensitive local draft
+until the project is created and does not create target traffic during setup. OpenAPI continues to
+the import wizard. OpenTelemetry, Synthetic, and Heartbeat selections offer a direct handoff to
+their scoped setup dialog after the new project dashboard has loaded; every other choice opens the
+project dashboard with the relevant next action.
+The completion step also offers an explicit starter 99.9% availability SLO; it remains `no data`
+until the configured minimum eligible telemetry events exist.
+
+Interval, timeout, retries and incident thresholds are advanced project settings. They become the
 defaults inherited by *new* routes; changing them later never rewrites existing routes.
 
 ```http
-POST /api/projects
+POST /project/catalog
 { "name": "Payments API", "defaultIntervalSeconds": 300, "defaultTimeoutMs": 5000,
   "defaultRetries": 1, "failureThreshold": 3, "recoverySuccessThreshold": 1 }
 ```
@@ -282,15 +307,67 @@ What re-importing guarantees:
 - **Summary tiles** — route counts per health state, 24h uptime, 24h average latency, open
   incidents, last check time.
 - **Charts** — uptime % and response time over `1h`, `6h`, `24h`, `7d` or `30d`. These are served
-  pre-bucketed by `GET /api/projects/:id/metrics/timeseries?range=24h`, so the browser never
+  pre-bucketed by `GET /route/metrics/:id?range=24h`, so the browser never
   downloads raw check rows.
 - **Incidents** — open and recently resolved, with duration and failure reason.
 - **Route table** — search by path/name/summary, filter by method, health, tag, enabled and
   deprecated, sort by any column, and page through results. Searching, filtering, sorting and
   paging all happen in SQL, so a project with thousands of routes stays responsive.
 - **Bulk actions** — select rows (or a whole page) and enable, disable or delete them together.
+- **Service-level objectives** — editors can create availability or latency objectives with a
+  target, rolling window, and minimum eligible-event threshold. Objectives use project-scoped
+  telemetry only; missing, stale, maintenance, and configuration-error evidence is never rendered
+  as healthy.
+- **Telemetry route mappings** — editors can bind a trusted environment and service/deployment
+  identity to one catalog route. The mapping never grants a telemetry sender the ability to choose
+  a project or route outside the credential's server-side scope.
+- **Environments** — editors can add or edit an environment’s name and optional base URL. The URL
+  is normalized server-side before it is saved; updating one environment never changes another.
+- **Heartbeats** — editors create a heartbeat for a selected environment and save the generated
+  `argus_hb_...` token once. Send `POST /heartbeat/ping` with that token in `Authorization: Bearer`
+  and a distinct `Idempotency-Key` for every scheduled run. The optional body only accepts
+  `{ "outcome": "success" }` or `{ "outcome": "failure" }`; Argus never stores arbitrary job
+  metadata. The dashboard exposes healthy, late, missing, and revoked states. Reusing a key is
+  accepted as a retry but cannot extend the monitor's last-seen time; revoking the monitor rejects
+  its token immediately.
+- **Incidents** — every synthetic-route incident records its source and bounded evaluation
+  evidence. Editors can choose **Acknowledge** to show that a person is responding; this never
+  hides the incident or changes the recovery rule. A healthy check resolves the acknowledged
+  incident, while viewers can still inspect its source, timing, and failure reason.
+- **Synthetic safety and cost** — before enabling a GET or HEAD canary, its form shows the
+  maximum daily request attempts implied by the interval and retry count. Argus reserves that
+  allowance atomically against both a project and a global UTC-day budget before it queues work.
+  Before a worker dials the target it also acquires a short-lived project and global execution
+  lease, preventing a backlog from becoming a request burst. Normal runs receive deterministic
+  jitter of up to 10% of their interval (capped at 30 seconds), avoiding synchronized starts. A budget- or concurrency-exhausted
+  run is deferred to its next interval and recorded as a scheduler skip; it is not misreported as
+  a failed endpoint check. Operators configure the ceilings with
+  `ROUTE_PROJECT_DAILY_BUDGET` (default `10000`) and `ROUTE_GLOBAL_DAILY_BUDGET` (default
+  `100000`), plus `ROUTE_PROJECT_CONCURRENCY` (default `4`) and
+  `ROUTE_GLOBAL_CONCURRENCY` (default `50`).
 
-### 9.6 Route health states
+### 9.6 Private-agent assignments
+
+Use a private agent only for a target that the central Argus control plane must not reach. An
+editor creates a project/environment-bound assignment with a catalog route reference, a deliberate
+`GET` or `HEAD` method, an HTTP(S) target, a 15-second to 24-hour interval, and a 200 ms to
+60-second timeout. The agent receives assignments only in its verified, 15-minute signed
+configuration envelope for that exact project and environment. It never accepts inbound
+connections, follows redirects, permits non-HTTP(S) targets, sends credentials or request bodies,
+or accepts arbitrary commands; its local executor treats every non-2xx response as failure,
+drains at most 1 MiB, and reports bounded success/failure evidence outbound to Argus. Project
+editors create or revoke assignments from the **Private agents** card; project viewers can inspect
+the resulting bounded assignment metadata without seeing agent enrollment credentials. Each result
+is accepted only when its assignment remains active for the reporting agent's exact environment;
+failure and recovery incidents are consequently scoped to that assignment instead of being merged
+across unrelated local checks.
+
+Current assignment-management endpoints are `GET`/`POST /agent/assignments/:projectId` and
+`POST /agent/assignments/revoke/:projectId/:assignmentId`. Viewers can list assignments; only
+project editors can create or revoke them. The same scoped management controls are available in
+the project dashboard.
+
+### 9.7 Route health states
 
 One definition, applied everywhere (`internal/domain/route.go`):
 
@@ -307,14 +384,14 @@ The incident rule is configurable per project and per route: an incident **opens
 consecutive successes (default 1). Repeated failures while an incident is already open do not open a
 second one.
 
-### 9.7 Route detail
+### 9.8 Route detail
 
 Each route has its own page showing configuration (target URL, interval, timeout, retries, expected
 status range, incident rule, next check, tags, headers, and the imported parameters/request
 body/responses/security blocks), current health, 24h uptime and latency, a status-code distribution,
 the recent check log with failure reasons and attempt counts, and its incidents.
 
-### 9.8 How checking works
+### 9.9 How checking works
 
 Checks run entirely in the background worker — there are no frontend timers involved. Four scheduled
 asynq tasks:
@@ -329,7 +406,7 @@ asynq tasks:
 Route checks run on the `default` queue so they can never starve the legacy website checks on
 `critical`; total in-flight work is bounded by `WORKER_CONCURRENCY`.
 
-### 9.9 Monitored URLs are untrusted
+### 9.10 Monitored URLs are untrusted
 
 Every outbound check is treated as hostile input:
 
@@ -350,39 +427,42 @@ Every outbound check is treated as hostile input:
 - Configured header values that look like secrets are masked in every API response, import preview
   and log line. The stored value stays intact so checks still authenticate.
 
-### 9.10 Project API reference
+### 9.11 Project API reference
 
 All of these require `Authorization: Bearer <token>`.
 
 ```http
-GET    /api/projects?search=&status=&limit=&offset=
-POST   /api/projects
-GET    /api/projects/:projectId
-PUT    /api/projects/:projectId
-POST   /api/projects/:projectId/archive
-POST   /api/projects/:projectId/unarchive
-DELETE /api/projects/:projectId
+GET    /project/catalog?search=&status=&limit=&offset=
+POST   /project/catalog
+GET    /project/catalog/:projectId
+PUT    /project/catalog/:projectId
+POST   /project/archive/:projectId
+POST   /project/restore/:projectId
+DELETE /project/catalog/:projectId
 
-GET    /api/projects/:projectId/routes?search=&method=&status=&tag=&enabled=&deprecated=&sortBy=&sortDir=&limit=&offset=
-POST   /api/projects/:projectId/routes
-POST   /api/projects/:projectId/routes/bulk
-POST   /api/projects/:projectId/routes/bulk-delete
-GET    /api/projects/:projectId/routes/:routeId
-PUT    /api/projects/:projectId/routes/:routeId
-POST   /api/projects/:projectId/routes/:routeId/enable
-POST   /api/projects/:projectId/routes/:routeId/disable
-DELETE /api/projects/:projectId/routes/:routeId
-GET    /api/projects/:projectId/routes/:routeId/checks?limit=&offset=
+GET    /route/catalog/:projectId?search=&method=&status=&tag=&enabled=&deprecated=&sortBy=&sortDir=&limit=&offset=
+POST   /route/catalog/:projectId
+POST   /route/bulk/:projectId
+POST   /route/removal/:projectId
+GET    /route/catalog/:projectId/:routeId
+PUT    /route/catalog/:projectId/:routeId
+POST   /route/enable/:projectId/:routeId
+POST   /route/disable/:projectId/:routeId
+DELETE /route/catalog/:projectId/:routeId
+GET    /route/checks/:projectId/:routeId?limit=&offset=
 
-GET    /api/projects/:projectId/incidents?routeId=&state=&limit=&offset=
-GET    /api/projects/:projectId/metrics/timeseries?range=1h|6h|24h|7d|30d&routeId=
+GET    /route/incidents/:projectId?routeId=&state=&limit=&offset=
+GET    /route/metrics/:projectId?range=1h|6h|24h|7d|30d&routeId=
 
-POST   /api/projects/:projectId/imports/validate      (multipart "file", or JSON {"spec": "..."})
-GET    /api/projects/:projectId/imports/:jobId
-POST   /api/projects/:projectId/imports/:jobId/commit
+GET    /incident/catalog/:projectId?state=&limit=&offset=
+POST   /incident/acknowledge/:projectId/:incidentId
+
+POST   /import/validation/:projectId      (multipart "file", or JSON {"spec": "..."})
+GET    /import/job/:projectId/:jobId
+POST   /import/commit/:projectId/:jobId
 ```
 
-### 9.11 Configuration
+### 9.12 Configuration
 
 All route-monitoring settings have safe defaults; none are required.
 

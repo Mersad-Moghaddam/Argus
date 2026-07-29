@@ -11,8 +11,6 @@
 (() => {
   'use strict';
 
-  const TOKEN_KEY = 'argus_project_token';
-  const USER_KEY = 'argus_project_user';
   const VIEW_REFRESH_SECONDS = 20;
   const ROUTE_PAGE_SIZE = 25;
   const PREVIEW_PAGE_SIZE = 100;
@@ -20,6 +18,20 @@
   const pel = {
     tab: document.getElementById('tab-projects'),
     panel: document.getElementById('panel-projects'),
+    globalAuthPanel: document.getElementById('globalAuthPanel'),
+    globalAccountPanel: document.getElementById('globalAccountPanel'),
+    guestActions: document.getElementById('accountGuestActions'),
+    signedInActions: document.getElementById('accountSignedInActions'),
+    globalUserLabel: document.getElementById('globalUserLabel'),
+    globalSignOut: document.getElementById('globalSignOut'),
+    accountEmail: document.getElementById('accountEmail'),
+    accountPasswordForm: document.getElementById('accountPasswordForm'),
+    accountCurrentPassword: document.getElementById('accountCurrentPassword'),
+    accountNewPassword: document.getElementById('accountNewPassword'),
+    accountPasswordError: document.getElementById('accountPasswordError'),
+    accountPasswordSubmit: document.getElementById('accountPasswordSubmit'),
+    accountSessions: document.getElementById('accountSessions'),
+    accountRevokeOthers: document.getElementById('accountRevokeOthers'),
     authGate: document.getElementById('projAuthGate'),
     authForm: document.getElementById('projAuthForm'),
     authTitle: document.getElementById('projAuthTitle'),
@@ -32,6 +44,17 @@
     authSubmit: document.getElementById('projAuthSubmit'),
     authSwitch: document.getElementById('projAuthSwitch'),
     authSwitchPrompt: document.getElementById('projAuthSwitchPrompt'),
+    forgotPassword: document.getElementById('projForgotPassword'),
+    recoveryGate: document.getElementById('projRecoveryGate'),
+    recoveryRequestForm: document.getElementById('projRecoveryRequestForm'),
+    recoveryEmail: document.getElementById('projRecoveryEmail'),
+    recoveryRequestError: document.getElementById('projRecoveryRequestError'),
+    recoveryRequestSubmit: document.getElementById('projRecoveryRequestSubmit'),
+    recoveryCompleteForm: document.getElementById('projRecoveryCompleteForm'),
+    recoveryToken: document.getElementById('projRecoveryToken'),
+    recoveryNewPassword: document.getElementById('projRecoveryNewPassword'),
+    recoveryCompleteError: document.getElementById('projRecoveryCompleteError'),
+    recoveryCompleteSubmit: document.getElementById('projRecoveryCompleteSubmit'),
     shell: document.getElementById('projShell'),
     crumbs: document.getElementById('projCrumbs'),
     userLabel: document.getElementById('projUserLabel'),
@@ -46,7 +69,98 @@
     projectModalTitle: document.getElementById('projProjectModalTitle'),
     projectFormError: document.getElementById('projProjectFormError'),
     projectCancel: document.getElementById('projProjectCancel'),
+    projectBack: document.getElementById('projProjectBack'),
     projectSubmit: document.getElementById('projProjectSubmit'),
+    projectSteps: document.getElementById('projProjectSteps'),
+projectAdvanced: document.getElementById('projProjectAdvanced'),
+projectReview: document.getElementById('projOnboardingReview'),
+projectVerification: document.getElementById('projOnboardingVerification'),
+projectSLO: document.getElementById('projOnboardingSLO'),
+projectNotification: document.getElementById('projOnboardingNotification'),
+projectNext: document.getElementById('projOnboardingNext'),
+
+    environmentModal: document.getElementById('projEnvironmentModal'),
+    environmentForm: document.getElementById('projEnvironmentForm'),
+    environmentName: document.getElementById('projEnvironmentName'),
+    environmentBaseURL: document.getElementById('projEnvironmentBaseUrl'),
+    environmentFormError: document.getElementById('projEnvironmentFormError'),
+    environmentCancel: document.getElementById('projEnvironmentCancel'),
+    environmentSubmit: document.getElementById('projEnvironmentSubmit'),
+
+    telemetryCredentialModal: document.getElementById('projTelemetryCredentialModal'),
+    telemetryCredentialForm: document.getElementById('projTelemetryCredentialForm'),
+    telemetryCredentialName: document.getElementById('projTelemetryCredentialName'),
+    telemetryCredentialEnvironment: document.getElementById('projTelemetryCredentialEnvironment'),
+    telemetryCredentialExpiry: document.getElementById('projTelemetryCredentialExpiry'),
+    telemetryCredentialFormError: document.getElementById('projTelemetryCredentialFormError'),
+    telemetryCredentialCancel: document.getElementById('projTelemetryCredentialCancel'),
+    telemetryCredentialSubmit: document.getElementById('projTelemetryCredentialSubmit'),
+    telemetrySecretModal: document.getElementById('projTelemetrySecretModal'),
+    telemetrySecretValue: document.getElementById('projTelemetrySecretValue'),
+    telemetrySecretCopy: document.getElementById('projTelemetrySecretCopy'),
+    telemetrySecretClose: document.getElementById('projTelemetrySecretClose'),
+
+    heartbeatModal: document.getElementById('projHeartbeatModal'),
+    heartbeatForm: document.getElementById('projHeartbeatForm'),
+    heartbeatName: document.getElementById('projHeartbeatName'),
+    heartbeatEnvironment: document.getElementById('projHeartbeatEnvironment'),
+    heartbeatInterval: document.getElementById('projHeartbeatInterval'),
+    heartbeatGrace: document.getElementById('projHeartbeatGrace'),
+    heartbeatFormError: document.getElementById('projHeartbeatFormError'),
+    heartbeatCancel: document.getElementById('projHeartbeatCancel'),
+    heartbeatSubmit: document.getElementById('projHeartbeatSubmit'),
+    heartbeatSecretModal: document.getElementById('projHeartbeatSecretModal'),
+    heartbeatSecretValue: document.getElementById('projHeartbeatSecretValue'),
+    heartbeatSecretCopy: document.getElementById('projHeartbeatSecretCopy'),
+    heartbeatSecretClose: document.getElementById('projHeartbeatSecretClose'),
+
+    agentModal: document.getElementById('projAgentModal'),
+    agentForm: document.getElementById('projAgentForm'),
+    agentName: document.getElementById('projAgentName'),
+    agentEnvironment: document.getElementById('projAgentEnvironment'),
+    agentInterval: document.getElementById('projAgentInterval'),
+    agentFormError: document.getElementById('projAgentFormError'),
+    agentCancel: document.getElementById('projAgentCancel'),
+    agentSubmit: document.getElementById('projAgentSubmit'),
+    agentSecretModal: document.getElementById('projAgentSecretModal'),
+    agentSecretValue: document.getElementById('projAgentSecretValue'),
+    agentSecretCopy: document.getElementById('projAgentSecretCopy'),
+    agentSecretClose: document.getElementById('projAgentSecretClose'),
+    agentAssignmentModal: document.getElementById('projAgentAssignmentModal'),
+    agentAssignmentForm: document.getElementById('projAgentAssignmentForm'),
+    agentAssignmentName: document.getElementById('projAgentAssignmentName'),
+    agentAssignmentEnvironment: document.getElementById('projAgentAssignmentEnvironment'),
+    agentAssignmentRoute: document.getElementById('projAgentAssignmentRoute'),
+    agentAssignmentMethod: document.getElementById('projAgentAssignmentMethod'),
+    agentAssignmentTarget: document.getElementById('projAgentAssignmentTarget'),
+    agentAssignmentInterval: document.getElementById('projAgentAssignmentInterval'),
+    agentAssignmentTimeout: document.getElementById('projAgentAssignmentTimeout'),
+    agentAssignmentFormError: document.getElementById('projAgentAssignmentFormError'),
+    agentAssignmentCancel: document.getElementById('projAgentAssignmentCancel'),
+    agentAssignmentSubmit: document.getElementById('projAgentAssignmentSubmit'),
+
+    sloModal: document.getElementById('projSLOModal'),
+    sloForm: document.getElementById('projSLOForm'),
+    sloName: document.getElementById('projSLOName'),
+    sloKind: document.getElementById('projSLOKind'),
+    sloTarget: document.getElementById('projSLOTarget'),
+    sloLatencyField: document.getElementById('projSLOLatencyField'),
+    sloLatencyThreshold: document.getElementById('projSLOLatencyThreshold'),
+    sloWindowDays: document.getElementById('projSLOWindowDays'),
+    sloMinEvents: document.getElementById('projSLOMinEvents'),
+    sloFormError: document.getElementById('projSLOFormError'),
+    sloCancel: document.getElementById('projSLOCancel'),
+    sloSubmit: document.getElementById('projSLOSubmit'),
+
+    telemetryMappingModal: document.getElementById('projTelemetryMappingModal'),
+    telemetryMappingForm: document.getElementById('projTelemetryMappingForm'),
+    telemetryMappingEnvironment: document.getElementById('projTelemetryMappingEnvironment'),
+    telemetryMappingService: document.getElementById('projTelemetryMappingService'),
+    telemetryMappingDeployment: document.getElementById('projTelemetryMappingDeployment'),
+    telemetryMappingRoute: document.getElementById('projTelemetryMappingRoute'),
+    telemetryMappingFormError: document.getElementById('projTelemetryMappingFormError'),
+    telemetryMappingCancel: document.getElementById('projTelemetryMappingCancel'),
+    telemetryMappingSubmit: document.getElementById('projTelemetryMappingSubmit'),
 
     routeModal: document.getElementById('projRouteModal'),
     routeForm: document.getElementById('projRouteForm'),
@@ -74,6 +188,11 @@
   const state = {
     route: { name: 'list' },
     authMode: 'login',
+    authReturnTo: null,
+    sessionUser: null,
+    sessionResolved: false,
+    account: { sessions: null, loading: false },
+    onboarding: { step: 1, source: 'telemetry', createdProject: null },
     // Projects list view.
     list: { search: '', status: '', offset: 0, limit: 24, loading: false, data: null, total: 0 },
     // Project detail view.
@@ -83,6 +202,14 @@
       range: '24h',
       series: null,
       incidents: [],
+	  projectIncidents: [],
+      environments: [],
+      telemetryIngress: [],
+      telemetryMappings: [],
+      slos: [],
+	  heartbeats: [],
+agents: [],
+agentAssignments: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -102,29 +229,38 @@
   let refreshTimer = null;
   let modalReturnFocus = null;
   let confirmAction = null;
+  const ONBOARDING_DRAFT_KEY = 'argus_project_onboarding_draft_v1';
+  const projectModals = [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.heartbeatModal, pel.heartbeatSecretModal, pel.agentModal, pel.agentSecretModal, pel.agentAssignmentModal, pel.sloModal, pel.telemetryMappingModal, pel.routeModal, pel.bulkModal, pel.confirmModal];
 
   /* ------------------------------------------------------- auth + api client */
 
-  function getToken() {
-    return localStorage.getItem(TOKEN_KEY) || '';
-  }
-
   function getUser() {
-    try {
-      return JSON.parse(localStorage.getItem(USER_KEY) || 'null');
-    } catch {
-      return null;
-    }
+    return state.sessionUser || null;
   }
 
-  function setSession(token, user) {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(USER_KEY, JSON.stringify(user || null));
+  function setSession(user) {
+    state.sessionUser = user || null;
+    state.sessionResolved = true;
+    syncAccountChrome();
   }
 
   function clearSession() {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    state.sessionUser = null;
+    state.sessionResolved = true;
+    syncAccountChrome();
+  }
+
+  function syncAccountChrome() {
+    const user = getUser();
+    pel.guestActions.classList.toggle('hidden', Boolean(user));
+    pel.signedInActions.classList.toggle('hidden', !user);
+    pel.globalUserLabel.textContent = user ? (user.email || user.name || 'Signed in') : '';
+  }
+
+  function csrfToken() {
+    const prefix = 'argus_csrf=';
+    const cookie = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(prefix));
+    return cookie ? cookie.slice(prefix.length) : '';
   }
 
   /** Raised when the server rejects our bearer token; the caller stops quietly. */
@@ -135,30 +271,27 @@
     }
   }
 
-  /**
-   * apiProjects mirrors app.js's api() helper but sends the project bearer
-   * token instead of the legacy X-API-Key, and surfaces the server's JSON
-   * "error" field as the thrown message so the UI can show something useful.
-   */
+  /** Cookie-authenticated project API client. The session identifier is
+   * HttpOnly and never appears in JavaScript storage or request headers. */
   async function apiProjects(path, options = {}) {
-    const token = getToken();
-    if (!token) throw new SessionExpired();
-
-    const headers = { Authorization: `Bearer ${token}`, ...(options.headers || {}) };
+    const headers = { ...(options.headers || {}) };
     if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
       headers['Content-Type'] = 'application/json';
+    }
+    if (!['GET', 'HEAD', 'OPTIONS'].includes((options.method || 'GET').toUpperCase())) {
+      headers['X-CSRF-Token'] = csrfToken();
     }
 
     let res;
     try {
-      res = await fetch(`/api${path}`, { ...options, headers });
+	  res = await fetch(path, { ...options, headers, credentials: 'same-origin' });
     } catch (networkErr) {
       throw new Error(`Network error: ${networkErr.message}`);
     }
 
     if (res.status === 401) {
       clearSession();
-      renderAuthGate();
+      navigate(authHash('login', window.location.hash));
       throw new SessionExpired();
     }
     if (res.status === 204) return null;
@@ -264,7 +397,17 @@
 
   function parseHash() {
     const hash = window.location.hash.replace(/^#/, '');
-    const parts = hash.split('/').filter(Boolean);
+    const [path, query = ''] = hash.split('?', 2);
+    const parts = path.split('/').filter(Boolean);
+    if (parts.length === 1 && parts[0] === 'account') return { name: 'account' };
+    if (parts.length === 1 && parts[0] === 'recover') return { name: 'recovery' };
+    if (parts.length === 1 && (parts[0] === 'login' || parts[0] === 'register')) {
+      return {
+        name: 'auth',
+        mode: parts[0] === 'register' ? 'register' : 'login',
+        returnTo: validatedReturnTo(new URLSearchParams(query).get('returnTo')),
+      };
+    }
     if (parts[0] !== 'projects') return null;
     if (parts.length === 1) return { name: 'list' };
     const projectId = Number(parts[1]);
@@ -276,6 +419,21 @@
       if (Number.isInteger(routeId) && routeId > 0) return { name: 'route', projectId, routeId };
     }
     return { name: 'project', projectId };
+  }
+
+  function validatedReturnTo(value) {
+    if (typeof value !== 'string' || !value.startsWith('#/projects')) return null;
+    const parsed = value.slice(1).split('?', 1)[0].split('/').filter(Boolean);
+    if (parsed[0] !== 'projects') return null;
+    if (parsed.length > 4 || (parsed[1] && (!/^\d+$/.test(parsed[1]) || Number(parsed[1]) <= 0))) return null;
+    if (parsed[2] && parsed[2] !== 'routes' && parsed[2] !== 'import') return null;
+    if (parsed[2] === 'routes' && (!parsed[3] || !/^\d+$/.test(parsed[3]) || Number(parsed[3]) <= 0)) return null;
+    return value;
+  }
+
+  function authHash(mode, returnTo = null) {
+    const safeReturnTo = validatedReturnTo(returnTo);
+    return `#/${mode}${safeReturnTo ? `?returnTo=${encodeURIComponent(safeReturnTo)}` : ''}`;
   }
 
   function navigate(hash) {
@@ -325,17 +483,48 @@
     const parsed = parseHash();
     if (!parsed) return; // Not our hash; leave the other tabs alone.
 
+    if (parsed.name === 'auth') {
+      renderAuthGate(parsed.mode, parsed.returnTo);
+      if (getUser()) navigate(parsed.returnTo || '#/projects');
+      else if (!state.sessionResolved) restoreSession();
+      return;
+    }
+
+    if (parsed.name === 'recovery') {
+      if (getUser()) {
+        navigate('#/account');
+        return;
+      }
+      renderRecovery();
+      if (!state.sessionResolved) restoreSession();
+      return;
+    }
+
+    if (parsed.name === 'account') {
+      if (!getUser()) {
+        if (!state.sessionResolved) restoreSession();
+        navigate(authHash('login'));
+        return;
+      }
+      renderAccount();
+      return;
+    }
+
+    document.body.classList.remove('identity-route');
+    pel.globalAuthPanel.classList.add('hidden');
+    pel.globalAccountPanel.classList.add('hidden');
+
     if (pel.tab && !pel.tab.classList.contains('active') && typeof activateTab === 'function') {
       activateTab(pel.tab);
     }
     state.route = parsed;
     renderCrumbs();
 
-    if (!getToken()) {
-      renderAuthGate();
+    if (!getUser()) {
+      if (!state.sessionResolved) restoreSession();
+      navigate(authHash('login', window.location.hash));
       return;
     }
-    pel.authGate.classList.add('hidden');
     pel.shell.classList.remove('hidden');
     pel.userLabel.textContent = (getUser() && (getUser().email || getUser().name)) || '';
 
@@ -369,6 +558,13 @@
       project: null,
       series: null,
       incidents: [],
+      environments: [],
+      telemetryIngress: [],
+      telemetryMappings: [],
+      slos: [],
+      heartbeats: [],
+agents: [],
+agentAssignments: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -399,26 +595,99 @@
 
   /* ------------------------------------------------------------- auth gate */
 
-  function renderAuthGate() {
+  function renderAuthGate(mode = 'login', returnTo = null) {
     stopAutoRefresh();
     pel.shell.classList.add('hidden');
+    state.authReturnTo = validatedReturnTo(returnTo);
+    document.body.classList.add('identity-route');
+    pel.globalAuthPanel.classList.remove('hidden');
+    pel.globalAccountPanel.classList.add('hidden');
     pel.authGate.classList.remove('hidden');
-    setAuthMode(state.authMode);
+    pel.recoveryGate.classList.add('hidden');
+    setAuthMode(mode);
+  }
+
+  function renderRecovery() {
+    stopAutoRefresh();
+    document.body.classList.add('identity-route');
+    pel.globalAuthPanel.classList.remove('hidden');
+    pel.globalAccountPanel.classList.add('hidden');
+    pel.authGate.classList.add('hidden');
+    pel.recoveryGate.classList.remove('hidden');
+    pel.shell.classList.add('hidden');
+    pel.recoveryCompleteForm.classList.add('hidden');
+    hideFormError(pel.recoveryRequestError);
+    hideFormError(pel.recoveryCompleteError);
   }
 
   function setAuthMode(mode) {
     state.authMode = mode;
     const registering = mode === 'register';
-    pel.authTitle.textContent = registering ? 'Create an API Projects account' : 'Sign in to API Projects';
+    pel.authTitle.textContent = registering ? 'Create your Argus account' : 'Sign in to Argus';
     pel.authIntro.textContent = registering
-      ? 'Your account owns the projects you create and is separate from the uptime dashboard API key.'
-      : "API route monitoring uses its own account, separate from the uptime dashboard's API key.";
+      ? 'Your account owns the private monitoring projects you create.'
+      : 'Sign in to create and manage private monitoring projects.';
     pel.authNameField.hidden = !registering;
     pel.authSubmit.textContent = registering ? 'Create account' : 'Sign in';
     pel.authPassword.autocomplete = registering ? 'new-password' : 'current-password';
     pel.authSwitchPrompt.textContent = registering ? 'Already have an account?' : 'No account yet?';
     pel.authSwitch.textContent = registering ? 'Sign in instead' : 'Create one';
     hideFormError(pel.authError);
+  }
+
+  function renderAccount() {
+    stopAutoRefresh();
+    document.body.classList.add('identity-route');
+    pel.globalAuthPanel.classList.add('hidden');
+    pel.globalAccountPanel.classList.remove('hidden');
+    pel.shell.classList.add('hidden');
+    pel.accountEmail.textContent = (getUser() && (getUser().email || getUser().name)) || '';
+    hideFormError(pel.accountPasswordError);
+    loadAccountSessions();
+  }
+
+  function sessionTime(value) {
+    if (!value) return 'Not used yet';
+    if (typeof relativeTime === 'function') return relativeTime(value);
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Unknown time' : date.toLocaleString();
+  }
+
+  function renderAccountSessions() {
+    const sessions = state.account.sessions;
+    if (!sessions) {
+      pel.accountSessions.innerHTML = '<div class="empty-state"><span>Loading active sessions…</span></div>';
+      return;
+    }
+    if (!sessions.length) {
+      pel.accountSessions.innerHTML = '<div class="empty-state"><span>No active sessions found.</span></div>';
+      return;
+    }
+    pel.accountSessions.innerHTML = `<div class="account-session-list">${sessions.map((session) => `
+      <div class="account-session">
+        <div>
+          <strong>${escapeHtml(session.current ? 'This session' : (session.name || 'Session'))}</strong>
+          <span>Last active ${escapeHtml(sessionTime(session.lastUsedAt || session.createdAt))}</span>
+        </div>
+        ${session.current ? '<span class="badge status-up">Current</span>' : '<span class="badge status-pending">Active</span>'}
+      </div>`).join('')}</div>`;
+  }
+
+  async function loadAccountSessions() {
+    if (state.account.loading) return;
+    state.account.loading = true;
+    renderAccountSessions();
+    try {
+	  const result = await apiProjects('/identity/sessions');
+      state.account.sessions = result.sessions || [];
+      renderAccountSessions();
+    } catch (err) {
+      if (!(err instanceof SessionExpired)) {
+        pel.accountSessions.innerHTML = `<div class="empty-state is-error"><strong>Could not load sessions</strong><span>${escapeHtml(err.message)}</span></div>`;
+      }
+    } finally {
+      state.account.loading = false;
+    }
   }
 
   function showFormError(node, message) {
@@ -431,7 +700,10 @@
     node.classList.add('hidden');
   }
 
-  pel.authSwitch.addEventListener('click', () => setAuthMode(state.authMode === 'login' ? 'register' : 'login'));
+  pel.authSwitch.addEventListener('click', () => {
+    navigate(authHash(state.authMode === 'login' ? 'register' : 'login', state.authReturnTo));
+  });
+  pel.forgotPassword.addEventListener('click', () => navigate('#/recover'));
 
   pel.authForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -445,7 +717,7 @@
 
     setButtonLoading(pel.authSubmit, true, registering ? 'Creating...' : 'Signing in...');
     try {
-      const res = await fetch(`/api/auth/${registering ? 'register' : 'login'}`, {
+	  const res = await fetch(`/identity/${registering ? 'register' : 'login'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -461,11 +733,10 @@
         showFormError(pel.authError, (payload && payload.error) || `Request failed (${res.status})`);
         return;
       }
-      setSession(payload.token, payload.user);
+      setSession(payload.user);
       pel.authPassword.value = '';
       showToast(registering ? 'Account created. Welcome to API Projects.' : 'Signed in.', 'success');
-      navigate('#/projects');
-      handleRoute();
+      navigate(state.authReturnTo || '#/projects');
     } catch (err) {
       showFormError(pel.authError, `Network error: ${err.message}`);
     } finally {
@@ -473,16 +744,118 @@
     }
   });
 
-  pel.signOut.addEventListener('click', async () => {
+  pel.recoveryRequestForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.recoveryRequestError);
+    setButtonLoading(pel.recoveryRequestSubmit, true, 'Sending...');
     try {
-      await apiProjects('/auth/logout', { method: 'POST' });
+      const response = await fetch('/identity/recovery/request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pel.recoveryEmail.value.trim() }),
+      });
+      if (!response.ok) throw new Error(`Request failed (${response.status})`);
+      pel.recoveryCompleteForm.classList.remove('hidden');
+      pel.recoveryToken.focus();
+      showToast('If recovery is available for that account, instructions have been sent.', 'info');
+    } catch (err) {
+      showFormError(pel.recoveryRequestError, `Network error: ${err.message}`);
+    } finally {
+      setButtonLoading(pel.recoveryRequestSubmit, false);
+    }
+  });
+
+  pel.recoveryCompleteForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.recoveryCompleteError);
+    setButtonLoading(pel.recoveryCompleteSubmit, true, 'Updating...');
+    try {
+      const response = await fetch('/identity/recovery/complete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: pel.recoveryToken.value.trim(), newPassword: pel.recoveryNewPassword.value }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error((payload && payload.error) || `Request failed (${response.status})`);
+      }
+      pel.recoveryToken.value = '';
+      pel.recoveryNewPassword.value = '';
+      showToast('Password updated. Sign in with your new password.', 'success');
+      navigate('#/login');
+    } catch (err) {
+      showFormError(pel.recoveryCompleteError, err.message);
+    } finally {
+      setButtonLoading(pel.recoveryCompleteSubmit, false);
+    }
+  });
+
+  pel.accountPasswordForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.accountPasswordError);
+    setButtonLoading(pel.accountPasswordSubmit, true, 'Changing...');
+    try {
+	  await apiProjects('/identity/password', {
+        method: 'POST',
+        body: JSON.stringify({
+          currentPassword: pel.accountCurrentPassword.value,
+          newPassword: pel.accountNewPassword.value,
+        }),
+      });
+      pel.accountCurrentPassword.value = '';
+      pel.accountNewPassword.value = '';
+      showToast('Password changed. Other sessions were signed out.', 'success');
+      state.account.sessions = null;
+      loadAccountSessions();
+    } catch (err) {
+      if (!(err instanceof SessionExpired)) showFormError(pel.accountPasswordError, err.message);
+    } finally {
+      setButtonLoading(pel.accountPasswordSubmit, false);
+    }
+  });
+
+  pel.accountRevokeOthers.addEventListener('click', async () => {
+    if (!window.confirm('Revoke every other active session?')) return;
+    setButtonLoading(pel.accountRevokeOthers, true, 'Revoking...');
+    try {
+	  await apiProjects('/identity/sessions/revoke-others', { method: 'POST' });
+      state.account.sessions = null;
+      await loadAccountSessions();
+      showToast('Other active sessions were revoked.', 'success');
+    } catch (err) {
+      reportError('Could not revoke other sessions', err);
+    } finally {
+      setButtonLoading(pel.accountRevokeOthers, false);
+    }
+  });
+
+  async function signOut() {
+    try {
+	  await apiProjects('/identity/logout', { method: 'POST' });
     } catch {
       // A failed logout still clears the local session.
     }
     clearSession();
     showToast('Signed out of API Projects.', 'info');
-    renderAuthGate();
-  });
+    navigate(authHash('login'));
+  }
+
+  pel.signOut.addEventListener('click', signOut);
+  pel.globalSignOut.addEventListener('click', signOut);
+
+  async function restoreSession() {
+    if (state.sessionResolved) return;
+    try {
+	  const res = await fetch('/identity/profile', { credentials: 'same-origin' });
+      if (res.ok) {
+        const payload = await res.json();
+        setSession(payload.user);
+      } else {
+        clearSession();
+      }
+    } catch {
+      clearSession();
+    }
+    handleRoute();
+  }
 
   /* ------------------------------------------------------ projects list view */
 
@@ -492,7 +865,7 @@
     if (!state.list.data) pel.viewList.innerHTML = listShellHtml(skeletonCards());
     try {
       const res = await apiProjects(
-        `/projects${qs({ search: state.list.search, status: state.list.status, limit: state.list.limit, offset: state.list.offset })}`
+		`/project/catalog${qs({ search: state.list.search, status: state.list.status, limit: state.list.limit, offset: state.list.offset })}`
       );
       state.list.data = res.items || [];
       state.list.total = res.total || 0;
@@ -645,17 +1018,33 @@
     }
     try {
       const p = state.project;
-      const [project, series, incidents, routes] = await Promise.all([
-        apiProjects(`/projects/${id}`),
-        apiProjects(`/projects/${id}/metrics/timeseries${qs({ range: p.range })}`),
-        apiProjects(`/projects/${id}/incidents${qs({ limit: 15 })}`),
-        apiProjects(`/projects/${id}/routes${routeQuery(p)}`),
+	  const [project, series, incidents, projectIncidents, routes, environments, telemetryIngress, telemetryMappings, slos, heartbeats, agents, agentAssignments] = await Promise.all([
+		apiProjects(`/project/catalog/${id}`),
+		apiProjects(`/route/metrics/${id}${qs({ range: p.range })}`),
+		apiProjects(`/route/incidents/${id}${qs({ limit: 15 })}`),
+		apiProjects(`/incident/catalog/${id}${qs({ limit: 15 })}`),
+		apiProjects(`/route/catalog/${id}${routeQuery(p)}`),
+		apiProjects(`/environment/catalog/${id}`),
+		apiProjects(`/telemetry/ingress/${id}${qs({ limit: 20 })}`),
+		apiProjects(`/telemetry/mappings/${id}`),
+		apiProjects(`/slo/catalog/${id}`),
+		apiProjects(`/heartbeat/catalog/${id}`),
+apiProjects(`/agent/catalog/${id}`),
+apiProjects(`/agent/assignments/${id}`),
       ]);
       state.project.project = project;
       state.project.series = series;
       state.project.incidents = incidents || [];
+	  state.project.projectIncidents = projectIncidents.items || [];
       state.project.routes = routes.items || [];
       state.project.routesTotal = routes.total || 0;
+      state.project.environments = environments.items || [];
+	  state.project.telemetryIngress = telemetryIngress.items || [];
+	  state.project.telemetryMappings = telemetryMappings.items || [];
+	  state.project.slos = slos.items || [];
+	  state.project.heartbeats = heartbeats.items || [];
+      state.project.agents = agents.items || [];
+      state.project.agentAssignments = agentAssignments.items || [];
       renderCrumbs();
       renderProjectDetail();
     } catch (err) {
@@ -739,6 +1128,50 @@
       </section>
 
       <section class="card">
+        <div class="card-header"><h2>Environments</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-environment">Add environment</button>' : ''}</div>
+        ${state.project.environments.length ? `<div class="list">${state.project.environments.map((env) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(env.name)}</span><span class="list-item-meta">${escapeHtml(env.canonicalBaseUrl || 'Base URL not configured')}</span></div>${env.isDefault ? '<span class="badge status-up">default</span>' : ''}${canEdit ? `<button class="secondary sm" type="button" data-action="edit-environment" data-id="${Number(env.id)}">Edit</button>` : ''}</div>`).join('')}</div>` : '<div class="empty-state"><span>No environments configured.</span></div>'}
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Telemetry signals</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-telemetry-credential">Create OTLP credential</button>' : ''}</div>
+        <p class="hint">Recent accepted OTLP resource groups. Only safe service and deployment labels are shown; raw telemetry is not displayed here.</p>
+        ${telemetryIngressHtml(state.project.telemetryIngress)}
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Telemetry route mappings</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-telemetry-mapping">Create mapping</button>' : ''}</div>
+        <p class="hint">A mapping joins one trusted telemetry identity to one project route. It does not infer tenant ownership from incoming telemetry.</p>
+        ${telemetryMappingsHtml(state.project.telemetryMappings, canEdit)}
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Service-level objectives</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-slo">Create SLO</button>' : ''}</div>
+        <p class="hint">Objectives are calculated from project-scoped telemetry. No-data, stale, maintenance, and configuration errors are never presented as healthy.</p>
+        ${sloDefinitionsHtml(state.project.slos)}
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Heartbeats</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-heartbeat">Create heartbeat</button>' : ''}</div>
+        <p class="hint">Use a project-bound one-time token for jobs and scheduled workloads. Late and missing runs remain visible; duplicate retries do not refresh liveness.</p>
+        ${heartbeatMonitorsHtml(state.project.heartbeats, canEdit)}
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Private agents</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-agent">Enroll agent</button><button class="secondary sm" type="button" data-action="create-agent-assignment">Create assignment</button>' : ''}</div>
+        <p class="hint">Agents report outbound liveness only. Argus never connects into your private network. The enrollment token is shown once and can be revoked at any time.</p>
+        ${privateAgentsHtml(state.project.agents, canEdit)}
+        <h3 class="section-subheading">Scoped assignments</h3>
+        <p class="hint">Only signed GET/HEAD assignments for the agent’s environment are executed locally. Targets are never dialed by the Argus control plane.</p>
+        ${privateAgentAssignmentsHtml(state.project.agentAssignments, canEdit)}
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Operational incidents</h2></div>
+        <p class="hint">Source-aware incidents cover agents, heartbeats, telemetry, and SLOs. Acknowledgement records ownership but does not suppress automatic recovery.</p>
+        ${projectIncidentsHtml(state.project.projectIncidents, canEdit)}
+      </section>
+
+      <section class="card">
         <div class="card-header">
           <h2>Uptime &amp; response time</h2>
           <div class="card-toolbar">${rangePickerHtml(state.project.range, 'project-range')}</div>
@@ -757,7 +1190,7 @@
 
       <section class="card">
         <div class="card-header"><h2>Incidents</h2></div>
-        ${incidentsListHtml(state.project.incidents, state.project.id)}
+        ${incidentsListHtml(state.project.incidents, state.project.id, canEdit)}
       </section>
 
       <section class="card">
@@ -851,11 +1284,12 @@
           <thead>
             <tr>
               ${canEdit ? `<th class="col-check"><input type="checkbox" data-action="toggle-page-selection" aria-label="Select all routes on this page" ${allOnPageSelected ? 'checked' : ''} /></th>` : ''}
-              ${ROUTE_COLUMNS.map((c) =>
-                c.sortable
-                  ? `<th class="sortable${state.project.sortBy === c.key ? ` sort-active${state.project.sortDir === 'desc' ? ' sort-desc' : ''}` : ''}" data-action="sort-routes" data-sort="${c.key}">${escapeHtml(c.label)}<span class="sort-arrow">&#9662;</span></th>`
-                  : `<th>${escapeHtml(c.label)}</th>`
-              ).join('')}
+              ${ROUTE_COLUMNS.map((c) => {
+                if (!c.sortable) return `<th>${escapeHtml(c.label)}</th>`;
+                const active = state.project.sortBy === c.key;
+                const direction = active ? (state.project.sortDir === 'desc' ? 'descending' : 'ascending') : 'none';
+                return `<th class="sortable${active ? ` sort-active${state.project.sortDir === 'desc' ? ' sort-desc' : ''}` : ''}" aria-sort="${direction}"><button type="button" class="sort-button" data-action="sort-routes" data-sort="${c.key}">${escapeHtml(c.label)}<span class="sort-arrow" aria-hidden="true">&#9662;</span><span class="sr-only">${active ? `, sorted ${direction}` : ', not sorted'}</span></button></th>`;
+              }).join('')}
             </tr>
           </thead>
           <tbody>${body}</tbody>
@@ -890,7 +1324,7 @@
       </tr>`;
   }
 
-  function incidentsListHtml(incidents, projectId) {
+  function incidentsListHtml(incidents, projectId, canEdit = false) {
     if (!incidents.length) {
       return emptyPanel(ICON.incident, 'No incidents recorded', 'An incident opens automatically after a route fails the configured number of consecutive checks.');
     }
@@ -907,12 +1341,79 @@
                 &middot; ${resolved ? `resolved ${escapeHtml(relativeTime(i.resolvedAt))}` : 'ongoing'}
                 &middot; ${escapeHtml(duration)}
                 ${i.lastFailureReason ? `&middot; ${escapeHtml(i.lastFailureReason)}` : ''}
+                ${i.source ? `&middot; source ${escapeHtml(i.source)}` : ''}
               </span>
             </div>
-            <span class="badge status-${resolved ? 'resolved' : 'open'}"><span class="lamp"></span>${escapeHtml(i.state)}</span>
+            <div class="row-actions"><span class="badge status-${resolved ? 'resolved' : 'open'}"><span class="lamp"></span>${escapeHtml(i.state)}</span>${canEdit && i.state === 'open' ? `<button class="secondary sm" type="button" data-action="acknowledge-incident" data-id="${i.id}">Acknowledge</button>` : ''}</div>
           </li>`;
       })
       .join('')}</ul>`;
+  }
+
+  function telemetryIngressHtml(records) {
+    if (!records.length) {
+      return emptyPanel(ICON.route, 'No telemetry received yet', 'Create a telemetry credential and point an OpenTelemetry exporter at this Argus instance.');
+    }
+    return `<ul class="list">${records.map((record) => `
+      <li class="list-item">
+        <div class="list-item-main">
+          <span class="list-item-title">${escapeHtml(record.serviceName || 'Unnamed service')}</span>
+          <span class="list-item-meta">${escapeHtml(record.deploymentEnvironment || 'Deployment not declared')} &middot; ${num(record.itemCount, '0')} item${record.itemCount === 1 ? '' : 's'} &middot; ${record.receivedAt ? escapeHtml(relativeTime(record.receivedAt)) : 'time unavailable'}</span>
+        </div>
+        <span class="badge ${record.signalType === 'traces' ? 'route-unknown' : 'status-up'}">${escapeHtml(record.signalType || 'signal')}</span>
+      </li>`).join('')}</ul>`;
+  }
+
+  function telemetryMappingsHtml(mappings, canEdit) {
+    if (!mappings.length) {
+      return emptyPanel(ICON.route, 'No telemetry mappings yet', 'Map a trusted service and environment identity to a catalog route after telemetry is arriving.');
+    }
+    return `<div class="list">${mappings.map((mapping) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(mapping.serviceName)} → ${escapeHtml(mapping.httpMethod)} ${escapeHtml(mapping.routeTemplate)}</span><span class="list-item-meta">environment #${num(mapping.environmentId)}${mapping.deploymentEnvironment ? ` &middot; deployment ${escapeHtml(mapping.deploymentEnvironment)}` : ''} &middot; ${escapeHtml(mapping.source || 'manual')}</span></div>${canEdit ? `<button class="danger sm" type="button" data-action="delete-telemetry-mapping" data-id="${mapping.id}">Delete</button>` : ''}</div>`).join('')}</div>`;
+  }
+
+  function sloDefinitionsHtml(definitions) {
+    if (!definitions.length) {
+      return emptyPanel(ICON.incident, 'No SLOs configured', 'Create an availability or latency objective after connecting telemetry. Missing data will remain visible as no data.');
+    }
+    return `<div class="list">${definitions.map((definition) => {
+      const windowDays = Math.round(definition.windowSeconds / 86400);
+      const indicator = definition.sliKind === 'latency'
+        ? `latency below ${num(definition.latencyThresholdMs)} ms`
+        : 'availability';
+      return `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(definition.name)}</span><span class="list-item-meta">${escapeHtml(indicator)} &middot; ${Number(definition.targetPercent).toFixed(3).replace(/\.?(0+)$/, '')}% target &middot; ${windowDays}-day window &middot; ${num(definition.minEvents, '0')} minimum events</span></div><span class="proj-chip is-muted">v${num(definition.version, '1')}</span></div>`;
+    }).join('')}</div>`;
+  }
+
+  function heartbeatMonitorsHtml(monitors, canEdit) {
+    if (!monitors.length) return emptyPanel(ICON.route, 'No heartbeat monitors configured', 'Create a heartbeat for a job or scheduled workload, then send its first signed ping.');
+    return `<div class="list">${monitors.map((monitor) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(monitor.name)}</span><span class="list-item-meta">every ${num(Math.round(monitor.expectedIntervalSeconds / 60))} min + ${num(Math.round(monitor.gracePeriodSeconds / 60))} min grace &middot; ${monitor.lastReceivedAt ? `last seen ${escapeHtml(relativeTime(monitor.lastReceivedAt))}` : 'no signal received'}</span></div><div class="row-actions"><span class="badge ${monitor.lastOutcome === 'healthy' ? 'status-up' : monitor.lastOutcome === 'late' ? 'route-degraded' : 'route-unknown'}">${escapeHtml(monitor.lastOutcome || 'missing')}</span>${canEdit && !monitor.revokedAt ? `<button class="danger sm" type="button" data-action="revoke-heartbeat" data-id="${monitor.id}">Revoke</button>` : ''}</div></div>`).join('')}</div>`;
+  }
+
+  function privateAgentsHtml(agents, canEdit) {
+    if (!agents.length) return emptyPanel(ICON.route, 'No private agents enrolled', 'Enroll an environment-local agent when a target cannot be safely reached from the public control plane.');
+    return `<div class="list">${agents.map((agent) => {
+      const tone = agent.status === 'healthy' ? 'status-up' : agent.status === 'stale' ? 'route-degraded' : agent.status === 'revoked' ? 'status-resolved' : 'route-unknown';
+      const interval = agent.expectedIntervalSeconds >= 60 ? `${num(Math.round(agent.expectedIntervalSeconds / 60))} min` : `${num(agent.expectedIntervalSeconds)} sec`;
+      return `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(agent.name)}</span><span class="list-item-meta">environment #${num(agent.environmentId)} &middot; every ${interval} &middot; ${agent.lastSeenAt ? `last seen ${escapeHtml(relativeTime(agent.lastSeenAt))}` : 'no signal received'}${agent.version ? ` &middot; version ${escapeHtml(agent.version)}` : ''}</span></div><div class="row-actions"><span class="badge ${tone}">${escapeHtml(agent.status || 'offline')}</span>${canEdit && !agent.revokedAt ? `<button class="danger sm" type="button" data-action="revoke-agent" data-id="${agent.id}">Revoke</button>` : ''}</div></div>`;
+    }).join('')}</div>`;
+  }
+
+  function privateAgentAssignmentsHtml(assignments, canEdit) {
+    if (!assignments.length) return emptyPanel(ICON.route, 'No private-agent assignments', 'Create an assignment through the authenticated API to permit a narrowly scoped local GET or HEAD check.');
+    return `<div class="list">${assignments.map((assignment) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(assignment.name)}</span><span class="list-item-meta">${escapeHtml(assignment.method)} &middot; environment #${num(assignment.environmentId)} &middot; every ${num(assignment.intervalSeconds)} sec &middot; ${num(assignment.timeoutMs)} ms timeout</span></div><div class="row-actions"><span class="badge ${assignment.revokedAt || !assignment.enabled ? 'status-resolved' : 'status-up'}">${assignment.revokedAt || !assignment.enabled ? 'revoked' : 'enabled'}</span>${canEdit && !assignment.revokedAt ? `<button class="danger sm" type="button" data-action="revoke-agent-assignment" data-id="${assignment.id}">Revoke</button>` : ''}</div></div>`).join('')}</div>`;
+  }
+
+  function projectIncidentsHtml(incidents, canEdit) {
+    if (!incidents.length) return emptyPanel(ICON.incident, 'No operational incidents', 'Agent, heartbeat, telemetry, and SLO problems will appear here with their source and evidence.');
+    return `<div class="list">${incidents.map((incident) => {
+      const tone = incident.state === 'resolved' ? 'status-resolved' : incident.state === 'acknowledged' ? 'route-degraded' : 'route-failing';
+      let evidence = '';
+      try {
+        const parsed = JSON.parse(incident.evidence || '{}');
+        if (parsed.livenessState) evidence = ` &middot; state ${escapeHtml(parsed.livenessState)}`;
+      } catch (_) { /* Evidence stays intentionally opaque if it is not structured JSON. */ }
+      return `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(incident.title || 'Operational incident')}</span><span class="list-item-meta">${escapeHtml(incident.source || 'unknown source')} &middot; opened ${incident.startedAt ? escapeHtml(relativeTime(incident.startedAt)) : 'at an unknown time'}${evidence}</span></div><div class="row-actions"><span class="badge ${tone}">${escapeHtml(incident.state || 'open')}</span>${canEdit && incident.state === 'open' ? `<button class="secondary sm" type="button" data-action="acknowledge-project-incident" data-id="${incident.id}">Acknowledge</button>` : ''}</div></div>`;
+    }).join('')}</div>`;
   }
 
   function formatDuration(msTotal) {
@@ -956,11 +1457,11 @@
     }
     try {
       const [route, checks, incidents, series, project] = await Promise.all([
-        apiProjects(`/projects/${projectId}/routes/${routeId}`),
-        apiProjects(`/projects/${projectId}/routes/${routeId}/checks${qs({ limit: 100 })}`),
-        apiProjects(`/projects/${projectId}/incidents${qs({ routeId, limit: 20 })}`),
-        apiProjects(`/projects/${projectId}/metrics/timeseries${qs({ range: state.routeDetail.range, routeId })}`),
-        state.project.project && state.project.id === projectId ? Promise.resolve(state.project.project) : apiProjects(`/projects/${projectId}`),
+		apiProjects(`/route/catalog/${projectId}/${routeId}`),
+		apiProjects(`/route/checks/${projectId}/${routeId}${qs({ limit: 100 })}`),
+		apiProjects(`/route/incidents/${projectId}${qs({ routeId, limit: 20 })}`),
+		apiProjects(`/route/metrics/${projectId}${qs({ range: state.routeDetail.range, routeId })}`),
+		state.project.project && state.project.id === projectId ? Promise.resolve(state.project.project) : apiProjects(`/project/catalog/${projectId}`),
       ]);
       state.routeDetail.route = route;
       state.routeDetail.checks = checks || [];
@@ -1133,7 +1634,7 @@
 
       <section class="card">
         <div class="card-header"><h2>Incidents for this route</h2></div>
-        ${incidentsListHtml(state.routeDetail.incidents, state.routeDetail.projectId)}
+        ${incidentsListHtml(state.routeDetail.incidents, state.routeDetail.projectId, canEdit)}
       </section>`;
 
     drawSeriesCharts('routeUptimeChart', 'routeLatencyChart', state.routeDetail.series);
@@ -1379,9 +1880,9 @@
           const fd = new FormData();
           fd.append('file', file);
           if (baseUrl.value.trim()) fd.append('baseUrlOverride', baseUrl.value.trim());
-          job = await apiProjects(`/projects/${state.importer.projectId}/imports/validate`, { method: 'POST', body: fd });
+		  job = await apiProjects(`/import/validation/${state.importer.projectId}`, { method: 'POST', body: fd });
         } else {
-          job = await apiProjects(`/projects/${state.importer.projectId}/imports/validate`, {
+		  job = await apiProjects(`/import/validation/${state.importer.projectId}`, {
             method: 'POST',
             body: JSON.stringify({ spec: pastedText, baseUrlOverride: baseUrl.value.trim() }),
           });
@@ -1574,7 +2075,7 @@
         selected: !!state.importer.selections.get(item.key),
         action: item.action,
       }));
-      const result = await apiProjects(`/projects/${state.importer.projectId}/imports/${job.id}/commit`, {
+	  const result = await apiProjects(`/import/commit/${state.importer.projectId}/${job.id}`, {
         method: 'POST',
         body: JSON.stringify({ selections }),
       });
@@ -1600,27 +2101,65 @@
   function openModal(overlay) {
     modalReturnFocus = document.activeElement;
     overlay.classList.remove('hidden');
-    const focusable = overlay.querySelector('input:not([type="hidden"]), select, textarea, button');
+    syncModalBackground();
+    const focusable = focusableIn(overlay)[0];
     if (focusable) focusable.focus();
   }
 
   function closeModal(overlay) {
     overlay.classList.add('hidden');
+    syncModalBackground();
     if (modalReturnFocus && typeof modalReturnFocus.focus === 'function') modalReturnFocus.focus();
     modalReturnFocus = null;
   }
 
-  [pel.projectModal, pel.routeModal, pel.bulkModal, pel.confirmModal].forEach((overlay) => {
+  function focusableIn(overlay) {
+    return [...overlay.querySelectorAll('button:not([disabled]), [href], input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => !element.closest('[hidden], .hidden'));
+  }
+
+  function activeProjectModal() {
+    return projectModals.find((overlay) => !overlay.classList.contains('hidden')) || null;
+  }
+
+  function syncModalBackground() {
+    const hasProjectModal = Boolean(activeProjectModal());
+    const topbar = document.querySelector('.topbar');
+    const main = document.getElementById('main');
+    if (topbar) topbar.inert = hasProjectModal;
+    if (main) main.inert = hasProjectModal;
+  }
+
+  projectModals.forEach((overlay) => {
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) closeModal(overlay);
+      if (e.target !== overlay) return;
+      if (overlay === pel.telemetrySecretModal) closeTelemetrySecret();
+      else if (overlay === pel.heartbeatSecretModal) closeHeartbeatSecret();
+      else closeModal(overlay);
     });
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    [pel.projectModal, pel.routeModal, pel.bulkModal, pel.confirmModal].forEach((overlay) => {
-      if (!overlay.classList.contains('hidden')) closeModal(overlay);
-    });
+    const overlay = activeProjectModal();
+    if (!overlay) return;
+    if (e.key === 'Escape') {
+      if (overlay === pel.telemetrySecretModal) closeTelemetrySecret();
+      else if (overlay === pel.heartbeatSecretModal) closeHeartbeatSecret();
+      else closeModal(overlay);
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const focusable = focusableIn(overlay);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
   });
 
   function askConfirm({ title, body, confirmLabel = 'Confirm', danger = true }, onConfirm) {
@@ -1656,28 +2195,547 @@
 
   let editingProjectId = null;
 
+  function readOnboardingDraft() {
+    try {
+      const draft = JSON.parse(localStorage.getItem(ONBOARDING_DRAFT_KEY) || '{}');
+      return draft && typeof draft === 'object' ? draft : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveOnboardingDraft() {
+    if (editingProjectId || state.onboarding.createdProject) return;
+    const selected = document.querySelector('input[name="projSource"]:checked');
+    try {
+      localStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify({
+        name: document.getElementById('projFormName').value.trim(),
+        description: document.getElementById('projFormDescription').value.trim(),
+        environmentName: document.getElementById('projFormEnvironmentName').value.trim(),
+        environmentBaseUrl: document.getElementById('projFormEnvironmentBaseUrl').value.trim(),
+        source: selected ? selected.value : 'telemetry',
+      }));
+    } catch (_) {
+      // Draft preservation is a convenience only; project creation remains server-authoritative.
+    }
+  }
+
+  function clearOnboardingDraft() {
+    try { localStorage.removeItem(ONBOARDING_DRAFT_KEY); } catch (_) { /* ignore unavailable storage */ }
+  }
+
+  function selectedOnboardingSource() {
+    const selected = document.querySelector('input[name="projSource"]:checked');
+    return selected ? selected.value : 'telemetry';
+  }
+
+  function sourceSummary(source) {
+    return {
+      telemetry: ['OpenTelemetry', 'Create an environment and issue a scoped OTLP credential. Argus will receive passive metrics; it will not probe your service.'],
+      openapi: ['OpenAPI catalog', 'Import a specification after creation. It adds catalog entries only and sends zero requests to imported operations.'],
+      synthetic: ['Synthetic check', 'Create a disabled GET or HEAD canary after creation, then review its target and request budget before enabling it.'],
+      heartbeat: ['Heartbeat', 'Create a project first; heartbeat setup is the next recommended action for jobs and scheduled workloads.'],
+      sample: ['Sample data', 'This guided evaluation option is non-production only. It does not connect to or report health for your service.'],
+      later: ['Do this later', 'Create a project with no connected signal. You can connect telemetry, an OpenAPI catalog, a safe canary, or a heartbeat later.'],
+    }[source] || ['Monitoring source', 'Connect a monitoring source after the project is created.'];
+  }
+
+  function setOnboardingStep(step) {
+    state.onboarding.step = step;
+    const isEdit = Boolean(editingProjectId);
+    pel.projectSteps.classList.toggle('hidden', isEdit);
+    pel.projectAdvanced.classList.toggle('hidden', !isEdit);
+    pel.projectForm.querySelectorAll('[data-project-step]').forEach((section) => {
+      section.classList.toggle('hidden', isEdit || Number(section.dataset.projectStep) !== step);
+    });
+    pel.projectSteps.querySelectorAll('.wizard-step').forEach((item, index) => {
+      const current = index + 1 === step;
+      item.classList.toggle('is-active', current);
+      item.classList.toggle('is-done', index + 1 < step);
+      if (current) item.setAttribute('aria-current', 'step');
+      else item.removeAttribute('aria-current');
+    });
+    const created = Boolean(state.onboarding.createdProject);
+    pel.projectBack.classList.toggle('hidden', isEdit || created || step <= 1 || step >= 7);
+    pel.projectCancel.textContent = step === 7 ? 'Close' : 'Cancel';
+    pel.projectSubmit.classList.toggle('hidden', step >= 4);
+    pel.projectSubmit.textContent = isEdit ? 'Save project' : step === 3 ? 'Create project' : 'Continue';
+    if (step === 3) {
+      const [title, detail] = sourceSummary(selectedOnboardingSource());
+      pel.projectReview.replaceChildren();
+      const strong = document.createElement('strong');
+      strong.textContent = title;
+      const p = document.createElement('p');
+      p.textContent = detail;
+      pel.projectReview.append(strong, p);
+    }
+	if (!isEdit && step > 1) {
+		const activeStep = pel.projectForm.querySelector(`[data-project-step="${step}"]`);
+		const title = activeStep && activeStep.querySelector('legend, h4');
+		if (title) {
+			title.tabIndex = -1;
+			title.focus();
+		}
+	}
+  }
+
+  function finishOnboarding(project) {
+    const source = selectedOnboardingSource();
+    const [title, detail] = sourceSummary(source);
+    state.onboarding.createdProject = project;
+    clearOnboardingDraft();
+    pel.projectVerification.replaceChildren();
+    const strong = document.createElement('strong');
+    strong.textContent = `${project.name} was created. Signal verification is still pending.`;
+    const p = document.createElement('p');
+    p.textContent = `${detail} Argus does not treat this project as verified until it receives telemetry, a heartbeat, or an explicitly configured check.`;
+    const link = document.createElement('a');
+    link.className = 'btn-link';
+    link.href = source === 'openapi' ? `#/projects/${project.id}/import` : `#/projects/${project.id}`;
+    link.textContent = source === 'openapi' ? 'Import your OpenAPI catalog' : 'Open project dashboard to connect and verify';
+    const sourceAction = {
+      telemetry: ['Connect OpenTelemetry', openTelemetryCredentialModal],
+      synthetic: ['Create disabled canary', () => openRouteModal(null)],
+      heartbeat: ['Create heartbeat', openHeartbeatModal],
+    }[source];
+    let sourceButton;
+    if (sourceAction) {
+      const connect = document.createElement('button');
+      connect.type = 'button';
+      connect.className = 'secondary sm';
+      connect.textContent = sourceAction[0];
+      connect.addEventListener('click', () => openOnboardingSource(project, sourceAction[1]));
+      sourceButton = connect;
+    }
+    const continueToSLO = document.createElement('button');
+    continueToSLO.type = 'button';
+    continueToSLO.className = 'secondary sm';
+    continueToSLO.textContent = 'Continue to starter SLO';
+    continueToSLO.addEventListener('click', () => setOnboardingStep(5));
+    pel.projectVerification.append(strong, p, ...(sourceButton ? [sourceButton] : []), link, continueToSLO);
+
+    pel.projectSLO.replaceChildren();
+    const sloIntro = document.createElement('p');
+    sloIntro.textContent = 'An availability objective gives the first verified signal a clear service-level target. It remains no data until eligible evidence arrives.';
+    const starterSLO = document.createElement('button');
+    starterSLO.type = 'button';
+    starterSLO.className = 'secondary sm';
+    starterSLO.textContent = 'Create starter availability SLO';
+    starterSLO.addEventListener('click', async () => {
+      setButtonLoading(starterSLO, true, 'Creating...');
+      try {
+        await apiProjects(`/slo/catalog/${project.id}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            name: 'Availability',
+            sliKind: 'availability',
+            targetPercent: 99.9,
+            windowSeconds: 30 * 86400,
+            minEvents: 100,
+          }),
+        });
+        starterSLO.disabled = true;
+        starterSLO.textContent = 'Starter availability SLO created';
+        showToast('Starter availability SLO created. It will remain no data until eligible telemetry arrives.', 'success');
+      } catch (err) {
+        if (!(err instanceof SessionExpired)) showToast(`Could not create the starter SLO: ${err.message}`, 'error');
+        setButtonLoading(starterSLO, false);
+      }
+    });
+    const skipSLO = document.createElement('button');
+    skipSLO.type = 'button';
+    skipSLO.className = 'secondary sm';
+    skipSLO.textContent = 'Continue without an SLO';
+    skipSLO.addEventListener('click', () => setOnboardingStep(6));
+    const continueAfterSLO = document.createElement('button');
+    continueAfterSLO.type = 'button';
+    continueAfterSLO.className = 'secondary sm';
+    continueAfterSLO.textContent = 'Continue to notifications';
+    continueAfterSLO.addEventListener('click', () => setOnboardingStep(6));
+    pel.projectSLO.append(sloIntro, starterSLO, skipSLO, continueAfterSLO);
+
+    pel.projectNotification.replaceChildren();
+    const notificationIntro = document.createElement('p');
+    notificationIntro.textContent = 'Connect a notification channel before relying on incidents. Open the Notifications tab to create a webhook, Slack, or email channel; no channel is silently enabled here.';
+    const finish = document.createElement('button');
+    finish.type = 'button';
+    finish.className = 'secondary sm';
+    finish.textContent = 'Finish setup';
+    finish.addEventListener('click', () => setOnboardingStep(7));
+    pel.projectNotification.append(notificationIntro, finish);
+
+    pel.projectNext.replaceChildren();
+    const complete = document.createElement('strong');
+    complete.textContent = `${project.name} is ready for its first verified signal.`;
+    const completeDetail = document.createElement('p');
+    completeDetail.textContent = 'The dashboard keeps source freshness, SLO state, and incident evidence together. Return after connecting your source to confirm that Argus has received evidence.';
+    pel.projectNext.append(complete, completeDetail, link.cloneNode(true));
+    setOnboardingStep(4);
+  }
+
+  function openOnboardingSource(project, openDialog) {
+    closeModal(pel.projectModal);
+    navigate(`#/projects/${project.id}`);
+    const deadline = Date.now() + 5000;
+    const waitForProject = () => {
+      if (state.project.id === project.id && state.project.project) {
+        openDialog();
+      } else if (Date.now() < deadline) {
+        window.setTimeout(waitForProject, 50);
+      } else {
+        showToast('Project opened. Choose the recommended setup action from its dashboard.', 'info');
+      }
+    };
+    waitForProject();
+  }
+
   function openProjectModal(project) {
     editingProjectId = project ? project.id : null;
     pel.projectModalTitle.textContent = project ? `Edit ${project.name}` : 'New project';
-    document.getElementById('projFormName').value = project ? project.name : '';
-    document.getElementById('projFormDescription').value = project ? project.description || '' : '';
+    const draft = project ? {} : readOnboardingDraft();
+    document.getElementById('projFormName').value = project ? project.name : draft.name || '';
+    document.getElementById('projFormDescription').value = project ? project.description || '' : draft.description || '';
+    document.getElementById('projFormEnvironmentName').value = project ? 'production' : draft.environmentName || 'production';
+    document.getElementById('projFormEnvironmentBaseUrl').value = project ? '' : draft.environmentBaseUrl || '';
     document.getElementById('projFormInterval').value = project ? project.defaultIntervalSeconds : 300;
     document.getElementById('projFormTimeout').value = project ? project.defaultTimeoutMs : 5000;
     document.getElementById('projFormRetries').value = project ? project.defaultRetries : 1;
     document.getElementById('projFormFailureThreshold').value = project ? project.failureThreshold : 3;
     document.getElementById('projFormRecovery').value = project ? project.recoverySuccessThreshold : 1;
+    const source = project ? 'telemetry' : draft.source || 'telemetry';
+    const sourceInput = document.querySelector(`input[name="projSource"][value="${source}"]`);
+    if (sourceInput) sourceInput.checked = true;
+    state.onboarding.createdProject = null;
+    setOnboardingStep(1);
     hideFormError(pel.projectFormError);
     openModal(pel.projectModal);
   }
 
-  pel.projectCancel.addEventListener('click', () => closeModal(pel.projectModal));
+  let editingEnvironmentId = null;
+  function openEnvironmentModal(environment = null) {
+    pel.environmentForm.reset();
+    editingEnvironmentId = environment ? Number(environment.id) : null;
+    document.getElementById('projEnvironmentModalTitle').textContent = environment ? `Edit ${environment.name}` : 'Add environment';
+    pel.environmentSubmit.textContent = environment ? 'Save environment' : 'Create environment';
+    if (environment) {
+      pel.environmentName.value = environment.name || '';
+      pel.environmentBaseURL.value = environment.canonicalBaseUrl || '';
+    }
+    hideFormError(pel.environmentFormError);
+    openModal(pel.environmentModal);
+  }
+
+  pel.environmentCancel.addEventListener('click', () => closeModal(pel.environmentModal));
+  pel.environmentForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.environmentFormError);
+    setButtonLoading(pel.environmentSubmit, true, 'Creating...');
+    try {
+      await apiProjects(`/environment/catalog/${state.project.id}${editingEnvironmentId ? `/${editingEnvironmentId}` : ''}`, {
+        method: editingEnvironmentId ? 'PUT' : 'POST',
+        body: JSON.stringify({ name: pel.environmentName.value, baseUrl: pel.environmentBaseURL.value }),
+      });
+      closeModal(pel.environmentModal);
+      showToast(editingEnvironmentId ? 'Environment updated.' : 'Environment created.', 'success');
+      loadProjectDetail({ silent: true });
+    } catch (err) {
+      if (!(err instanceof SessionExpired)) showFormError(pel.environmentFormError, err.message);
+    } finally {
+      setButtonLoading(pel.environmentSubmit, false);
+    }
+  });
+
+  function openTelemetryCredentialModal() {
+    const environments = state.project.environments || [];
+    pel.telemetryCredentialForm.reset();
+    pel.telemetryCredentialExpiry.value = '90';
+    pel.telemetryCredentialEnvironment.replaceChildren();
+    environments.forEach((environment) => {
+      const option = document.createElement('option');
+      option.value = String(environment.id);
+      option.textContent = environment.isDefault ? `${environment.name} (default)` : environment.name;
+      pel.telemetryCredentialEnvironment.append(option);
+    });
+    pel.telemetryCredentialSubmit.disabled = environments.length === 0;
+    hideFormError(pel.telemetryCredentialFormError);
+    if (!environments.length) showFormError(pel.telemetryCredentialFormError, 'Create an environment before issuing a telemetry credential.');
+    openModal(pel.telemetryCredentialModal);
+  }
+
+  function closeTelemetrySecret() {
+    closeModal(pel.telemetrySecretModal);
+    pel.telemetrySecretValue.value = '';
+  }
+
+  pel.telemetryCredentialCancel.addEventListener('click', () => closeModal(pel.telemetryCredentialModal));
+  pel.telemetryCredentialForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.telemetryCredentialFormError);
+    const expiresInDays = Number(pel.telemetryCredentialExpiry.value);
+    if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365) {
+      showFormError(pel.telemetryCredentialFormError, 'Expiry must be a whole number from 1 to 365 days.');
+      return;
+    }
+    setButtonLoading(pel.telemetryCredentialSubmit, true, 'Creating...');
+    try {
+	  const issued = await apiProjects(`/telemetry/credentials/${state.project.id}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: pel.telemetryCredentialName.value.trim(),
+          environmentId: Number(pel.telemetryCredentialEnvironment.value),
+          expiresInDays,
+        }),
+      });
+      if (!issued || !issued.token) throw new Error('The server did not return a telemetry secret.');
+      closeModal(pel.telemetryCredentialModal);
+      pel.telemetrySecretValue.value = issued.token;
+      openModal(pel.telemetrySecretModal);
+      showToast('Telemetry credential created. Save the secret before closing this dialog.', 'success');
+    } catch (err) {
+      if (!(err instanceof SessionExpired)) showFormError(pel.telemetryCredentialFormError, err.message);
+    } finally {
+      setButtonLoading(pel.telemetryCredentialSubmit, false);
+    }
+  });
+
+  pel.telemetrySecretCopy.addEventListener('click', async () => {
+    const secret = pel.telemetrySecretValue.value;
+    if (!secret) return;
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard access is unavailable');
+      await navigator.clipboard.writeText(secret);
+      showToast('Telemetry secret copied. Keep it out of source control.', 'success');
+    } catch (err) {
+      pel.telemetrySecretValue.focus();
+      pel.telemetrySecretValue.select();
+      showToast('Select and copy the secret manually; browser clipboard access was unavailable.', 'info');
+    }
+  });
+  pel.telemetrySecretClose.addEventListener('click', closeTelemetrySecret);
+
+  function openTelemetryMappingModal() {
+    const { environments, routes } = state.project;
+    pel.telemetryMappingForm.reset();
+    pel.telemetryMappingEnvironment.replaceChildren();
+    pel.telemetryMappingRoute.replaceChildren();
+    environments.forEach((environment) => {
+      const option = document.createElement('option');
+      option.value = String(environment.id);
+      option.textContent = environment.isDefault ? `${environment.name} (default)` : environment.name;
+      pel.telemetryMappingEnvironment.append(option);
+    });
+    routes.forEach((route) => {
+      const option = document.createElement('option');
+      option.value = String(route.id);
+      option.textContent = `${route.method} ${route.path}`;
+      pel.telemetryMappingRoute.append(option);
+    });
+    const unavailable = !environments.length || !routes.length;
+    pel.telemetryMappingSubmit.disabled = unavailable;
+    hideFormError(pel.telemetryMappingFormError);
+    if (unavailable) showFormError(pel.telemetryMappingFormError, 'Create an environment and at least one catalog route before mapping telemetry.');
+    openModal(pel.telemetryMappingModal);
+  }
+
+  pel.telemetryMappingCancel.addEventListener('click', () => closeModal(pel.telemetryMappingModal));
+  pel.telemetryMappingForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.telemetryMappingFormError);
+    const serviceName = pel.telemetryMappingService.value.trim();
+    const environmentID = Number(pel.telemetryMappingEnvironment.value);
+    const routeID = Number(pel.telemetryMappingRoute.value);
+    if (!serviceName || !Number.isInteger(environmentID) || environmentID <= 0 || !Number.isInteger(routeID) || routeID <= 0) {
+      showFormError(pel.telemetryMappingFormError, 'Choose an environment and catalog route, then provide the service name.');
+      return;
+    }
+    setButtonLoading(pel.telemetryMappingSubmit, true, 'Creating...');
+    try {
+      await apiProjects(`/telemetry/mappings/${state.project.id}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          environmentId: environmentID,
+          routeId: routeID,
+          serviceName,
+          deploymentEnvironment: pel.telemetryMappingDeployment.value.trim(),
+        }),
+      });
+      closeModal(pel.telemetryMappingModal);
+      showToast('Telemetry route mapping created.', 'success');
+      loadProjectDetail({ silent: true });
+    } catch (err) {
+      if (!(err instanceof SessionExpired)) showFormError(pel.telemetryMappingFormError, err.message);
+    } finally {
+      setButtonLoading(pel.telemetryMappingSubmit, false);
+    }
+  });
+
+  function syncSLOKindFields() {
+    const latency = pel.sloKind.value === 'latency';
+    pel.sloLatencyField.classList.toggle('hidden', !latency);
+    pel.sloLatencyThreshold.required = latency;
+  }
+
+  function openSLOModal() {
+    pel.sloForm.reset();
+    pel.sloKind.value = 'availability';
+    pel.sloTarget.value = '99.9';
+    pel.sloWindowDays.value = '30';
+    pel.sloMinEvents.value = '100';
+    pel.sloLatencyThreshold.value = '500';
+    syncSLOKindFields();
+    hideFormError(pel.sloFormError);
+    openModal(pel.sloModal);
+  }
+
+  pel.sloKind.addEventListener('change', syncSLOKindFields);
+  pel.sloCancel.addEventListener('click', () => closeModal(pel.sloModal));
+  pel.sloForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFormError(pel.sloFormError);
+    const targetPercent = Number(pel.sloTarget.value);
+    const windowDays = Number(pel.sloWindowDays.value);
+    const minEvents = Number(pel.sloMinEvents.value);
+    const latency = pel.sloKind.value === 'latency';
+    const latencyThresholdMS = Number(pel.sloLatencyThreshold.value);
+    if (!pel.sloName.value.trim() || !Number.isFinite(targetPercent) || targetPercent <= 0 || targetPercent >= 100 || !Number.isInteger(windowDays) || windowDays < 1 || windowDays > 90 || !Number.isInteger(minEvents) || minEvents < 0 || (latency && (!Number.isInteger(latencyThresholdMS) || latencyThresholdMS < 1))) {
+      showFormError(pel.sloFormError, 'Provide a name, a target between 0% and 100%, a 1–90 day window, and valid event settings.');
+      return;
+    }
+    setButtonLoading(pel.sloSubmit, true, 'Creating...');
+    try {
+      await apiProjects(`/slo/catalog/${state.project.id}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: pel.sloName.value.trim(),
+          sliKind: pel.sloKind.value,
+          targetPercent,
+          windowSeconds: windowDays * 86400,
+          latencyThresholdMs: latency ? latencyThresholdMS : 0,
+          minEvents,
+        }),
+      });
+      closeModal(pel.sloModal);
+      showToast('SLO created. It will show no data until eligible telemetry arrives.', 'success');
+      loadProjectDetail({ silent: true });
+    } catch (err) {
+      if (!(err instanceof SessionExpired)) showFormError(pel.sloFormError, err.message);
+    } finally {
+      setButtonLoading(pel.sloSubmit, false);
+    }
+  });
+
+  function openHeartbeatModal() {
+    pel.heartbeatForm.reset();
+    pel.heartbeatInterval.value = '5';
+    pel.heartbeatGrace.value = '5';
+    pel.heartbeatEnvironment.replaceChildren();
+    state.project.environments.forEach((environment) => {
+      const option = document.createElement('option');
+      option.value = String(environment.id);
+      option.textContent = environment.name;
+      pel.heartbeatEnvironment.append(option);
+    });
+    const unavailable = !state.project.environments.length;
+    pel.heartbeatSubmit.disabled = unavailable;
+    hideFormError(pel.heartbeatFormError);
+    if (unavailable) showFormError(pel.heartbeatFormError, 'Create an environment before creating a heartbeat monitor.');
+    openModal(pel.heartbeatModal);
+  }
+  function closeHeartbeatSecret() { closeModal(pel.heartbeatSecretModal); pel.heartbeatSecretValue.value = ''; }
+  pel.heartbeatCancel.addEventListener('click', () => closeModal(pel.heartbeatModal));
+  pel.heartbeatForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const interval = Number(pel.heartbeatInterval.value); const grace = Number(pel.heartbeatGrace.value);
+    if (!pel.heartbeatName.value.trim() || !Number.isInteger(interval) || interval < 1 || interval > 10080 || !Number.isInteger(grace) || grace < 1 || grace > 10080) {
+      showFormError(pel.heartbeatFormError, 'Provide a name and intervals from 1 minute through 7 days.'); return;
+    }
+    setButtonLoading(pel.heartbeatSubmit, true, 'Creating...'); hideFormError(pel.heartbeatFormError);
+    try {
+      const issued = await apiProjects(`/heartbeat/catalog/${state.project.id}`, { method: 'POST', body: JSON.stringify({ name: pel.heartbeatName.value.trim(), environmentId: Number(pel.heartbeatEnvironment.value), expectedIntervalSeconds: interval * 60, gracePeriodSeconds: grace * 60 }) });
+      closeModal(pel.heartbeatModal); pel.heartbeatSecretValue.value = issued.token; openModal(pel.heartbeatSecretModal); loadProjectDetail({ silent: true });
+    } catch (err) { if (!(err instanceof SessionExpired)) showFormError(pel.heartbeatFormError, err.message); } finally { setButtonLoading(pel.heartbeatSubmit, false); }
+  });
+  pel.heartbeatSecretCopy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(pel.heartbeatSecretValue.value); showToast('Heartbeat token copied.', 'success'); } catch (_) { pel.heartbeatSecretValue.select(); document.execCommand('copy'); showToast('Heartbeat token selected for copying.', 'info'); } });
+  pel.heartbeatSecretClose.addEventListener('click', closeHeartbeatSecret);
+
+  function openAgentModal() {
+    pel.agentForm.reset();
+    pel.agentInterval.value = '60';
+    pel.agentEnvironment.replaceChildren();
+    state.project.environments.forEach((environment) => {
+      const option = document.createElement('option');
+      option.value = String(environment.id);
+      option.textContent = environment.name;
+      pel.agentEnvironment.append(option);
+    });
+    const unavailable = !state.project.environments.length;
+    pel.agentSubmit.disabled = unavailable;
+    hideFormError(pel.agentFormError);
+    if (unavailable) showFormError(pel.agentFormError, 'Create an environment before enrolling an agent.');
+    openModal(pel.agentModal);
+  }
+  function closeAgentSecret() { closeModal(pel.agentSecretModal); pel.agentSecretValue.value = ''; }
+  pel.agentCancel.addEventListener('click', () => closeModal(pel.agentModal));
+  pel.agentForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const interval = Number(pel.agentInterval.value);
+    const environmentID = Number(pel.agentEnvironment.value);
+    if (!pel.agentName.value.trim() || !Number.isInteger(environmentID) || environmentID <= 0 || !Number.isInteger(interval) || interval < 15 || interval > 86400) {
+      showFormError(pel.agentFormError, 'Provide a name, environment, and a heartbeat interval from 15 seconds through 24 hours.'); return;
+    }
+    setButtonLoading(pel.agentSubmit, true, 'Creating...'); hideFormError(pel.agentFormError);
+    try {
+      const issued = await apiProjects(`/agent/catalog/${state.project.id}`, { method: 'POST', body: JSON.stringify({ name: pel.agentName.value.trim(), environmentId: environmentID, expectedIntervalSeconds: interval }) });
+      closeModal(pel.agentModal); pel.agentSecretValue.value = issued.enrollmentToken; openModal(pel.agentSecretModal); loadProjectDetail({ silent: true });
+    } catch (err) { if (!(err instanceof SessionExpired)) showFormError(pel.agentFormError, err.message); } finally { setButtonLoading(pel.agentSubmit, false); }
+  });
+  pel.agentSecretCopy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(pel.agentSecretValue.value); showToast('Agent token copied. Keep it out of source control.', 'success'); } catch (_) { pel.agentSecretValue.select(); document.execCommand('copy'); showToast('Agent token selected for copying.', 'info'); } });
+  pel.agentSecretClose.addEventListener('click', closeAgentSecret);
+
+  function openAgentAssignmentModal() {
+    pel.agentAssignmentForm.reset();
+    pel.agentAssignmentInterval.value = '60'; pel.agentAssignmentTimeout.value = '5000';
+    pel.agentAssignmentEnvironment.replaceChildren(); pel.agentAssignmentRoute.replaceChildren();
+    state.project.environments.forEach((environment) => { const option = document.createElement('option'); option.value = environment.id; option.textContent = environment.name; pel.agentAssignmentEnvironment.append(option); });
+    state.project.routes.filter((route) => route.method === 'GET' || route.method === 'HEAD').forEach((route) => { const option = document.createElement('option'); option.value = route.id; option.textContent = `${route.method} ${route.path}`; pel.agentAssignmentRoute.append(option); });
+    const unavailable = !state.project.environments.length || !pel.agentAssignmentRoute.options.length;
+    pel.agentAssignmentSubmit.disabled = unavailable; hideFormError(pel.agentAssignmentFormError);
+    if (unavailable) showFormError(pel.agentAssignmentFormError, 'Create an environment and a GET or HEAD catalog route first.');
+    openModal(pel.agentAssignmentModal);
+  }
+  pel.agentAssignmentCancel.addEventListener('click', () => closeModal(pel.agentAssignmentModal));
+  pel.agentAssignmentForm.addEventListener('submit', async (event) => {
+    event.preventDefault(); const interval = Number(pel.agentAssignmentInterval.value); const timeout = Number(pel.agentAssignmentTimeout.value);
+    if (!pel.agentAssignmentName.value.trim() || !pel.agentAssignmentTarget.value.trim() || !Number.isInteger(interval) || interval < 15 || interval > 86400 || !Number.isInteger(timeout) || timeout < 200 || timeout > 60000) { showFormError(pel.agentAssignmentFormError, 'Provide a name, target, 15-second to 24-hour interval, and 200–60000 ms timeout.'); return; }
+    setButtonLoading(pel.agentAssignmentSubmit, true, 'Creating...'); hideFormError(pel.agentAssignmentFormError);
+    try { await apiProjects(`/agent/assignments/${state.project.id}`, { method: 'POST', body: JSON.stringify({ name: pel.agentAssignmentName.value.trim(), environmentId: Number(pel.agentAssignmentEnvironment.value), routeId: Number(pel.agentAssignmentRoute.value), method: pel.agentAssignmentMethod.value, target: pel.agentAssignmentTarget.value.trim(), intervalSeconds: interval, timeoutMs: timeout }) }); closeModal(pel.agentAssignmentModal); showToast('Private-agent assignment created.', 'success'); loadProjectDetail({ silent: true }); } catch (err) { if (!(err instanceof SessionExpired)) showFormError(pel.agentAssignmentFormError, err.message); } finally { setButtonLoading(pel.agentAssignmentSubmit, false); }
+  });
+
+  pel.projectCancel.addEventListener('click', () => {
+    saveOnboardingDraft();
+    closeModal(pel.projectModal);
+  });
+  pel.projectBack.addEventListener('click', () => setOnboardingStep(Math.max(1, state.onboarding.step - 1)));
 
   pel.projectForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     hideFormError(pel.projectFormError);
+    if (!editingProjectId && state.onboarding.step < 3) {
+      const name = document.getElementById('projFormName').value.trim();
+      if (!name) {
+        showFormError(pel.projectFormError, 'A project name is required.');
+        document.getElementById('projFormName').focus();
+        return;
+      }
+      saveOnboardingDraft();
+      setOnboardingStep(state.onboarding.step + 1);
+      return;
+    }
     const payload = {
       name: document.getElementById('projFormName').value.trim(),
       description: document.getElementById('projFormDescription').value.trim(),
+      environmentName: document.getElementById('projFormEnvironmentName').value.trim(),
+      environmentBaseUrl: document.getElementById('projFormEnvironmentBaseUrl').value.trim(),
       defaultIntervalSeconds: Number(document.getElementById('projFormInterval').value) || 0,
       defaultTimeoutMs: Number(document.getElementById('projFormTimeout').value) || 0,
       defaultRetries: Number(document.getElementById('projFormRetries').value) || 0,
@@ -1691,11 +2749,13 @@
     setButtonLoading(pel.projectSubmit, true, 'Saving...');
     try {
       if (editingProjectId) {
-        await apiProjects(`/projects/${editingProjectId}`, { method: 'PUT', body: JSON.stringify(payload) });
+		await apiProjects(`/project/catalog/${editingProjectId}`, { method: 'PUT', body: JSON.stringify(payload) });
         showToast('Project updated.', 'success');
       } else {
-        const created = await apiProjects('/projects', { method: 'POST', body: JSON.stringify(payload) });
+		const created = await apiProjects('/project/catalog', { method: 'POST', body: JSON.stringify(payload) });
         showToast(`Project "${created.name}" created.`, 'success');
+        finishOnboarding(created);
+        return;
       }
       closeModal(pel.projectModal);
       if (state.route.name === 'list') loadProjectsList();
@@ -1710,9 +2770,29 @@
     }
   });
 
+  document.querySelectorAll('input[name="projSource"]').forEach((input) => input.addEventListener('change', saveOnboardingDraft));
+
   /* -------------------------------------------------------- route form modal */
 
   let editingRouteId = null;
+
+  function updateRouteBudgetPreview() {
+    const interval = Number(document.getElementById('projRouteInterval').value);
+    const retries = Math.max(0, Math.min(5, Number(document.getElementById('projRouteRetries').value) || 0));
+    const enabled = document.getElementById('projRouteEnabled').checked;
+    const target = document.getElementById('projRouteBudget');
+    if (!enabled) {
+      target.textContent = 'Synthetic monitoring is disabled: this route creates no outbound requests.';
+      return;
+    }
+    if (!Number.isFinite(interval) || interval < 10) {
+      target.textContent = 'Set an interval to preview this canary’s request cost. Activation is still constrained by project and global safety budgets.';
+      return;
+    }
+    const checksPerDay = Math.ceil(86400 / interval);
+    const requestsPerDay = checksPerDay * (retries + 1);
+    target.textContent = `Estimated maximum: ${requestsPerDay.toLocaleString()} request attempt${requestsPerDay === 1 ? '' : 's'} per day (${checksPerDay.toLocaleString()} scheduled checks, up to ${retries + 1} attempt${retries ? 's' : ''} each). Project and global daily safety budgets can defer a run.`;
+  }
 
   function openRouteModal(route) {
     editingRouteId = route ? route.id : null;
@@ -1742,9 +2822,15 @@
       : '{"Authorization":"Bearer ..."}';
     document.getElementById('projRouteDeprecated').checked = route ? !!route.deprecated : false;
     document.getElementById('projRouteEnabled').checked = route ? !!route.enabled : true;
+    updateRouteBudgetPreview();
     hideFormError(pel.routeFormError);
     openModal(pel.routeModal);
   }
+
+  ['projRouteInterval', 'projRouteRetries', 'projRouteEnabled'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', updateRouteBudgetPreview);
+    document.getElementById(id).addEventListener('change', updateRouteBudgetPreview);
+  });
 
   pel.routeCancel.addEventListener('click', () => closeModal(pel.routeModal));
 
@@ -1785,10 +2871,10 @@
     try {
       const pid = state.project.id;
       if (editingRouteId) {
-        await apiProjects(`/projects/${pid}/routes/${editingRouteId}`, { method: 'PUT', body: JSON.stringify(payload) });
+		await apiProjects(`/route/catalog/${pid}/${editingRouteId}`, { method: 'PUT', body: JSON.stringify(payload) });
         showToast('Route updated.', 'success');
       } else {
-        await apiProjects(`/projects/${pid}/routes`, { method: 'POST', body: JSON.stringify(payload) });
+		await apiProjects(`/route/catalog/${pid}`, { method: 'POST', body: JSON.stringify(payload) });
         showToast('Route added.', 'success');
       }
       closeModal(pel.routeModal);
@@ -1836,7 +2922,7 @@
 
     setButtonLoading(pel.bulkSubmit, true, 'Adding...');
     try {
-      const result = await apiProjects(`/projects/${state.project.id}/routes/bulk`, {
+	  const result = await apiProjects(`/route/bulk/${state.project.id}`, {
         method: 'POST',
         body: JSON.stringify({ routes }),
       });
@@ -1876,11 +2962,11 @@
   async function findProject(id) {
     const cached = (state.list.data || []).find((p) => p.id === id);
     if (cached) return cached;
-    return apiProjects(`/projects/${id}`);
+	return apiProjects(`/project/catalog/${id}`);
   }
 
   async function setRouteEnabled(routeId, enabled) {
-    await apiProjects(`/projects/${state.project.id}/routes/${routeId}/${enabled ? 'enable' : 'disable'}`, { method: 'POST' });
+	await apiProjects(`/route/${enabled ? 'enable' : 'disable'}/${state.project.id}/${routeId}`, { method: 'POST' });
     showToast(`Route ${enabled ? 'enabled' : 'disabled'}.`, 'success');
     refreshCurrentView();
   }
@@ -1901,7 +2987,7 @@
       },
       async () => {
         if (action === 'delete') {
-          const res = await apiProjects(`/projects/${state.project.id}/routes/bulk-delete`, {
+		  const res = await apiProjects(`/route/removal/${state.project.id}`, {
             method: 'POST',
             body: JSON.stringify({ ids }),
           });
@@ -1910,7 +2996,7 @@
           // The API exposes enable/disable per route; run them with bounded
           // concurrency so a large selection cannot open hundreds of sockets.
           const failures = await mapWithLimit(ids, 6, async (id) => {
-            await apiProjects(`/projects/${state.project.id}/routes/${id}/${action}`, { method: 'POST' });
+			await apiProjects(`/route/${action}/${state.project.id}/${id}`, { method: 'POST' });
           });
           if (failures.length) {
             showToast(`${ids.length - failures.length} updated, ${failures.length} failed.`, 'error');
@@ -1979,7 +3065,7 @@
               danger: false,
             },
             async () => {
-              await apiProjects(`/projects/${id}/${archiving ? 'archive' : 'unarchive'}`, { method: 'POST' });
+			  await apiProjects(`/project/${archiving ? 'archive' : 'restore'}/${id}`, { method: 'POST' });
               showToast(archiving ? 'Project archived.' : 'Project restored.', 'success');
               loadProjectsList();
             }
@@ -1994,7 +3080,7 @@
               confirmLabel: 'Delete project',
             },
             async () => {
-              await apiProjects(`/projects/${id}`, { method: 'DELETE' });
+			  await apiProjects(`/project/catalog/${id}`, { method: 'DELETE' });
               showToast('Project deleted.', 'success');
               navigate('#/projects');
               loadProjectsList();
@@ -2015,9 +3101,75 @@
         case 'open-import':
           navigate(`#/projects/${state.project.id}/import`);
           break;
+        case 'create-environment': {
+          openEnvironmentModal();
+          break;
+        }
+        case 'edit-environment': {
+          const environment = state.project.environments.find((item) => Number(item.id) === id);
+          if (environment) openEnvironmentModal(environment);
+          break;
+        }
+        case 'create-telemetry-credential':
+          openTelemetryCredentialModal();
+          break;
+        case 'create-telemetry-mapping':
+          openTelemetryMappingModal();
+          break;
+        case 'delete-telemetry-mapping':
+          askConfirm(
+            { title: 'Delete this telemetry mapping?', body: 'Future SLO evaluation will no longer attribute this telemetry identity to the selected route.', confirmLabel: 'Delete mapping' },
+            async () => {
+              await apiProjects(`/telemetry/mappings/${state.project.id}/${id}`, { method: 'DELETE' });
+              showToast('Telemetry route mapping deleted.', 'success');
+              loadProjectDetail({ silent: true });
+            }
+          );
+          break;
+        case 'create-slo':
+          openSLOModal();
+          break;
+        case 'create-heartbeat':
+          openHeartbeatModal();
+          break;
+        case 'revoke-heartbeat':
+          askConfirm({ title: 'Revoke this heartbeat token?', body: 'The job using this token will no longer be able to report runs. Create a replacement heartbeat before changing the job configuration.', confirmLabel: 'Revoke heartbeat' }, async () => {
+            await apiProjects(`/heartbeat/revoke/${state.project.id}/${id}`, { method: 'POST' });
+            showToast('Heartbeat token revoked.', 'success'); loadProjectDetail({ silent: true });
+          });
+          break;
+        case 'create-agent':
+          openAgentModal();
+          break;
+        case 'create-agent-assignment':
+          openAgentAssignmentModal();
+          break;
+        case 'revoke-agent':
+          askConfirm({ title: 'Revoke this private-agent token?', body: 'The agent will no longer be able to report liveness. Create a replacement agent and update its local secret before revoking this one.', confirmLabel: 'Revoke agent' }, async () => {
+            await apiProjects(`/agent/revoke/${state.project.id}/${id}`, { method: 'POST' });
+            showToast('Private-agent token revoked.', 'success'); loadProjectDetail({ silent: true });
+          });
+          break;
+        case 'revoke-agent-assignment':
+          askConfirm({ title: 'Revoke this private-agent assignment?', body: 'Agents will stop receiving this signed local-check assignment after their next configuration refresh.', confirmLabel: 'Revoke assignment' }, async () => {
+            await apiProjects(`/agent/assignments/revoke/${state.project.id}/${id}`, { method: 'POST' });
+            showToast('Private-agent assignment revoked.', 'success'); loadProjectDetail({ silent: true });
+          });
+          break;
+        case 'acknowledge-incident':
+          await apiProjects(`/route/acknowledge/${state.project.id}/${id}`, { method: 'POST' });
+          showToast('Incident acknowledged.', 'success');
+          if (state.route.name === 'route') loadRouteDetail({ silent: true });
+          else loadProjectDetail({ silent: true });
+          break;
+		case 'acknowledge-project-incident':
+		  await apiProjects(`/incident/acknowledge/${state.project.id}/${id}`, { method: 'POST' });
+		  showToast('Operational incident acknowledged.', 'success');
+		  loadProjectDetail({ silent: true });
+		  break;
         case 'edit-route': {
           const route = state.project.routes.find((r) => r.id === id) || (state.routeDetail.route && state.routeDetail.route.id === id ? state.routeDetail.route : null);
-          openRouteModal(route || (await apiProjects(`/projects/${state.project.id}/routes/${id}`)));
+		  openRouteModal(route || (await apiProjects(`/route/catalog/${state.project.id}/${id}`)));
           break;
         }
         case 'enable-route':
@@ -2034,7 +3186,7 @@
               confirmLabel: 'Delete route',
             },
             async () => {
-              await apiProjects(`/projects/${state.project.id}/routes/${id}`, { method: 'DELETE' });
+			  await apiProjects(`/route/catalog/${state.project.id}/${id}`, { method: 'DELETE' });
               showToast('Route deleted.', 'success');
               if (state.route.name === 'route') navigate(`#/projects/${state.project.id}`);
               else loadProjectDetail({ silent: true });
@@ -2193,7 +3345,7 @@
   if (pel.tab) {
     pel.tab.addEventListener('click', () => {
       const parsed = parseHash();
-      if (!parsed) navigate('#/projects');
+      if (!parsed || parsed.name === 'auth') navigate('#/projects');
       else handleRoute();
     });
   }
@@ -2203,13 +3355,9 @@
   if (parseHash()) {
     handleRoute();
   } else {
-    setAuthMode('login');
-    if (!getToken()) {
-      pel.authGate.classList.remove('hidden');
-      pel.shell.classList.add('hidden');
-    } else {
-      pel.shell.classList.remove('hidden');
-      pel.authGate.classList.add('hidden');
-    }
+    syncAccountChrome();
+    pel.globalAuthPanel.classList.add('hidden');
+    pel.shell.classList.add('hidden');
   }
+  restoreSession();
 })();

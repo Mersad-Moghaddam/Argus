@@ -161,6 +161,135 @@ func TestLogoutInvalidatesToken(t *testing.T) {
 	}
 }
 
+func TestSessionInventoryAndRevokeOthers(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	registered, err := h.service.Register(ctx, "sessions@example.com", "longenoughpassword", "")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	second, err := h.service.Login(ctx, "sessions@example.com", "longenoughpassword")
+	if err != nil {
+		t.Fatalf("second login: %v", err)
+	}
+	sessions, err := h.service.ListSessions(ctx, registered.User.ID, second.Token)
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("sessions = %d, want 2", len(sessions))
+	}
+	current := 0
+	for _, session := range sessions {
+		if session.Current {
+			current++
+		}
+		if session.TokenHash != "" {
+			t.Fatal("session token hash leaked")
+		}
+	}
+	if current != 1 {
+		t.Fatalf("current sessions = %d, want 1", current)
+	}
+	if err = h.service.RevokeOtherSessions(ctx, registered.User.ID, second.Token); err != nil {
+		t.Fatalf("revoke others: %v", err)
+	}
+	if _, err = h.service.Authenticate(ctx, registered.Token); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("old session must be revoked, got %v", err)
+	}
+	if _, err = h.service.Authenticate(ctx, second.Token); err != nil {
+		t.Fatalf("current session must remain valid: %v", err)
+	}
+}
+
+func TestChangePasswordRevokesOtherSessions(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	registered, err := h.service.Register(ctx, "password-change@example.com", "longenoughpassword", "")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	second, err := h.service.Login(ctx, "password-change@example.com", "longenoughpassword")
+	if err != nil {
+		t.Fatalf("second login: %v", err)
+	}
+
+	if err := h.service.ChangePassword(ctx, registered.User.ID, second.Token, "longenoughpassword", "new-long-password"); err != nil {
+		t.Fatalf("change password: %v", err)
+	}
+	if _, err := h.service.Authenticate(ctx, registered.Token); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("other session must be revoked, got %v", err)
+	}
+	if _, err := h.service.Authenticate(ctx, second.Token); err != nil {
+		t.Fatalf("current session must remain valid: %v", err)
+	}
+	if _, err := h.service.Login(ctx, "password-change@example.com", "longenoughpassword"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("old password must fail, got %v", err)
+	}
+	if _, err := h.service.Login(ctx, "password-change@example.com", "new-long-password"); err != nil {
+		t.Fatalf("new password must work: %v", err)
+	}
+}
+
+func TestChangePasswordRequiresCurrentAndStrongPassword(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	registered, err := h.service.Register(ctx, "password-rules@example.com", "longenoughpassword", "")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	if err := h.service.ChangePassword(ctx, registered.User.ID, registered.Token, "wrong-password", "new-long-password"); !errors.Is(err, ErrCurrentPassword) {
+		t.Fatalf("wrong current password = %v, want %v", err, ErrCurrentPassword)
+	}
+	if err := h.service.ChangePassword(ctx, registered.User.ID, registered.Token, "longenoughpassword", "short"); !errors.Is(err, ErrWeakPassword) {
+		t.Fatalf("short password = %v, want %v", err, ErrWeakPassword)
+	}
+}
+
+func TestPasswordRecoveryIsOneTimeAndRevokesSessions(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	registered, err := h.service.Register(ctx, "recover@example.com", "longenoughpassword", "")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	if _, err = h.service.Login(ctx, "recover@example.com", "longenoughpassword"); err != nil {
+		t.Fatalf("second session: %v", err)
+	}
+	if err = h.service.RequestPasswordRecovery(ctx, "recover@example.com"); err != nil {
+		t.Fatalf("request recovery: %v", err)
+	}
+	if h.recovery.Token == "" || h.recovery.Token == "longenoughpassword" {
+		t.Fatal("expected a newly issued opaque recovery token")
+	}
+	if err = h.service.CompletePasswordRecovery(ctx, h.recovery.Token, "new-long-password"); err != nil {
+		t.Fatalf("complete recovery: %v", err)
+	}
+	if _, err = h.service.Authenticate(ctx, registered.Token); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("recovery must revoke prior sessions, got %v", err)
+	}
+	if _, err = h.service.Login(ctx, "recover@example.com", "longenoughpassword"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("old password must fail, got %v", err)
+	}
+	if _, err = h.service.Login(ctx, "recover@example.com", "new-long-password"); err != nil {
+		t.Fatalf("new password must work: %v", err)
+	}
+	if err = h.service.CompletePasswordRecovery(ctx, h.recovery.Token, "another-password"); !errors.Is(err, ErrInvalidRecoveryToken) {
+		t.Fatalf("reused token = %v, want ErrInvalidRecoveryToken", err)
+	}
+}
+
+func TestPasswordRecoveryRequestDoesNotEnumerateAccounts(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	if err := h.service.RequestPasswordRecovery(ctx, "missing@example.com"); err != nil {
+		t.Fatalf("unknown account should receive generic success, got %v", err)
+	}
+	if err := h.service.RequestPasswordRecovery(ctx, "not-an-email"); err != nil {
+		t.Fatalf("invalid address should receive generic success, got %v", err)
+	}
+}
+
 // TestRegisterDefaultsNameToEmail documents the fallback so the UI always has
 // something to show.
 func TestRegisterDefaultsNameToEmail(t *testing.T) {

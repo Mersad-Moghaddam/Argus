@@ -6,7 +6,7 @@ Assumption check-in status: the requested deployment-context questions were rais
 
 ## Executive summary
 
-Argus combines an internet-facing management API, stored credentials and a server-side HTTP requester. Its dominant risks are therefore control-plane authentication failure, SSRF/egress abuse, unsafe state-changing probes, credential theft through browser injection, and tenant-authorization mistakes. The legacy API's fail-open API-key behavior and less-hardened HTTP client make the strongest current attack chain. Monitoring v2 should reduce outbound-request exposure, but an OTLP gateway introduces a new tenant-attribution and cardinality boundary that must be designed as hostile input from day one.
+Argus combines an internet-facing management API, stored credentials and a server-side HTTP requester. Its dominant risks are therefore control-plane authentication failure, SSRF/egress abuse, unsafe state-changing probes, credential theft through browser injection, and tenant-authorization mistakes. Both legacy and project route monitor paths now share strict dial-time and redirect-time target controls; notification webhook egress remains a separate boundary. Monitoring v2 reduces outbound-request exposure, but an OTLP gateway introduces a tenant-attribution and cardinality boundary that must be treated as hostile input from day one.
 
 ## Scope and assumptions
 
@@ -44,7 +44,7 @@ Material assumptions:
 
 Assumptions to reconfirm before implementation:
 
-1. If Argus will be permanently private and single-tenant, cross-tenant threats can be downgraded, but fail-open management access and outbound-request abuse remain release risks.
+1. If Argus will be permanently private and single-tenant, cross-tenant threats can be downgraded, but outbound-request abuse and operator configuration remain release risks.
 2. If the central worker must reach private targets, the design needs a separate egress trust zone, destination registration/approval, and stronger network enforcement; simply enabling the existing private-target flag is insufficient.
 3. If residency or regulated-data requirements apply, telemetry collection must be minimized and region/deletion/key-management controls must be designed before ingestion is enabled.
 
@@ -66,7 +66,7 @@ Assumptions to reconfirm before implementation:
 - **Internet browser → Fiber API**
   - Data: credentials, bearer/API-key headers, project/route configuration, filters and mutations.
   - Channel: HTTP; TLS is assumed at an external edge and is not configured in-repo.
-  - Guarantees: bearer auth on Projects; optional/fail-open API key on legacy routes; Helmet defaults and body limit.
+  - Guarantees: bearer auth on Projects; legacy routes fail closed until an API key is configured; Helmet defaults and body limit.
   - Validation: Fiber JSON parsing plus per-handler/domain checks; no visible auth rate limiter.
 
 - **Browser → static frontend execution**
@@ -90,8 +90,8 @@ Assumptions to reconfirm before implementation:
 - **Outbound worker → monitored target**
   - Data: method, URL, headers/credentials and synthetic parameter values.
   - Channel: HTTP(S), DNS and TLS across an untrusted network.
-  - Guarantees: newer route evaluator has dial-time IP and redirect controls; legacy evaluator uses `http.DefaultClient`.
-  - Validation: URL allowlist/private-range policy varies between worker paths.
+  - Guarantees: legacy and project-route evaluators use strict dial-time IP and redirect controls.
+  - Validation: shared HTTP/TLS target policy blocks private, loopback, link-local, reserved, and metadata destinations.
 
 - **User → OpenAPI parser → route persistence**
   - Data: untrusted multipart file or JSON/YAML document, references, paths, schemas and examples.
@@ -179,13 +179,13 @@ flowchart LR
 | Surface | How reached | Trust boundary | Notes | Evidence (repo path / symbol) |
 |---|---|---|---|---|
 | Register/login | public POST | Internet → API | bcrypt work, no visible limiter | `internal/api/auth_handler.go:RegisterAuthRoutes` |
-| Legacy management API | `/api/websites`, features, logs | Internet → API | API key bypasses when empty | `internal/adapters/inbound/http/middleware.go:APIKeyAuth` |
+| Legacy management API | `/monitor/*`, `/system/*`, `/status/*` | Internet → API | disabled when API key is unset | `internal/adapters/inbound/http/middleware.go:APIKeyAuth` |
 | Project/route API | bearer-authenticated `/api/projects` | User → tenant data | role matrix exists | `internal/platform/httpserver/fiber.go:NewFiberApp`; `internal/api/handlers_test.go:TestProjectAuthorizationMatrix` |
 | OpenAPI import | multipart/body upload | User → parser | complex untrusted JSON/YAML/refs | `internal/api/import_handler.go`; `internal/openapi/` |
 | Browser DOM render | API data to `innerHTML`/handlers | API/storage → browser execution | manual contextual escaping | `frontend/app.js:renderWebsites`; `frontend/projects.js` render helpers |
 | URL hash router | location hash | Browser URL → application state | IDs parsed from hash | `frontend/projects.js:parseHash` |
 | Route evaluator | queued route to HTTP client | Control plane → untrusted network | hardened path | `internal/worker/route_evaluator.go` |
-| Legacy evaluator | queued website to default client | Control plane → untrusted network | redirect/rebinding parity gap | `internal/worker/processor.go` |
+| Legacy evaluator | queued website to hardened client | Control plane → untrusted network | strict dial/redirect policy | `internal/worker/processor.go` |
 | MySQL DSN/config | environment and `.env` | Operator → process | defaults include known dev credentials | `internal/config/config.go:Load`; `.env.example` |
 | Redis/Asynq | deployment network | Application → queue | optional password | `internal/config/config.go:Load` |
 | Future OTLP | public/scoped ingest | Customer workload → data plane | design-time only | `docs/audit-2026-07-28-en/ARGUS_TRANSFORMATION_BLUEPRINT.md` |
@@ -198,11 +198,11 @@ flowchart LR
    3. Attacker alters monitors, consumes worker capacity and seeds browser-rendered data.
    4. Monitoring integrity and availability are lost.
 
-2. **SSRF through the legacy worker**
-   1. Attacker gains target-write access through the fail-open API or a legitimate account.
+2. **SSRF through a monitor worker**
+   1. Attacker gains target-write access through a configured legacy key or a legitimate account.
    2. Attacker supplies a host whose initial validation appears public.
-   3. DNS rebinding or redirect leads `http.DefaultClient` toward a private/metadata address.
-   4. Worker probes internal services; response/status/timing become an oracle.
+   3. DNS rebinding or redirect attempts to lead a hardened dialer toward a private/metadata address.
+   4. The policy rejects the destination before the socket connects; an egress firewall remains defense in depth.
 
 3. **Production data mutation by imported route**
    1. Project editor imports a valid OpenAPI file.
@@ -250,8 +250,8 @@ flowchart LR
 
 | Threat ID | Threat source | Prerequisites | Threat action | Impact | Impacted assets | Existing controls (evidence) | Gaps | Recommended mitigations | Detection ideas | Likelihood | Impact severity | Priority |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| TM-001 | Remote unauthenticated attacker | Legacy API is internet-reachable and `API_KEY` empty | Use fail-open management routes | Full legacy monitor/config manipulation and worker abuse | targets, incidents, worker capacity | API-key middleware when configured (`middleware.go:APIKeyAuth`) | empty key calls `Next`; broad default bind | fail startup; auth v2 on all private APIs; explicit loopback dev bypass only | startup security gauge; unauthenticated mutation audit; config policy check | High under default/misconfig | High | critical |
-| TM-002 | Target writer plus malicious DNS/redirect server | Ability to persist a legacy target | Rebind/redirect default HTTP client to internal address | Internal scanning, metadata access attempt, timing/status oracle | network boundary, secrets, worker IP reputation | initial target validation; newer route dialer hardened (`route_evaluator.go`) | legacy uses `http.DefaultClient` after precheck | shared dial-time validator; per-hop redirect checks; egress firewall; private agent model | blocked-destination counters; DNS answer-change and redirect-origin logs | Medium | High | high |
+| TM-001 | Remote unauthenticated attacker | Legacy API is internet-reachable | Attempt management routes while `API_KEY` is unset | Unauthorized mutation attempt is rejected | targets, incidents, worker capacity | API-key middleware returns `503` when unset and `401` for mismatch (`middleware.go:APIKeyAuth`) | broad public bind and API-key lifecycle remain operator concerns | retain fail-closed guard; auth v2 on all private APIs; explicit loopback dev bypass only | startup security gauge; unauthenticated mutation audit; config policy check | Low | High | high |
+| TM-002 | Target writer plus malicious DNS/redirect server | Ability to persist a monitor target | Rebind/redirect monitor transport to internal address | Internal scanning, metadata access attempt, timing/status oracle | network boundary, secrets, worker IP reputation | strict URL, dial-time, and redirect checks on legacy and project monitors (`processor.go`, `route_evaluator.go`) | notification webhook egress remains separately scoped; network egress firewall is external | retain shared validator; egress firewall; private agent model | blocked-destination counters; DNS answer-change and redirect-origin logs | Low to Medium | High | high |
 | TM-003 | Project editor or mistaken operator | Imported/manual unsafe method with credentials | Scheduler sends and retries state-changing request | Customer production data mutation/deletion | downstream data, credentials, Argus trust | retry/body/redirect caps | import enabled; method policy allows unsafe methods; no fixture contract | endpoint/policy separation; default-off; GET/HEAD default; sandbox/idempotency/cleanup exception | unsafe dispatch counter fixed at zero; policy audit events | High with current import | High | critical |
 | TM-004 | Stored-data writer | Victim opens dashboard; crafted value reaches inline handler | Break JavaScript string/handler context and execute same-origin script | token/API-key theft, UI actions as victim | browser credentials, project data | many values use `escapeHtml` | HTML escaping is wrong for JS context; credentials in Web Storage; no explicit CSP | remove inline handlers and HTML string sinks; HttpOnly session; strict CSP | CSP reports; DOM-sink tests; session anomaly detection | Medium | High | high |
 | TM-005 | Internet attacker | Public auth endpoints reachable | Brute force, credential stuffing or bcrypt resource abuse | account takeover or control-plane degradation | accounts, CPU availability | bcrypt; generic invalid-login error (`auth.go`) | no visible limiter/backoff; long session TTL | Redis-backed IP+account limiter; MFA optional; breach screening; rotation/revoke | login failure velocity; 429 metrics; CPU saturation by endpoint | High | Medium to High | high |
@@ -278,7 +278,7 @@ Likely or easily triggered paths that can affect external production systems, th
 Account/project compromise, downstream credential exposure, internal-network reach or sustained service degradation requiring prompt remediation.
 
 - stored XSS stealing a 30-day bearer token;
-- legacy DNS-rebinding/redirect SSRF;
+- DNS-rebinding/redirect attempts against monitor egress;
 - missed project authorization predicate exposing another user's routes;
 - plaintext route-header theft from a database backup.
 
@@ -302,7 +302,7 @@ Hardening gaps with low realistic exploitability and small impact in the assumed
 
 | Path | Why it matters | Related Threat IDs |
 |---|---|---|
-| `internal/adapters/inbound/http/middleware.go` | fail-open API key and bearer parsing establish the main identity boundary | TM-001, TM-006 |
+| `internal/adapters/inbound/http/middleware.go` | fail-closed API key and bearer parsing establish the main identity boundary | TM-001, TM-006 |
 | `internal/platform/httpserver/fiber.go` | route exposure, middleware, limits and static security headers | TM-001, TM-005, TM-009 |
 | `internal/api/auth_handler.go` | public credential endpoints and future cookie/CSRF contract | TM-005, TM-009 |
 | `internal/application/auth.go` | password/session generation, expiry and lifecycle | TM-004, TM-005 |
@@ -313,7 +313,7 @@ Hardening gaps with low realistic exploitability and small impact in the assumed
 | `internal/application/imports.go` | imported route activation and bulk database effects | TM-003, TM-007 |
 | `internal/domain/route.go` | method/path policy and unsafe-method allowlist | TM-003 |
 | `internal/openapi/` | complex JSON/YAML/ref parsing and resource budgets | TM-007 |
-| `internal/worker/processor.go` | legacy `http.DefaultClient` SSRF boundary | TM-002 |
+| `internal/worker/processor.go` | legacy monitor hardened HTTP/TLS egress boundary | TM-002 |
 | `internal/worker/route_evaluator.go` | hardened egress controls, secrets, redirects and retries | TM-002, TM-003, TM-008 |
 | `internal/platform/worker/` | queue trust, scheduling fairness and availability | TM-003, TM-007 |
 | `internal/adapters/outbound/mysql/users.go` | password/token-hash storage and session lookup | TM-005, TM-006 |

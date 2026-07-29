@@ -14,14 +14,28 @@ import (
 
 type ImportHandler struct{ service *application.Service }
 
+// MaxImportCommitBodyBytes bounds only the explicit selection list. Validation
+// uploads retain the larger application limit needed for a 10 MiB spec.
+const MaxImportCommitBodyBytes = 1024 * 1024
+
 func NewImportHandler(service *application.Service) *ImportHandler {
 	return &ImportHandler{service: service}
 }
 
 func RegisterImportRoutes(app fiber.Router, h *ImportHandler, guards ...fiber.Handler) {
-	app.Post("/projects/:projectId/imports/validate", guarded(guards, h.Validate)...)
-	app.Get("/projects/:projectId/imports/:jobId", guarded(guards, h.GetJob)...)
-	app.Post("/projects/:projectId/imports/:jobId/commit", guarded(guards, h.Commit)...)
+	app.Post("/import/validation/:projectId", guarded(guards, h.Validate)...)
+	app.Get("/import/job/:projectId/:jobId", guarded(guards, h.GetJob)...)
+	commitGuards := make([]fiber.Handler, 0, len(guards)+1)
+	commitGuards = append(commitGuards, importCommitBodyLimit)
+	commitGuards = append(commitGuards, guards...)
+	app.Post("/import/commit/:projectId/:jobId", guarded(commitGuards, h.Commit)...)
+}
+
+func importCommitBodyLimit(c *fiber.Ctx) error {
+	if c.Request().Header.ContentLength() > MaxImportCommitBodyBytes || len(c.Body()) > MaxImportCommitBodyBytes {
+		return c.Status(fiber.StatusRequestEntityTooLarge).JSON(fiber.Map{"error": "import selection payload is too large"})
+	}
+	return c.Next()
 }
 
 type pasteImportRequest struct {

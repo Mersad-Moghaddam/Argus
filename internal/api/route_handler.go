@@ -19,18 +19,74 @@ func NewRouteHandler(service *application.Service) *RouteHandler {
 }
 
 func RegisterRouteRoutes(app fiber.Router, h *RouteHandler, guards ...fiber.Handler) {
-	app.Get("/projects/:projectId/routes", guarded(guards, h.ListRoutes)...)
-	app.Post("/projects/:projectId/routes", guarded(guards, h.CreateRoute)...)
-	app.Post("/projects/:projectId/routes/bulk", guarded(guards, h.BulkCreateRoutes)...)
-	app.Post("/projects/:projectId/routes/bulk-delete", guarded(guards, h.BulkDeleteRoutes)...)
-	app.Get("/projects/:projectId/routes/:routeId", guarded(guards, h.GetRoute)...)
-	app.Put("/projects/:projectId/routes/:routeId", guarded(guards, h.UpdateRoute)...)
-	app.Post("/projects/:projectId/routes/:routeId/enable", guarded(guards, h.EnableRoute)...)
-	app.Post("/projects/:projectId/routes/:routeId/disable", guarded(guards, h.DisableRoute)...)
-	app.Delete("/projects/:projectId/routes/:routeId", guarded(guards, h.DeleteRoute)...)
-	app.Get("/projects/:projectId/routes/:routeId/checks", guarded(guards, h.ListRouteChecks)...)
-	app.Get("/projects/:projectId/incidents", guarded(guards, h.ListIncidents)...)
-	app.Get("/projects/:projectId/metrics/timeseries", guarded(guards, h.ListMetricsTimeseries)...)
+	app.Post("/route/normalization/:projectId", guarded(guards, h.PreviewNormalization)...)
+	app.Get("/route/catalog/:projectId", guarded(guards, h.ListRoutes)...)
+	app.Post("/route/catalog/:projectId", guarded(guards, h.CreateRoute)...)
+	app.Post("/route/bulk/:projectId", guarded(guards, h.BulkCreateRoutes)...)
+	app.Post("/route/removal/:projectId", guarded(guards, h.BulkDeleteRoutes)...)
+	app.Get("/route/catalog/:projectId/:routeId", guarded(guards, h.GetRoute)...)
+	app.Put("/route/catalog/:projectId/:routeId", guarded(guards, h.UpdateRoute)...)
+	app.Post("/route/enable/:projectId/:routeId", guarded(guards, h.EnableRoute)...)
+	app.Post("/route/disable/:projectId/:routeId", guarded(guards, h.DisableRoute)...)
+	app.Delete("/route/catalog/:projectId/:routeId", guarded(guards, h.DeleteRoute)...)
+	app.Get("/route/checks/:projectId/:routeId", guarded(guards, h.ListRouteChecks)...)
+	app.Get("/route/incidents/:projectId", guarded(guards, h.ListIncidents)...)
+	app.Post("/route/acknowledge/:projectId/:incidentId", guarded(guards, h.AcknowledgeIncident)...)
+	app.Get("/route/metrics/:projectId", guarded(guards, h.ListMetricsTimeseries)...)
+}
+
+type normalizationPreviewRequest struct {
+	Method        string `json:"method"`
+	BaseURL       string `json:"baseUrl"`
+	RouteTemplate string `json:"routeTemplate"`
+	IntervalSecs  int    `json:"intervalSeconds"`
+}
+
+// PreviewNormalization lets an editor inspect the backend-owned canonical
+// endpoint identity before any catalog entry or synthetic definition is saved.
+func (h *RouteHandler) PreviewNormalization(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	var req normalizationPreviewRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"code": "invalid_request", "error": "invalid request payload"})
+	}
+	normalized, err := domain.NormalizeEndpoint(req.Method, req.BaseURL, req.RouteTemplate)
+	if err != nil {
+		return normalizationErrorResponse(c, err)
+	}
+	duplicate := false
+	if existing, lookupErr := h.service.GetRouteByMethodPath(c.UserContext(), project.ID, normalized.Method, normalized.RouteTemplate); lookupErr == nil && existing != nil {
+		duplicate = true
+	}
+	interval := req.IntervalSecs
+	if interval <= 0 {
+		interval = project.DefaultIntervalSeconds
+	}
+	if interval <= 0 {
+		interval = 300
+	}
+	methodClass := "unsafe"
+	if domain.IsSafeSyntheticMethod(normalized.Method) {
+		methodClass = "safe"
+	}
+	return c.JSON(fiber.Map{
+		"valid": true,
+		"canonical": fiber.Map{
+			"method": normalized.Method, "baseUrl": normalized.BaseURL,
+			"routeTemplate": normalized.RouteTemplate, "identity": normalized.CanonicalIdentity,
+		},
+		"fetchTarget": normalized.FetchTarget,
+		"changes":     normalized.Changes,
+		"duplicate":   duplicate,
+		"safety": fiber.Map{
+			"methodClass": methodClass, "probeDefault": "disabled",
+			"networkValidation": "repeated_at_execution", "traffic": "catalog_only",
+			"estimatedRequestsPerDay": 86400 / interval,
+		},
+	})
 }
 
 type routeRequest struct {
@@ -207,7 +263,7 @@ func (h *RouteHandler) setEnabled(c *fiber.Ctx, enabled bool) error {
 		return sendErr
 	}
 	if err := h.service.SetRouteEnabled(c.UserContext(), route.ID, enabled); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update route"})
+		return routeErrorResponse(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
@@ -286,6 +342,23 @@ func (h *RouteHandler) ListIncidents(c *fiber.Ctx) error {
 	return c.JSON(incidents)
 }
 
+func (h *RouteHandler) AcknowledgeIncident(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	incidentID, err := parseIDParam(c, "incidentId")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if err = h.service.AcknowledgeRouteIncident(c.UserContext(), project.ID, incidentID, currentUserID(c)); errors.Is(err, domain.ErrProjectNotFound) {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "incident not found"})
+	} else if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
 // ListMetricsTimeseries serves the bucketed data behind the dashboard's
 // time-range charts. Passing routeId narrows it to a single route.
 func (h *RouteHandler) ListMetricsTimeseries(c *fiber.Ctx) error {
@@ -318,9 +391,18 @@ func (h *RouteHandler) ListMetricsTimeseries(c *fiber.Ctx) error {
 
 func routeErrorResponse(c *fiber.Ctx, err error) error {
 	switch {
-	case errors.Is(err, domain.ErrInvalidRoute), errors.Is(err, domain.ErrDuplicateRoute), errors.Is(err, domain.ErrInvalidInput):
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	case errors.Is(err, domain.ErrInvalidRoute), errors.Is(err, domain.ErrDuplicateRoute), errors.Is(err, domain.ErrInvalidInput), errors.Is(err, domain.ErrUnsafeSynthetic):
+		return normalizationErrorResponse(c, err)
 	default:
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "route operation failed"})
 	}
+}
+
+func normalizationErrorResponse(c *fiber.Ctx, err error) error {
+	payload := fiber.Map{"code": domain.ValidationCode(err), "error": domain.ValidationMessage(err)}
+	var validation *domain.ValidationError
+	if errors.As(err, &validation) {
+		payload["field"] = validation.Field
+	}
+	return c.Status(fiber.StatusBadRequest).JSON(payload)
 }

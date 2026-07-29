@@ -9,9 +9,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/netip"
-	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -39,21 +36,28 @@ type Processor struct {
 	logger   *observability.LogStore
 
 	// Project-based API route monitoring dependencies.
-	routes    ports.RouteStore
-	evaluator *RouteEvaluator
-	routeCfg  RouteMonitorConfig
+	routes            ports.RouteStore
+	evaluator         *RouteEvaluator
+	routeCfg          RouteMonitorConfig
+	sloEvaluator      *SLOEvaluator
+	agentLiveness     *AgentLivenessEvaluator
+	heartbeatLiveness *HeartbeatLivenessEvaluator
+	legacyEvaluator   *RouteEvaluator
 }
 
 func NewProcessor(monitors ports.MonitorStore, alerts ports.AlertChannelStore, outbox ports.OutboxStore, service *application.Service, client *asynq.Client, notifier ports.Notifier, logger *observability.LogStore,
 	routes ports.RouteStore, evaluator *RouteEvaluator, routeCfg RouteMonitorConfig) *Processor {
 	return &Processor{monitors: monitors, alerts: alerts, outbox: outbox, service: service, client: client, notifier: notifier, logger: logger,
-		routes: routes, evaluator: evaluator, routeCfg: routeCfg}
+		routes: routes, evaluator: evaluator, routeCfg: routeCfg, legacyEvaluator: NewRouteEvaluator(EvaluatorConfig{})}
 }
 func (p *Processor) Register(mux *asynq.ServeMux) {
 	mux.HandleFunc(TypeEnqueueDueChecks, p.HandleEnqueueDueChecks)
 	mux.HandleFunc(TypeCheckWebsite, p.HandleCheckWebsite)
 	mux.HandleFunc(TypeDispatchOutbox, p.HandleDispatchOutbox)
 	p.RegisterRouteTasks(mux)
+	p.RegisterSLOTasks(mux)
+	p.RegisterAgentLivenessTasks(mux)
+	p.RegisterHeartbeatLivenessTasks(mux)
 }
 
 func (p *Processor) HandleEnqueueDueChecks(ctx context.Context, _ *asynq.Task) error {
@@ -151,14 +155,15 @@ func (p *Processor) evaluate(ctx context.Context, website *models.Website, targe
 }
 
 func (p *Processor) checkHTTP(ctx context.Context, target string) (string, int, int, string) {
-	if err := validateTarget(target); err != nil {
+	evaluator := p.legacyEgress()
+	if _, err := evaluator.validateRequestURL(target); err != nil {
 		return "down", 0, 0, err.Error()
 	}
 	reqCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, target, nil)
 	start := time.Now()
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := evaluator.client.Do(req)
 	latency := int(time.Since(start).Milliseconds())
 	if err != nil {
 		return "down", 0, latency, err.Error()
@@ -174,14 +179,15 @@ func (p *Processor) checkKeyword(ctx context.Context, target string, keyword *st
 	if keyword == nil || *keyword == "" {
 		return "down", 0, 0, "missing expected keyword"
 	}
-	if err := validateTarget(target); err != nil {
+	evaluator := p.legacyEgress()
+	if _, err := evaluator.validateRequestURL(target); err != nil {
 		return "down", 0, 0, err.Error()
 	}
 	reqCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, target, nil)
 	start := time.Now()
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := evaluator.client.Do(req)
 	latency := int(time.Since(start).Milliseconds())
 	if err != nil {
 		return "down", 0, latency, err.Error()
@@ -209,7 +215,8 @@ func (p *Processor) checkKeyword(ctx context.Context, target string, keyword *st
 	return "down", resp.StatusCode, latency, "expected keyword not found"
 }
 func (p *Processor) checkTLS(target string, thresholdDays int) (string, int, int, string) {
-	parsed, err := url.Parse(target)
+	evaluator := p.legacyEgress()
+	parsed, err := evaluator.validateRequestURL(target)
 	if err != nil {
 		return "down", 0, 0, "invalid URL"
 	}
@@ -218,7 +225,7 @@ func (p *Processor) checkTLS(target string, thresholdDays int) (string, int, int
 		host += ":443"
 	}
 	start := time.Now()
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", host, &tls.Config{ServerName: parsed.Hostname(), MinVersion: tls.VersionTLS12})
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second, Control: evaluator.controlConnection}, "tcp", host, &tls.Config{ServerName: parsed.Hostname(), MinVersion: tls.VersionTLS12})
 	latency := int(time.Since(start).Milliseconds())
 	if err != nil {
 		return "down", 0, latency, err.Error()
@@ -235,32 +242,16 @@ func (p *Processor) checkTLS(target string, thresholdDays int) (string, int, int
 	return "up", 200, latency, ""
 }
 
-func validateTarget(rawURL string) error {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return err
+// legacyEgress keeps the legacy website monitors on strict public-target
+// policy even if project route monitoring is separately allowed internally.
+func (p *Processor) legacyEgress() *RouteEvaluator {
+	if p.legacyEvaluator != nil {
+		return p.legacyEvaluator
 	}
-	host := u.Hostname()
-	if host == "" {
-		return fmt.Errorf("invalid host")
-	}
-	if strings.EqualFold(host, "169.254.169.254") || strings.HasPrefix(host, "metadata.google.internal") {
-		return fmt.Errorf("blocked metadata endpoint")
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return err
-	}
-	for _, ip := range ips {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			continue
-		}
-		if addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() {
-			return fmt.Errorf("target resolves to private address")
-		}
-	}
-	return nil
+	return NewRouteEvaluator(EvaluatorConfig{})
 }
 
-var _ = strconv.Itoa
+func validateTarget(rawURL string) error {
+	_, err := NewRouteEvaluator(EvaluatorConfig{}).validateRequestURL(rawURL)
+	return err
+}

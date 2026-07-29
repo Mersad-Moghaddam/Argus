@@ -1,6 +1,8 @@
 package httpserver
 
 import (
+	"context"
+	"sync"
 	"time"
 
 	adapterhttp "argus/internal/adapters/inbound/http"
@@ -12,48 +14,107 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/etag"
 	"github.com/gofiber/fiber/v2/middleware/helmet"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // maxUploadBytes bounds request bodies (including multipart OpenAPI/Swagger
 // spec uploads) well above the parser's own document size limit so Fiber
 // rejects oversized requests before they reach handler code.
 const maxUploadBytes = 15 * 1024 * 1024
+const maxControlBodyBytes = 256 * 1024
 
-func NewFiberApp(service *application.Service, logStore *observability.LogStore, apiKey string) *fiber.App {
-	app := fiber.New(fiber.Config{AppName: "Argus Distributed Uptime Checker", BodyLimit: maxUploadBytes})
+var (
+	httpTelemetryOnce sync.Once
+	httpRequestCount  = func(context.Context, int64, ...metric.AddOption) {}
+	httpDuration      = func(context.Context, float64, ...metric.RecordOption) {}
+)
+
+func NewFiberApp(service *application.Service, logStore *observability.LogStore, apiKey string, authCookieSecure ...bool) *fiber.App {
+	return NewFiberAppWithMetricSink(service, logStore, apiKey, observability.NoopMetricSink(), authCookieSecure...)
+}
+
+// NewFiberAppWithMetricSink wires the production telemetry metric sink while
+// keeping tests and non-ingesting callers explicit about their no-op sink.
+func NewFiberAppWithMetricSink(service *application.Service, logStore *observability.LogStore, apiKey string, metricSink observability.MetricSink, authCookieSecure ...bool) *fiber.App {
+	return NewFiberAppWithMetricSinkAndTelemetryHandler(service, logStore, apiKey, metricSink, nil, authCookieSecure...)
+}
+
+// NewFiberAppWithMetricSinkAndTelemetryHandler permits an OTLP transport
+// companion (gRPC) to share the exact same credential quota state as HTTP.
+func NewFiberAppWithMetricSinkAndTelemetryHandler(service *application.Service, logStore *observability.LogStore, apiKey string, metricSink observability.MetricSink, telemetryIngestHandler *api.TelemetryIngestHandler, authCookieSecure ...bool) *fiber.App {
+	cookieSecure := false
+	if len(authCookieSecure) > 0 {
+		cookieSecure = authCookieSecure[0]
+	}
+	app := fiber.New(fiber.Config{
+		AppName: "Argus Distributed Uptime Checker", BodyLimit: maxUploadBytes,
+		ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second,
+		ReadBufferSize: 8 * 1024,
+	})
 	app.Use(recover.New())
+	app.Use(serverTelemetry)
 	app.Use(helmet.New())
+	app.Use(securityHeaders)
 	app.Use(etag.New())
 	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
 
-	apiGroup := app.Group("/api")
+	// Control-plane URLs follow /family/purpose[/optional]. This keeps their
+	// meaning visible in server telemetry and removes the ambiguous /api prefix.
+	controlGroup := app.Group("")
+	// Authentication is intentionally bounded before bcrypt work occurs. This
+	// in-process limiter is a baseline; production multi-instance deployments
+	// should use a shared Fiber limiter storage at the edge or in Redis.
+	controlGroup.Use("/identity", controlBodyLimit(maxControlBodyBytes), limiter.New(limiter.Config{
+		Max: 100, Expiration: time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string { return c.IP() },
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{"error": "too many authentication attempts; try again later"})
+		},
+	}))
 
 	// Legacy single-tenant website/heartbeat/TLS monitoring API: unchanged
 	// behavior, still protected by the global X-API-Key when configured. The
-	// guard is attached per route rather than as /api-wide middleware, because
-	// the project API below shares the /api prefix but uses bearer tokens; a
+	// guard is attached per route rather than as control-plane-wide middleware,
+	// because the project API below uses bearer tokens; a
 	// group-level Use would apply the API-key check to both.
 	legacyGuard := adapterhttp.APIKeyAuth(apiKey)
 	websiteHandler := api.NewWebsiteHandler(service)
 	logHandler := api.NewLogHandler(logStore)
 	featureHandler := api.NewFeatureHandler(service)
-	api.RegisterWebsiteRoutes(apiGroup, websiteHandler, legacyGuard)
-	api.RegisterLogRoutes(apiGroup, logHandler, legacyGuard)
-	api.RegisterFeatureRoutes(apiGroup, featureHandler, legacyGuard)
+	api.RegisterWebsiteRoutes(controlGroup, websiteHandler, legacyGuard)
+	api.RegisterLogRoutes(controlGroup, logHandler, legacyGuard)
+	api.RegisterFeatureRoutes(controlGroup, featureHandler, legacyGuard)
 
 	// Project-based API route monitoring: separate bearer-token user auth,
 	// independent from the legacy API key.
-	authHandler := api.NewAuthHandler(service)
-	api.RegisterAuthRoutes(apiGroup, authHandler, adapterhttp.BearerAuth(service))
-
+	authHandler := api.NewAuthHandler(service, cookieSecure)
 	bearerGuard := adapterhttp.BearerAuth(service)
+	api.RegisterAuthRoutes(controlGroup, authHandler, bearerGuard, adapterhttp.CSRFProtect)
+
 	projectHandler := api.NewProjectHandler(service)
 	routeHandler := api.NewRouteHandler(service)
 	importHandler := api.NewImportHandler(service)
-	api.RegisterProjectRoutes(apiGroup, projectHandler, bearerGuard)
-	api.RegisterRouteRoutes(apiGroup, routeHandler, bearerGuard)
-	api.RegisterImportRoutes(apiGroup, importHandler, bearerGuard)
+	if telemetryIngestHandler == nil {
+		telemetryIngestHandler = api.NewTelemetryIngestHandler(service, metricSink)
+	}
+	heartbeatHandler := api.NewHeartbeatHandler(service)
+	// Project-management requests are small JSON control payloads. Keep their
+	// route-local bound separate from import validation, which legitimately
+	// carries a 10 MiB OpenAPI document.
+	projectControlGroup := controlGroup.Group("", controlBodyLimit(maxControlBodyBytes))
+	api.RegisterProjectRoutes(projectControlGroup, projectHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterRouteRoutes(projectControlGroup, routeHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterImportRoutes(controlGroup, importHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterTelemetryIngestRoutes(app, telemetryIngestHandler)
+	privateAgentHandler := api.NewPrivateAgentHandler(service)
+	api.RegisterPrivateAgentRoutes(app, privateAgentHandler)
+	api.RegisterPrivateAgentManagementRoutes(projectControlGroup, privateAgentHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterHeartbeatRoutes(projectControlGroup, heartbeatHandler, bearerGuard, adapterhttp.CSRFProtect)
 
 	app.Static("/", "./frontend", fiber.Static{
 		Compress:      true,
@@ -66,6 +127,64 @@ func NewFiberApp(service *application.Service, logStore *observability.LogStore,
 		ModifyResponse: requireStaticRevalidation,
 	})
 	return app
+}
+
+func serverTelemetry(c *fiber.Ctx) error {
+	started := time.Now()
+	ctx, span := otel.Tracer("argus/http").Start(c.UserContext(), "HTTP request")
+	c.SetUserContext(ctx)
+	err := c.Next()
+	route := c.Route().Path
+	if route == "" {
+		route = "/unmatched"
+	}
+	status := c.Response().StatusCode()
+	span.SetAttributes(
+		attribute.String("http.request.method", c.Method()),
+		attribute.String("http.route", route),
+		attribute.Int("http.response.status_code", status),
+		attribute.Int64("http.server.duration_ms", time.Since(started).Milliseconds()),
+	)
+	attrs := metric.WithAttributes(
+		attribute.String("http.request.method", c.Method()),
+		attribute.String("http.route", route),
+		attribute.Int("http.response.status_code", status),
+	)
+	initHTTPMetrics()
+	httpRequestCount(ctx, 1, attrs)
+	httpDuration(ctx, time.Since(started).Seconds(), attrs)
+	if status >= 500 || err != nil {
+		span.SetStatus(codes.Error, "server request failed")
+	}
+	span.End()
+	return err
+}
+
+func initHTTPMetrics() {
+	httpTelemetryOnce.Do(func() {
+		meter := otel.Meter("argus/http")
+		count, _ := meter.Int64Counter("argus.http.server.requests")
+		duration, _ := meter.Float64Histogram("argus.http.server.duration", metric.WithUnit("s"))
+		httpRequestCount = count.Add
+		httpDuration = duration.Record
+	})
+}
+
+func controlBodyLimit(limit int) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if c.Request().Header.ContentLength() > limit {
+			return c.Status(fiber.StatusRequestEntityTooLarge).JSON(fiber.Map{"error": "request payload is too large"})
+		}
+		return c.Next()
+	}
+}
+
+func securityHeaders(c *fiber.Ctx) error {
+	c.Set(fiber.HeaderContentSecurityPolicy, "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'")
+	c.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+	c.Set(fiber.HeaderReferrerPolicy, "strict-origin-when-cross-origin")
+	c.Set(fiber.HeaderXContentTypeOptions, "nosniff")
+	return c.Next()
 }
 
 func requireStaticRevalidation(c *fiber.Ctx) error {

@@ -103,17 +103,20 @@ func (s *Service) BulkCreateRoutes(ctx context.Context, project models.Project, 
 }
 
 func (s *Service) buildRoute(project models.Project, input RouteInput, source string) (models.APIRoute, error) {
-	method, err := domain.NormalizeMethod(input.Method)
+	normalized, err := domain.NormalizeEndpoint(input.Method, input.BaseURL, input.Path)
 	if err != nil {
 		return models.APIRoute{}, err
 	}
-	path, err := domain.NormalizePath(input.Path)
-	if err != nil {
-		return models.APIRoute{}, err
-	}
+	method, path := normalized.Method, normalized.RouteTemplate
+	// Compatibility callers without an explicit Enabled field retain their
+	// legacy behavior. All v2 browser and import paths send an explicit value;
+	// import is catalog-only and browser defaults are disabled.
 	enabled := true
 	if input.Enabled != nil {
 		enabled = *input.Enabled
+	}
+	if input.Enabled != nil && enabled && !domain.IsSafeSyntheticMethod(method) {
+		return models.APIRoute{}, domain.ErrUnsafeSynthetic
 	}
 	interval := orDefault(input.MonitorIntervalSecs, project.DefaultIntervalSeconds, 10, 86400)
 	timeout := orDefault(input.TimeoutMS, project.DefaultTimeoutMS, 200, 60000)
@@ -130,7 +133,10 @@ func (s *Service) buildRoute(project models.Project, input RouteInput, source st
 		ProjectID:           project.ID,
 		Method:              method,
 		Path:                path,
-		BaseURL:             strings.TrimRight(strings.TrimSpace(input.BaseURL), "/"),
+		BaseURL:             normalized.BaseURL,
+		CanonicalIdentity:   normalized.CanonicalIdentity,
+		CanonicalHash:       domain.CanonicalHash(normalized.CanonicalIdentity),
+		CanonicalVersion:    1,
 		Name:                strings.TrimSpace(input.Name),
 		Summary:             strings.TrimSpace(input.Summary),
 		Description:         strings.TrimSpace(input.Description),
@@ -208,8 +214,19 @@ func (s *Service) UpdateRoute(ctx context.Context, existing models.APIRoute, inp
 	}
 	existing.Deprecated = input.Deprecated
 	if input.BaseURL != "" {
-		existing.BaseURL = strings.TrimRight(strings.TrimSpace(input.BaseURL), "/")
+		baseURL, _, err := domain.NormalizeBaseURL(input.BaseURL)
+		if err != nil {
+			return models.APIRoute{}, err
+		}
+		existing.BaseURL = baseURL
 	}
+	normalized, err := domain.NormalizeEndpoint(existing.Method, existing.BaseURL, existing.Path)
+	if err != nil {
+		return models.APIRoute{}, err
+	}
+	existing.CanonicalIdentity = normalized.CanonicalIdentity
+	existing.CanonicalHash = domain.CanonicalHash(normalized.CanonicalIdentity)
+	existing.CanonicalVersion = 1
 	if raw := redactUnsafeHeaderKeysNoop(input.Headers); raw != "" || input.Headers == "" {
 		existing.Headers = raw
 	}
@@ -247,6 +264,18 @@ func lastStatusLabel(statusCode int, failureReason string) string {
 }
 
 func (s *Service) SetRouteEnabled(ctx context.Context, id int64, enabled bool) error {
+	if enabled {
+		route, err := s.routes.GetRouteByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		if route == nil {
+			return domain.ErrRouteNotFound
+		}
+		if !domain.IsSafeSyntheticMethod(route.Method) {
+			return domain.ErrUnsafeSynthetic
+		}
+	}
 	return s.routes.SetRouteEnabled(ctx, id, enabled)
 }
 
@@ -262,6 +291,10 @@ func (s *Service) GetRoute(ctx context.Context, id int64) (*models.APIRoute, err
 	return s.routes.GetRouteByID(ctx, id)
 }
 
+func (s *Service) GetRouteByMethodPath(ctx context.Context, projectID int64, method, path string) (*models.APIRoute, error) {
+	return s.routes.GetRouteByMethodPath(ctx, projectID, method, path)
+}
+
 func (s *Service) ListRoutes(ctx context.Context, filter models.RouteFilter) ([]models.APIRoute, int, error) {
 	return s.routes.ListRoutes(ctx, filter)
 }
@@ -272,6 +305,20 @@ func (s *Service) ListRouteChecks(ctx context.Context, routeID int64, limit, off
 
 func (s *Service) ListRouteIncidents(ctx context.Context, projectID int64, routeID *int64, state string, limit, offset int) ([]models.RouteIncident, error) {
 	return s.routeIncidents.ListRouteIncidents(ctx, projectID, routeID, state, limit, offset)
+}
+
+func (s *Service) AcknowledgeRouteIncident(ctx context.Context, projectID, incidentID, userID int64) error {
+	incident, err := s.routeIncidents.GetRouteIncident(ctx, projectID, incidentID)
+	if err != nil {
+		return err
+	}
+	if incident == nil {
+		return domain.ErrProjectNotFound
+	}
+	if incident.State == "resolved" {
+		return domain.ErrInvalidInput
+	}
+	return s.routeIncidents.AcknowledgeRouteIncident(ctx, incidentID, userID, time.Now().UTC())
 }
 
 // timeseriesRanges are the only windows the API will serve. Fixing the set
@@ -364,7 +411,8 @@ func (s *Service) ProcessRouteCheckResult(ctx context.Context, route models.APIR
 
 	bucket := checkedAt.UTC().Truncate(time.Minute).Format(time.RFC3339)
 	if transition.ShouldOpen {
-		incidentID, createErr := s.routeIncidents.CreateRouteIncident(ctx, route.ID, route.ProjectID, failureReason, checkedAt)
+		evidence, _ := json.Marshal(map[string]any{"statusCode": statusCode, "attempts": attempts, "outcome": status})
+		incidentID, createErr := s.routeIncidents.CreateRouteIncident(ctx, route.ID, route.ProjectID, "synthetic", fmt.Sprintf("route:%d", route.ID), failureReason, string(evidence), checkedAt)
 		if createErr != nil {
 			return createErr
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -45,6 +46,9 @@ func TestCreateRouteNormalizesAndInheritsProjectDefaults(t *testing.T) {
 	if route.BaseURL != "https://api.example.com" {
 		t.Fatalf("base URL not normalized: %q", route.BaseURL)
 	}
+	if route.CanonicalIdentity != "GET https://api.example.com/v1/pets" || len(route.CanonicalHash) != 32 || route.CanonicalVersion != 1 {
+		t.Fatalf("canonical dual-write fields missing: %+v", route)
+	}
 	if route.MonitorIntervalSecs != 60 || route.TimeoutMS != 3000 || route.Retries != 1 {
 		t.Fatalf("project monitoring defaults not inherited: %+v", route)
 	}
@@ -80,6 +84,36 @@ func TestCreateRouteRejectsInvalidAndDuplicate(t *testing.T) {
 	}
 }
 
+func TestRoutesAreCatalogOnlyUntilAnExplicitSafeCanaryIsEnabled(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	project := seedProject(t, h)
+
+	catalog, err := h.service.CreateRoute(ctx, project, RouteInput{Method: "POST", Path: "/orders", BaseURL: "https://api.example.com", Enabled: boolPtr(false)})
+	if err != nil {
+		t.Fatalf("create catalog entry: %v", err)
+	}
+	if catalog.Enabled || catalog.Status != domain.RouteStatusDisabled {
+		t.Fatalf("a catalog entry must not start a synthetic check: %+v", catalog)
+	}
+	if _, err := h.service.CreateRoute(ctx, project, RouteInput{Method: "DELETE", Path: "/orders/{id}", BaseURL: "https://api.example.com", Enabled: boolPtr(true)}); !errors.Is(err, domain.ErrUnsafeSynthetic) {
+		t.Fatalf("expected unsafe enabled method to be rejected, got %v", err)
+	}
+	if err := h.service.SetRouteEnabled(ctx, catalog.ID, true); !errors.Is(err, domain.ErrUnsafeSynthetic) {
+		t.Fatalf("expected unsafe catalog entry enablement to be rejected, got %v", err)
+	}
+
+	safe, err := h.service.CreateRoute(ctx, project, RouteInput{Method: "GET", Path: "/health", BaseURL: "https://api.example.com", Enabled: boolPtr(true)})
+	if err != nil {
+		t.Fatalf("create safe canary: %v", err)
+	}
+	if !safe.Enabled {
+		t.Fatal("explicit GET canary should be enabled")
+	}
+}
+
+func boolPtr(v bool) *bool { return &v }
+
 func TestBulkCreateRoutesReportsPartialFailures(t *testing.T) {
 	h := newTestHarness()
 	ctx := context.Background()
@@ -111,7 +145,7 @@ func TestBulkCreateRoutesReportsPartialFailures(t *testing.T) {
 		1: domain.ErrInvalidRoute.Error(),
 		3: domain.ErrDuplicateRoute.Error(),
 		4: domain.ErrDuplicateRoute.Error(),
-		5: domain.ErrInvalidRoute.Error(),
+		5: "a route template is required",
 	}
 	for _, f := range result.Failed {
 		want, ok := wantIndexes[f.Index]
@@ -325,6 +359,36 @@ func TestProcessRouteCheckResultUpdatesMetrics(t *testing.T) {
 	}
 	if len(checks) != 1 || checks[0].Status != "up" || checks[0].StatusCode != 200 {
 		t.Fatalf("expected one persisted time-series row, got %+v", checks)
+	}
+}
+
+func TestRouteIncidentAcknowledgementPreservesEvidenceAndAllowsResolution(t *testing.T) {
+	h := newTestHarness()
+	ctx := context.Background()
+	project := seedProject(t, h)
+	route, err := h.service.CreateRoute(ctx, project, RouteInput{Method: "GET", Path: "/incident-evidence", BaseURL: "https://a.example", FailureThreshold: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	processChecks(t, h, route.ID, "down")
+	open, err := h.service.ListRouteIncidents(ctx, project.ID, &route.ID, "open", 10, 0)
+	if err != nil || len(open) != 1 {
+		t.Fatalf("open incident: %v %+v", err, open)
+	}
+	if open[0].Source != "synthetic" || open[0].SourceKey != "route:"+strconv.FormatInt(route.ID, 10) || !strings.Contains(open[0].Evidence, `"statusCode":500`) {
+		t.Fatalf("missing source/evidence: %+v", open[0])
+	}
+	if err = h.service.AcknowledgeRouteIncident(ctx, project.ID, open[0].ID, 99); err != nil {
+		t.Fatalf("acknowledge: %v", err)
+	}
+	acknowledged, err := h.service.ListRouteIncidents(ctx, project.ID, &route.ID, "acknowledged", 10, 0)
+	if err != nil || len(acknowledged) != 1 || acknowledged[0].AcknowledgedByID == nil || *acknowledged[0].AcknowledgedByID != 99 {
+		t.Fatalf("acknowledged incident: %v %+v", err, acknowledged)
+	}
+	processChecks(t, h, route.ID, "up")
+	resolved, err := h.service.ListRouteIncidents(ctx, project.ID, &route.ID, "resolved", 10, 0)
+	if err != nil || len(resolved) != 1 || resolved[0].ResolvedAt == nil {
+		t.Fatalf("resolved acknowledged incident: %v %+v", err, resolved)
 	}
 }
 

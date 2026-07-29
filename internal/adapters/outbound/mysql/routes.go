@@ -9,19 +9,20 @@ import (
 	"time"
 
 	"argus/internal/models"
+	"argus/internal/secrets"
 )
 
-const routeColumns = `id, project_id, method, path, base_url, operation_id, name, summary, description, tags, deprecated,
-	parameters, request_body, responses, security, headers, spec_hash, source, enabled,
+const routeColumns = `id, project_id, method, path, base_url, canonical_identity, canonical_hash, canonical_version, operation_id, name, summary, description, tags, deprecated,
+	parameters, request_body, responses, security, headers, headers_encrypted, spec_hash, source, enabled,
 	monitor_interval_seconds, timeout_ms, retries, expected_status_range, failure_threshold, recovery_successes,
 	status, last_checked_at, last_status_code, last_latency_ms, last_failure_reason, consecutive_failures, consecutive_successes,
 	next_check_at, uptime_24h_pct, avg_latency_24h_ms, checks_24h, failures_24h, created_at, updated_at`
 
-func scanRoute(row interface{ Scan(dest ...any) error }, rt *models.APIRoute) error {
-	var description, tags, parameters, requestBody, responses, security, headers, lastFailureReason sql.NullString
+func (r *Store) scanRoute(row interface{ Scan(dest ...any) error }, rt *models.APIRoute) error {
+	var description, tags, parameters, requestBody, responses, security, headers, encryptedHeaders, lastFailureReason sql.NullString
 	var lastChecked sql.NullTime
-	err := row.Scan(&rt.ID, &rt.ProjectID, &rt.Method, &rt.Path, &rt.BaseURL, &rt.OperationID, &rt.Name, &rt.Summary, &description, &tags, &rt.Deprecated,
-		&parameters, &requestBody, &responses, &security, &headers, &rt.SpecHash, &rt.Source, &rt.Enabled,
+	err := row.Scan(&rt.ID, &rt.ProjectID, &rt.Method, &rt.Path, &rt.BaseURL, &rt.CanonicalIdentity, &rt.CanonicalHash, &rt.CanonicalVersion, &rt.OperationID, &rt.Name, &rt.Summary, &description, &tags, &rt.Deprecated,
+		&parameters, &requestBody, &responses, &security, &headers, &encryptedHeaders, &rt.SpecHash, &rt.Source, &rt.Enabled,
 		&rt.MonitorIntervalSecs, &rt.TimeoutMS, &rt.Retries, &rt.ExpectedStatusRange, &rt.FailureThreshold, &rt.RecoverySuccesses,
 		&rt.Status, &lastChecked, &rt.LastStatusCode, &rt.LastLatencyMS, &lastFailureReason, &rt.ConsecutiveFailures, &rt.ConsecutiveSuccesses,
 		&rt.NextCheckAt, &rt.Uptime24hPct, &rt.AvgLatency24hMS, &rt.Checks24h, &rt.Failures24h, &rt.CreatedAt, &rt.UpdatedAt)
@@ -34,6 +35,13 @@ func scanRoute(row interface{ Scan(dest ...any) error }, rt *models.APIRoute) er
 	rt.Responses = responses.String
 	rt.Security = security.String
 	rt.Headers = headers.String
+	if encryptedHeaders.Valid && encryptedHeaders.String != "" {
+		var openErr error
+		rt.Headers, openErr = secrets.Open(r.routeSecretKey, encryptedHeaders.String)
+		if openErr != nil {
+			return openErr
+		}
+	}
 	rt.LastFailureReason = lastFailureReason.String
 	if lastChecked.Valid {
 		rt.LastCheckedAt = &lastChecked.Time
@@ -42,6 +50,13 @@ func scanRoute(row interface{ Scan(dest ...any) error }, rt *models.APIRoute) er
 		_ = json.Unmarshal([]byte(tags.String), &rt.Tags)
 	}
 	return nil
+}
+
+func (r *Store) sealedHeaders(headers string) (any, error) {
+	if strings.TrimSpace(headers) == "" {
+		return nil, nil
+	}
+	return secrets.Seal(r.routeSecretKey, headers)
 }
 
 func marshalTags(tags []string) any {
@@ -63,13 +78,17 @@ func nullableJSON(s string) any {
 }
 
 func (r *Store) CreateRoute(ctx context.Context, route models.APIRoute) (int64, error) {
-	res, err := r.db.ExecContext(ctx, `INSERT INTO api_routes (project_id, method, path, base_url, operation_id, name, summary, description, tags, deprecated,
-			parameters, request_body, responses, security, headers, spec_hash, source, enabled,
+	sealedHeaders, err := r.sealedHeaders(route.Headers)
+	if err != nil {
+		return 0, err
+	}
+	res, err := r.db.ExecContext(ctx, `INSERT INTO api_routes (project_id, method, path, base_url, canonical_identity, canonical_hash, canonical_version, operation_id, name, summary, description, tags, deprecated,
+			parameters, request_body, responses, security, headers, headers_encrypted, spec_hash, source, enabled,
 			monitor_interval_seconds, timeout_ms, retries, expected_status_range, failure_threshold, recovery_successes,
 			status, next_check_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		route.ProjectID, route.Method, route.Path, route.BaseURL, route.OperationID, route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
-		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nullableJSON(route.Headers), route.SpecHash, route.Source, route.Enabled,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		route.ProjectID, route.Method, route.Path, route.BaseURL, route.CanonicalIdentity, route.CanonicalHash, route.CanonicalVersion, route.OperationID, route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
+		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nil, sealedHeaders, route.SpecHash, route.Source, route.Enabled,
 		route.MonitorIntervalSecs, route.TimeoutMS, route.Retries, route.ExpectedStatusRange, route.FailureThreshold, route.RecoverySuccesses,
 		route.Status, route.NextCheckAt)
 	if err != nil {
@@ -88,11 +107,11 @@ func (r *Store) BulkCreateRoutes(ctx context.Context, routes []models.APIRoute) 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	stmt, err := tx.PrepareContext(ctx, `INSERT INTO api_routes (project_id, method, path, base_url, operation_id, name, summary, description, tags, deprecated,
-			parameters, request_body, responses, security, headers, spec_hash, source, enabled,
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO api_routes (project_id, method, path, base_url, canonical_identity, canonical_hash, canonical_version, operation_id, name, summary, description, tags, deprecated,
+			parameters, request_body, responses, security, headers, headers_encrypted, spec_hash, source, enabled,
 			monitor_interval_seconds, timeout_ms, retries, expected_status_range, failure_threshold, recovery_successes,
 			status, next_check_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return 0, err
 	}
@@ -100,8 +119,12 @@ func (r *Store) BulkCreateRoutes(ctx context.Context, routes []models.APIRoute) 
 
 	count := 0
 	for _, route := range routes {
-		if _, err = stmt.ExecContext(ctx, route.ProjectID, route.Method, route.Path, route.BaseURL, route.OperationID, route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
-			nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nullableJSON(route.Headers), route.SpecHash, route.Source, route.Enabled,
+		sealedHeaders, sealErr := r.sealedHeaders(route.Headers)
+		if sealErr != nil {
+			return 0, sealErr
+		}
+		if _, err = stmt.ExecContext(ctx, route.ProjectID, route.Method, route.Path, route.BaseURL, route.CanonicalIdentity, route.CanonicalHash, route.CanonicalVersion, route.OperationID, route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
+			nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nil, sealedHeaders, route.SpecHash, route.Source, route.Enabled,
 			route.MonitorIntervalSecs, route.TimeoutMS, route.Retries, route.ExpectedStatusRange, route.FailureThreshold, route.RecoverySuccesses,
 			route.Status, route.NextCheckAt); err != nil {
 			return 0, err
@@ -115,15 +138,19 @@ func (r *Store) BulkCreateRoutes(ctx context.Context, routes []models.APIRoute) 
 }
 
 func (r *Store) UpdateRoute(ctx context.Context, route models.APIRoute) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET name=?, summary=?, description=?, tags=?, deprecated=?,
-			parameters=?, request_body=?, responses=?, security=?, headers=?, spec_hash=?, enabled=?,
+	sealedHeaders, err := r.sealedHeaders(route.Headers)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.ExecContext(ctx, `UPDATE api_routes SET name=?, summary=?, description=?, tags=?, deprecated=?,
+			parameters=?, request_body=?, responses=?, security=?, headers=?, headers_encrypted=?, spec_hash=?, enabled=?,
 			monitor_interval_seconds=?, timeout_ms=?, retries=?, expected_status_range=?, failure_threshold=?, recovery_successes=?,
-			base_url=?, updated_at=NOW()
+			base_url=?, canonical_identity=?, canonical_hash=?, canonical_version=?, updated_at=NOW()
 		WHERE id=?`,
 		route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
-		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nullableJSON(route.Headers), route.SpecHash, route.Enabled,
+		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), nil, sealedHeaders, route.SpecHash, route.Enabled,
 		route.MonitorIntervalSecs, route.TimeoutMS, route.Retries, route.ExpectedStatusRange, route.FailureThreshold, route.RecoverySuccesses,
-		route.BaseURL, route.ID)
+		route.BaseURL, route.CanonicalIdentity, route.CanonicalHash, route.CanonicalVersion, route.ID)
 	return err
 }
 
@@ -134,10 +161,10 @@ func (r *Store) UpdateRoute(ctx context.Context, route models.APIRoute) error {
 // silently clobber a user's monitoring settings.
 func (r *Store) UpdateRouteImportedMetadata(ctx context.Context, route models.APIRoute) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET name=?, summary=?, description=?, tags=?, deprecated=?,
-			parameters=?, request_body=?, responses=?, security=?, spec_hash=?, base_url=?, updated_at=NOW()
+			parameters=?, request_body=?, responses=?, security=?, spec_hash=?, base_url=?, canonical_identity=?, canonical_hash=?, canonical_version=?, updated_at=NOW()
 		WHERE id=?`,
 		route.Name, route.Summary, nullableJSON(route.Description), marshalTags(route.Tags), route.Deprecated,
-		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), route.SpecHash, route.BaseURL, route.ID)
+		nullableJSON(route.Parameters), nullableJSON(route.RequestBody), nullableJSON(route.Responses), nullableJSON(route.Security), route.SpecHash, route.BaseURL, route.CanonicalIdentity, route.CanonicalHash, route.CanonicalVersion, route.ID)
 	return err
 }
 
@@ -181,7 +208,7 @@ func (r *Store) BulkDeleteRoutes(ctx context.Context, projectID int64, ids []int
 func (r *Store) GetRouteByID(ctx context.Context, id int64) (*models.APIRoute, error) {
 	var rt models.APIRoute
 	row := r.db.QueryRowContext(ctx, `SELECT `+routeColumns+` FROM api_routes WHERE id=? LIMIT 1`, id)
-	if err := scanRoute(row, &rt); err != nil {
+	if err := r.scanRoute(row, &rt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -193,7 +220,7 @@ func (r *Store) GetRouteByID(ctx context.Context, id int64) (*models.APIRoute, e
 func (r *Store) GetRouteByMethodPath(ctx context.Context, projectID int64, method, path string) (*models.APIRoute, error) {
 	var rt models.APIRoute
 	row := r.db.QueryRowContext(ctx, `SELECT `+routeColumns+` FROM api_routes WHERE project_id=? AND method=? AND path=? LIMIT 1`, projectID, method, path)
-	if err := scanRoute(row, &rt); err != nil {
+	if err := r.scanRoute(row, &rt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -298,7 +325,7 @@ func (r *Store) ListRoutes(ctx context.Context, filter models.RouteFilter) ([]mo
 	out := []models.APIRoute{}
 	for rows.Next() {
 		var rt models.APIRoute
-		if err = scanRoute(rows, &rt); err != nil {
+		if err = r.scanRoute(rows, &rt); err != nil {
 			return nil, 0, err
 		}
 		out = append(out, rt)
@@ -318,12 +345,174 @@ func (r *Store) ListDueRoutes(ctx context.Context, now time.Time, limit int, aft
 	out := []models.APIRoute{}
 	for rows.Next() {
 		var rt models.APIRoute
-		if err = scanRoute(rows, &rt); err != nil {
+		if err = r.scanRoute(rows, &rt); err != nil {
 			return nil, err
 		}
 		out = append(out, rt)
 	}
 	return out, rows.Err()
+}
+
+// ReserveSyntheticBudget makes the admission decision before an Asynq task is
+// created. Both counters live in the same transaction and are locked in a
+// stable order, so concurrent scheduler processes cannot oversubscribe either
+// the global or project allowance.
+func (r *Store) ReserveSyntheticBudget(ctx context.Context, projectID int64, day time.Time, requests, projectLimit, globalLimit int) (bool, string, error) {
+	if projectID <= 0 || requests <= 0 || projectLimit <= 0 || globalLimit <= 0 {
+		return false, "invalid_budget", fmt.Errorf("invalid synthetic budget reservation")
+	}
+	windowDay := day.UTC().Format("2006-01-02")
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, "", err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Materialize both lock rows before selecting FOR UPDATE. This supports a
+	// fresh installation and makes the global row the serialization point.
+	if _, err = tx.ExecContext(ctx, `INSERT INTO synthetic_budget_windows (scope, project_id, window_day)
+		VALUES ('global', 0, ?), ('project', ?, ?)
+		ON DUPLICATE KEY UPDATE request_count=request_count`, windowDay, projectID, windowDay); err != nil {
+		return false, "", err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT scope, project_id, request_count
+		FROM synthetic_budget_windows
+		WHERE window_day=? AND ((scope='global' AND project_id=0) OR (scope='project' AND project_id=?))
+		ORDER BY scope, project_id FOR UPDATE`, windowDay, projectID)
+	if err != nil {
+		return false, "", err
+	}
+	var globalCount, projectCount int64
+	for rows.Next() {
+		var scope string
+		var id, count int64
+		if err = rows.Scan(&scope, &id, &count); err != nil {
+			_ = rows.Close()
+			return false, "", err
+		}
+		if scope == "global" && id == 0 {
+			globalCount = count
+		} else if scope == "project" && id == projectID {
+			projectCount = count
+		}
+	}
+	if err = rows.Close(); err != nil {
+		return false, "", err
+	}
+	if globalCount+int64(requests) > int64(globalLimit) {
+		return false, "global_daily_budget", nil
+	}
+	if projectCount+int64(requests) > int64(projectLimit) {
+		return false, "project_daily_budget", nil
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE synthetic_budget_windows SET request_count=request_count+?
+		WHERE window_day=? AND ((scope='global' AND project_id=0) OR (scope='project' AND project_id=?))`, requests, windowDay, projectID); err != nil {
+		return false, "", err
+	}
+	if err = tx.Commit(); err != nil {
+		return false, "", err
+	}
+	return true, "", nil
+}
+
+func (r *Store) ReleaseSyntheticBudget(ctx context.Context, projectID int64, day time.Time, requests int) error {
+	if projectID <= 0 || requests <= 0 {
+		return fmt.Errorf("invalid synthetic budget refund")
+	}
+	windowDay := day.UTC().Format("2006-01-02")
+	// GREATEST prevents a corrupted or repeated failure path from creating a
+	// negative counter. Both scope rows must exist after any successful reserve.
+	result, err := r.db.ExecContext(ctx, `UPDATE synthetic_budget_windows
+		SET request_count=GREATEST(0, request_count-?)
+		WHERE window_day=? AND ((scope='global' AND project_id=0) OR (scope='project' AND project_id=?))`, requests, windowDay, projectID)
+	if err != nil {
+		return err
+	}
+	if changed, _ := result.RowsAffected(); changed != 2 {
+		return fmt.Errorf("synthetic budget refund found incomplete counter rows")
+	}
+	return nil
+}
+
+// AcquireSyntheticLease uses two stable lock rows to serialize admission. The
+// actual lease has a bounded TTL, so a process crash cannot permanently spend
+// a concurrency slot. A route-specific lease key also prevents duplicate task
+// delivery from issuing two simultaneous requests to the same target.
+func (r *Store) AcquireSyntheticLease(ctx context.Context, projectID int64, leaseKey string, now, expiresAt time.Time, projectLimit, globalLimit int) (bool, string, error) {
+	if projectID <= 0 || strings.TrimSpace(leaseKey) == "" || !expiresAt.After(now) || projectLimit <= 0 || globalLimit <= 0 {
+		return false, "invalid_concurrency", fmt.Errorf("invalid synthetic lease")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, "", err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.ExecContext(ctx, `INSERT INTO synthetic_concurrency_locks (scope, project_id)
+		VALUES ('global', 0), ('project', ?)
+		ON DUPLICATE KEY UPDATE project_id=VALUES(project_id)`, projectID); err != nil {
+		return false, "", err
+	}
+	lockRows, err := tx.QueryContext(ctx, `SELECT scope, project_id FROM synthetic_concurrency_locks
+		WHERE (scope='global' AND project_id=0) OR (scope='project' AND project_id=?)
+		ORDER BY scope, project_id FOR UPDATE`, projectID)
+	if err != nil {
+		return false, "", err
+	}
+	for lockRows.Next() {
+		var scope string
+		var id int64
+		if err = lockRows.Scan(&scope, &id); err != nil {
+			_ = lockRows.Close()
+			return false, "", err
+		}
+	}
+	if err = lockRows.Close(); err != nil {
+		return false, "", err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM synthetic_execution_leases WHERE expires_at <= ?`, now); err != nil {
+		return false, "", err
+	}
+	var globalActive, projectActive int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM synthetic_execution_leases WHERE expires_at > ?`, now).Scan(&globalActive); err != nil {
+		return false, "", err
+	}
+	if globalActive >= globalLimit {
+		return false, "global_concurrency", nil
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM synthetic_execution_leases WHERE project_id=? AND expires_at > ?`, projectID, now).Scan(&projectActive); err != nil {
+		return false, "", err
+	}
+	if projectActive >= projectLimit {
+		return false, "project_concurrency", nil
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO synthetic_execution_leases (lease_key, project_id, expires_at) VALUES (?, ?, ?)`, leaseKey, projectID, expiresAt); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate") {
+			return false, "project_concurrency", nil
+		}
+		return false, "", err
+	}
+	if err = tx.Commit(); err != nil {
+		return false, "", err
+	}
+	return true, "", nil
+}
+
+func (r *Store) ReleaseSyntheticLease(ctx context.Context, leaseKey string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM synthetic_execution_leases WHERE lease_key=?`, leaseKey)
+	return err
+}
+
+func (r *Store) RecordSyntheticSkip(ctx context.Context, routeID, projectID int64, reason string, skippedAt time.Time) error {
+	if reason != "project_daily_budget" && reason != "global_daily_budget" && reason != "project_concurrency" && reason != "global_concurrency" {
+		return fmt.Errorf("invalid synthetic skip reason")
+	}
+	_, err := r.db.ExecContext(ctx, `INSERT INTO synthetic_check_skips (route_id, project_id, reason, skipped_at) VALUES (?, ?, ?, ?)`, routeID, projectID, reason, skippedAt)
+	return err
+}
+
+func (r *Store) DeferRouteCheck(ctx context.Context, routeID int64, nextCheckAt time.Time) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET next_check_at=?, updated_at=NOW() WHERE id=?`, nextCheckAt, routeID)
+	return err
 }
 
 func (r *Store) MarkRouteChecked(ctx context.Context, id int64, status string, statusCode, latencyMS int, failureReason string, consecutiveFailures, consecutiveSuccesses int, routeStatus string, checkedAt, nextCheckAt time.Time) error {

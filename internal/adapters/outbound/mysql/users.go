@@ -36,6 +36,11 @@ func (r *Store) GetUserByID(ctx context.Context, id int64) (*models.User, error)
 	return &u, err
 }
 
+func (r *Store) UpdateUserPassword(ctx context.Context, id int64, passwordHash string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE users SET password_hash=? WHERE id=?`, passwordHash, id)
+	return err
+}
+
 func (r *Store) CreateToken(ctx context.Context, token models.AuthToken) (int64, error) {
 	res, err := r.db.ExecContext(ctx, `INSERT INTO auth_tokens (user_id, token_hash, name, expires_at) VALUES (?, ?, ?, ?)`, token.UserID, token.TokenHash, token.Name, token.ExpiresAt)
 	if err != nil {
@@ -61,6 +66,27 @@ func (r *Store) GetTokenByHash(ctx context.Context, tokenHash string) (*models.A
 	return &t, nil
 }
 
+func (r *Store) ListTokensByUser(ctx context.Context, userID int64) ([]models.AuthToken, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, user_id, token_hash, name, created_at, last_used_at, expires_at FROM auth_tokens WHERE user_id=? ORDER BY created_at DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []models.AuthToken{}
+	for rows.Next() {
+		var token models.AuthToken
+		var lastUsed sql.NullTime
+		if err := rows.Scan(&token.ID, &token.UserID, &token.TokenHash, &token.Name, &token.CreatedAt, &lastUsed, &token.ExpiresAt); err != nil {
+			return nil, err
+		}
+		if lastUsed.Valid {
+			token.LastUsedAt = &lastUsed.Time
+		}
+		out = append(out, token)
+	}
+	return out, rows.Err()
+}
+
 func (r *Store) TouchToken(ctx context.Context, id int64, usedAt time.Time) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE auth_tokens SET last_used_at=? WHERE id=?`, usedAt, id)
 	return err
@@ -68,5 +94,43 @@ func (r *Store) TouchToken(ctx context.Context, id int64, usedAt time.Time) erro
 
 func (r *Store) DeleteToken(ctx context.Context, tokenHash string) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM auth_tokens WHERE token_hash=?`, tokenHash)
+	return err
+}
+
+func (r *Store) DeleteTokensByUserExcept(ctx context.Context, userID int64, tokenHash string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM auth_tokens WHERE user_id=? AND token_hash<>?`, userID, tokenHash)
+	return err
+}
+
+func (r *Store) CreatePasswordRecoveryToken(ctx context.Context, token models.PasswordRecoveryToken) (int64, error) {
+	res, err := r.db.ExecContext(ctx, `INSERT INTO password_recovery_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)`, token.UserID, token.TokenHash, token.ExpiresAt)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (r *Store) ConsumePasswordRecoveryToken(ctx context.Context, tokenHash string, usedAt time.Time) (*models.PasswordRecoveryToken, error) {
+	result, err := r.db.ExecContext(ctx, `UPDATE password_recovery_tokens SET used_at=? WHERE token_hash=? AND used_at IS NULL AND expires_at>?`, usedAt, tokenHash, usedAt)
+	if err != nil {
+		return nil, err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil || changed != 1 {
+		return nil, err
+	}
+	var token models.PasswordRecoveryToken
+	err = r.db.QueryRowContext(ctx, `SELECT id, user_id, token_hash, expires_at, used_at, created_at FROM password_recovery_tokens WHERE token_hash=? LIMIT 1`, tokenHash).Scan(&token.ID, &token.UserID, &token.TokenHash, &token.ExpiresAt, &token.UsedAt, &token.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &token, nil
+}
+
+func (r *Store) DeletePasswordRecoveryTokensByUser(ctx context.Context, userID int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM password_recovery_tokens WHERE user_id=?`, userID)
 	return err
 }

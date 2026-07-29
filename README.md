@@ -104,7 +104,10 @@ docker compose up -d
 docker compose ps
 ```
 
-This starts MySQL 8.4 and Redis 8.8 with persistent named volumes.
+This starts MySQL 8.4, Redis 8.8, and VictoriaMetrics with persistent named
+volumes. VictoriaMetrics is available only on local loopback at
+`http://127.0.0.1:8428`; see [ADR 0001](docs/adr/0001-prometheus-compatible-metrics-store.md)
+for retention, backup, restore, and production-access guidance.
 
 ### 2. Start Argus
 
@@ -119,7 +122,7 @@ The application connects to MySQL and Redis, applies every `*.up.sql` migration 
 Use the **Add monitor** form in the dashboard, or call the API:
 
 ```bash
-curl --request POST http://localhost:8080/api/websites \
+curl --request POST http://localhost:8080/monitor/websites \
   --header 'Content-Type: application/json' \
   --data '{
     "url": "https://example.com",
@@ -150,6 +153,7 @@ Argus reads environment variables and automatically loads a local `.env` file wh
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `HTTP_ADDR` | `:8080` | API and dashboard listen address. |
+| `OTLP_GRPC_ADDR` | empty | Optional dedicated OTLP/gRPC listener address. Empty leaves OTLP/gRPC disabled; terminate TLS and restrict network access before enabling it. |
 | `MYSQL_DSN` | `argus:argus@tcp(localhost:3306)/argus?parseTime=true` | Go MySQL driver DSN. Keep `parseTime=true`. |
 | `REDIS_ADDR` | `localhost:6379` | Redis address used by Asynq. |
 | `REDIS_PASSWORD` | empty | Redis password. |
@@ -163,6 +167,18 @@ Argus reads environment variables and automatically loads a local `.env` file wh
 | `DB_MAX_OPEN_CONNS` | `25` | Maximum open MySQL connections. |
 | `DB_MAX_IDLE_CONNS` | `25` | Maximum idle MySQL connections. |
 | `DB_CONN_MAX_LIFETIME` | `5m` | Maximum lifetime of a pooled connection. |
+| `METRICS_BACKEND_URL` | `http://localhost:8428` | Internal VictoriaMetrics base URL for sanitized OTLP samples and future SLO queries. |
+| `METRICS_BACKEND_TIMEOUT` | `5s` | Timeout for the VictoriaMetrics import request. |
+| `SLO_EVALUATION_INTERVAL` | `1m` | How often the worker evaluates stored SLO definitions from the internal metrics backend. |
+| `SLO_STALE_AFTER` | `10m` | Age after which the most recent telemetry sample produces a stale SLO result. |
+| `ROUTE_PROJECT_DAILY_BUDGET` | `10000` | Maximum synthetic HTTP request attempts admitted for one project in a UTC day. A retry reserves another attempt. |
+| `ROUTE_GLOBAL_DAILY_BUDGET` | `100000` | Maximum synthetic HTTP request attempts admitted across all projects in a UTC day. |
+| `ROUTE_PROJECT_CONCURRENCY` | `4` | Maximum in-flight synthetic HTTP requests for a single project. |
+| `ROUTE_GLOBAL_CONCURRENCY` | `50` | Maximum in-flight synthetic HTTP requests across all projects. |
+| `RECOVERY_DELIVERY_URL` | empty | Optional operator-owned HTTPS webhook for password-recovery delivery. Argus sends the registered email, one-time reset token, and expiry; an empty value safely disables delivery. |
+| `RECOVERY_DELIVERY_TIMEOUT` | `5s` | Maximum duration for the trusted recovery-delivery webhook. |
+| `ROUTE_SECRET_ENCRYPTION_KEY` | empty | Base64-encoded 32-byte AES-256 key required to persist non-empty synthetic request headers. New writes use versioned AEAD ciphertext; keep this key in an operator-managed secret store. |
+| `AUTH_COOKIE_SECURE` | `true` | Marks browser session cookies `Secure`. Set `false` only for local HTTP development. |
 
 Example production-oriented `.env`:
 
@@ -180,7 +196,34 @@ Invalid integer or duration values fall back to defaults; an invalid `REDIS_DB` 
 
 ## HTTP API
 
-Responses are JSON unless an endpoint returns `204 No Content`. The website API uses optional global API-key auth; the project API uses its own bearer-token sessions.
+### Route-header secret migration
+
+After setting `ROUTE_SECRET_ENCRYPTION_KEY`, migrate legacy plaintext route
+headers with `go run ./cmd/migrate-route-secrets -dry-run` and then without
+`-dry-run`. Migration is restartable because each converted row has its
+plaintext column cleared.
+
+For a key rotation, first apply migration `0020`, stop route writers in a
+maintenance window, and run a dry run followed by the real command using one
+stable rotation ID:
+
+```bash
+ROUTE_SECRET_ENCRYPTION_KEY=<new-key> go run ./cmd/migrate-route-secrets \
+  -rotate -rotation-id route-header-2026-07 -old-key <old-key> -dry-run
+ROUTE_SECRET_ENCRYPTION_KEY=<new-key> go run ./cmd/migrate-route-secrets \
+  -rotate -rotation-id route-header-2026-07 -old-key <old-key>
+```
+
+Each committed batch advances a durable checkpoint in
+`route_header_secret_rotations` in the same transaction as its ciphertext
+updates. If the command is interrupted, rerun the exact same command and
+rotation ID; it resumes safely. The checkpoint stores SHA-256 fingerprints of
+the source and destination keys (never the keys), and rejects an accidental
+reuse of an ID with different key material. Switch the application key only
+after output reports `complete=true`, then retain the old key only for the
+rollback period defined by your secret-management policy.
+
+Responses are JSON unless an endpoint returns `204 No Content`. Every Argus control-plane route uses `/family/purpose[/optional]`; the removed `/api/*` prefix is not accepted. The website API uses optional global API-key auth; the project API uses its own bearer-token sessions.
 
 ### Website monitoring API
 
@@ -188,18 +231,18 @@ When `API_KEY` is non-empty, include `X-API-Key: <key>` on every endpoint below.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/websites?limit=100&offset=0` | List monitors. |
-| `POST` | `/api/websites` | Create a monitor. |
-| `DELETE` | `/api/websites/:id` | Delete a monitor and its dependent history. |
-| `POST` | `/api/websites/:id/heartbeat` | Record a heartbeat. |
-| `GET` | `/api/checks?limit=100` | Read recent check history. |
-| `GET` | `/api/incidents?limit=100&offset=0` | Read incident history. |
-| `POST` | `/api/alert-channels` | Create a webhook, Slack, or email channel. |
-| `POST` | `/api/maintenance-windows` | Schedule alert suppression globally or for one monitor. |
-| `GET` | `/api/status-pages?limit=100&offset=0` | List status pages. |
-| `POST` | `/api/status-pages` | Create a status page. |
-| `GET` | `/api/public/status/:slug` | Read a public status page payload. |
-| `GET` | `/api/logs` | Read the in-memory operational log buffer. |
+| `GET` | `/monitor/websites?limit=100&offset=0` | List monitors. |
+| `POST` | `/monitor/websites` | Create a monitor. |
+| `DELETE` | `/monitor/websites/:id` | Delete a monitor and its dependent history. |
+| `POST` | `/monitor/heartbeat/:id` | Record a heartbeat. |
+| `GET` | `/system/checks?limit=100` | Read recent check history. |
+| `GET` | `/system/incidents?limit=100&offset=0` | Read incident history. |
+| `POST` | `/notification/channels` | Create a webhook, Slack, or email channel. |
+| `POST` | `/notification/maintenance` | Schedule alert suppression globally or for one monitor. |
+| `GET` | `/status/pages?limit=100&offset=0` | List status pages. |
+| `POST` | `/status/pages` | Create a status page. |
+| `GET` | `/status/public/:slug` | Read a public status page payload. |
+| `GET` | `/system/logs` | Read the in-memory operational log buffer. |
 
 See the step-by-step [User Guide](USER_GUIDE.md) for request bodies and daily workflows.
 
@@ -209,23 +252,165 @@ This API is an **in-progress foundation** for multi-project route monitoring. Re
 
 ```bash
 # Register
-curl --request POST http://localhost:8080/api/auth/register \
+curl --request POST http://localhost:8080/identity/register \
   --header 'Content-Type: application/json' \
   --data '{"email":"operator@example.com","password":"change-me-now","name":"Operator"}'
 
 # Use the returned token
-curl http://localhost:8080/api/projects \
+curl http://localhost:8080/project/catalog \
   --header 'Authorization: Bearer <token>'
 ```
 
 | Area | Endpoints |
 | --- | --- |
-| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
-| Projects | `GET/POST /api/projects`, `GET/PUT/DELETE /api/projects/:projectId`, archive and unarchive actions |
-| Routes | Project-scoped list, create, update, delete, enable/disable, bulk create/delete, check history, and incidents |
-| Imports | Validate, preview, and commit OpenAPI 3.x or Swagger 2.0 JSON/YAML documents up to 10 MiB |
+| Identity | `POST /identity/register`, `POST /identity/login`, `POST /identity/logout`, `GET /identity/profile` |
+| Projects | `GET/POST /project/catalog`, `GET/PUT/DELETE /project/catalog/:projectId`, `/project/archive/:projectId`, and `/project/restore/:projectId` |
+| Telemetry | Editor-only `GET/POST /telemetry/credentials/:projectId`, plus `/telemetry/rotate/:projectId/:credentialId` and `/telemetry/revoke/:projectId/:credentialId`. Any project viewer can read freshness diagnostics at `/telemetry/ingress/:projectId`. |
+| Heartbeats | Viewer-readable `GET /heartbeat/catalog/:projectId`; editors create and revoke monitors with `POST /heartbeat/catalog/:projectId` and `POST /heartbeat/revoke/:projectId/:monitorId`. Jobs send `POST /heartbeat/ping` with the one-time Bearer token and a unique `Idempotency-Key`. |
+| Routes | `/route/catalog/:projectId` for project-scoped list/create; focused family/purpose routes handle mutations, checks, incidents, and metrics. |
+| Operational incidents | `GET /incident/catalog/:projectId` lists source-aware project incidents; editors acknowledge an open incident with `POST /incident/acknowledge/:projectId/:incidentId`. |
+| Imports | `/import/validation/:projectId`, `/import/job/:projectId/:jobId`, and `/import/commit/:projectId/:jobId` support OpenAPI 3.x or Swagger 2.0 JSON/YAML documents up to 10 MiB. |
+
+### OTLP ingestion
+
+Argus currently accepts OTLP protobuf exports at `POST /v1/metrics` and
+`POST /v1/traces`. Send `Content-Type: application/x-protobuf` (or
+`application/protobuf`) and `Authorization: Bearer <one-time-credential>`.
+The credential, not the telemetry resource, selects the project and
+environment. Resource metadata is treated as untrusted: only a bounded
+`service.name` and `deployment.environment.name` diagnostic is retained for
+mapping/freshness; raw attributes, URLs, measurements, span names, trace IDs,
+and payloads are not written to MySQL. Each credential has a configured expiry
+and per-minute request ceiling; requests above the ceiling receive `429`.
+Project editors can create the credential from the **Telemetry signals** card;
+the secret dialog is intentionally one-time and clears its displayed value when
+it is dismissed.
+
+When `OTLP_GRPC_ADDR` is explicitly configured, Argus also accepts the standard
+OTLP/gRPC Metrics and Trace `Export` services on that dedicated listener. Send
+the same `Authorization: Bearer <one-time-credential>` metadata. HTTP and gRPC
+share credential scope checks, the per-minute quota, resource/item limits,
+sanitized metric translation, and bounded diagnostics. The gRPC listener caps
+incoming messages at 4 MiB and responses at 1 MiB; it is intentionally disabled
+by default and must be protected with TLS termination and network policy.
+
+For Collector YAML examples, secret-injection guidance, verification, and
+transport troubleshooting, see [the OpenTelemetry Collector connection guide](docs/otlp-collector-guide.md).
+
+Operator response procedures for ingestion, queues, SLOs, synthetics, private
+agents, notifications, and migrations are in [the operations runbook](docs/operations-runbook.md).
+
+For fresh installation, upgrade, route-secret rotation, and rollback procedure,
+see [the database migration guide](docs/database-migration-guide.md).
+
+Recognized HTTP server-duration histograms are written to VictoriaMetrics as
+the `argus_http_server_request_duration_seconds` histogram family. The bridge
+only allows the server-bound project/environment IDs, service identity,
+deployment environment, HTTP method, normalized route template, status code,
+and bucket boundary as labels. Other metrics remain visible only as bounded
+ingestion diagnostics until Argus has an explicit safe translation for them.
+
+Telemetry route mappings are a project-scoped control-plane API at
+`GET/POST /telemetry/mappings/:projectId` (and
+`DELETE /telemetry/mappings/:projectId/:mappingId`). A mapping
+binds a catalog route to an existing project environment and service identity;
+it cannot reference another project's route or environment.
 
 OpenAPI imports resolve only local `$ref` pointers—Argus does not fetch external references. Import commits preserve user-owned monitoring configuration and disable, rather than delete, explicitly selected routes that disappeared from a specification.
+
+### Project heartbeats
+
+Project editors create a heartbeat for a selected environment and receive an
+opaque `argus_hb_...` token once. Argus stores only its SHA-256 hash. A job
+sends a ping with a fresh idempotency key for each run:
+
+```bash
+curl --request POST http://localhost:8080/heartbeat/ping \
+  --header 'Authorization: Bearer argus_hb_...' \
+  --header 'Idempotency-Key: nightly-backup-2026-07-29T00:00:00Z' \
+  --header 'Content-Type: application/json' \
+  --data '{"outcome":"success"}'
+```
+
+Only the bounded `success` or `failure` outcome is accepted; arbitrary run
+metadata, logs, URLs, and payloads are not persisted. Repeating an idempotency
+key returns an accepted response but deliberately does not refresh liveness.
+The dashboard reports `healthy`, `late`, `missing`, or `revoked` from the
+configured expected interval and grace period. Revocation immediately rejects
+the old job token.
+
+### Project incident evidence
+
+Synthetic-route incidents now record their source (`synthetic`), stable source
+key, and bounded evaluation evidence alongside the failure reason. Project
+editors can acknowledge an open incident at
+`POST /route/acknowledge/:projectId/:incidentId`; acknowledgement identifies
+human attention but does not suppress recovery or resolve the incident. A
+subsequent healthy evaluation resolves it normally. The source/evidence model
+is additive and is the compatibility bridge for SLO, heartbeat, agent, and
+pipeline incident producers.
+
+Scheduled SLO evaluation also writes transactional-outbox intents only when an
+SLO state changes. `slo_unhealthy` and `slo_recovered` are delivered through
+the existing retryable notification workflow; repeated identical evaluations
+do not generate notification noise.
+
+### Private-agent enrollment and liveness
+
+Project editors manage environment-bound private-agent identities through
+`GET/POST /agent/catalog/:projectId` and
+`POST /agent/revoke/:projectId/:agentId`. Creation returns an opaque
+`argus_agent_...` enrollment token exactly once; Argus persists only its
+SHA-256 hash. The creation payload accepts `expectedIntervalSeconds` (default
+60; bounded to 15 seconds through 24 hours). Store the raw token in the
+agent's local secret store and never place it in source control or a target
+URL. Agent listings derive `healthy`, `stale`, `offline`, or `revoked` state
+from that expectation and the most recent successful outbound heartbeat.
+
+An agent reports outbound liveness and its version without exposing its local
+network to the central service:
+
+```bash
+curl --request POST http://localhost:8080/agent/heartbeat \
+  --header 'Authorization: Bearer argus_agent_...' \
+  --header 'Content-Type: application/json' \
+  --data '{"version":"1.0.0"}'
+```
+
+Project heartbeat monitors are evaluated every minute. A late or missing run
+opens one source-aware operational incident; the incident resolves when a new,
+non-duplicate heartbeat is received. This liveness state is separate from the
+job's optional `success` or `failure` outcome.
+
+The service returns the agent's server-bound project and environment identity;
+the agent must not select those values itself. Revocation immediately rejects
+the credential, and project non-members receive a non-enumerating response.
+When `AGENT_CONFIG_SIGNING_KEY` is configured, an enrolled agent can also call
+`GET /agent/config` with its Bearer token. Argus returns a 15-minute,
+Ed25519-signed identity/liveness envelope bound to that token's server-side
+project and environment. It contains no private target, executable work, or
+reverse-connect instruction; without the signing key this route fails closed.
+Provision the matching base64url public key to the agent as
+`ARGUS_AGENT_CONFIG_PUBLIC_KEY`; it verifies the envelope before adopting the
+server-bound heartbeat interval.
+The included `argus-agent` process is an outbound-only liveness client:
+
+```bash
+ARGUS_AGENT_CONTROL_URL=https://argus.example.com \
+ARGUS_AGENT_TOKEN=argus_agent_... \
+go run ./cmd/argus-agent -heartbeat-interval=60s
+```
+
+It requires HTTPS except for loopback development, has a 10-second request
+timeout, validates a 15-second-to-24-hour heartbeat interval, and never logs
+the credential. The project dashboard exposes enrollment, one-time token
+copying, last-seen/version, healthy/stale/offline/revoked state, and guarded
+revocation. An agent may report a bounded `success` or `failure` outcome to
+`POST /agent/result` using its Bearer token and an `Idempotency-Key`; Argus
+derives project/environment identity from the token, deduplicates replays, and
+creates or resolves source-aware evidence. The packaged local executor and
+target execution remain follow-up work. Argus does not
+reverse-connect or dial customer-private addresses.
 
 ## Architecture
 
@@ -275,11 +460,27 @@ Domain policies + ports
 - Duplicate-column error `1060` is treated as an idempotent compatibility case.
 - Down migrations exist for controlled development rollback, but startup never applies them automatically.
 
+### Canonical endpoint identity backfill
+
+After migration `0006_endpoint_identity.up.sql` is applied, convert legacy API
+routes with the operator command below. Start with `-dry-run`; invalid legacy
+values and normalization collisions are recorded in
+`route_canonicalization_conflicts` for review, while valid rows are converted
+in bounded, restartable batches.
+
+```bash
+DATABASE_DSN='user:password@tcp(127.0.0.1:3306)/argus?parseTime=true' \
+  go run ./cmd/backfill-endpoint-identity -dry-run
+
+DATABASE_DSN='user:password@tcp(127.0.0.1:3306)/argus?parseTime=true' \
+  go run ./cmd/backfill-endpoint-identity -batch-size 200
+```
+
 Named Docker volumes retain both MySQL and Redis state across container restarts.
 
 ## Security model
 
-Argus is intended to monitor public network targets. Before direct HTTP and keyword checks, it resolves the hostname and blocks loopback, RFC1918/private, link-local, and cloud metadata addresses. Additional safeguards include:
+Argus is intended to monitor public network targets. Legacy website monitors and project-route checks enforce the same public-target policy at URL validation, every resolved socket dial, and each redirect hop. They block loopback, RFC1918/private, link-local, and cloud metadata addresses. Additional safeguards include:
 
 - optional global API-key protection through Fiber middleware;
 - independent bearer auth for project APIs, bcrypt password hashing, hashed session tokens, and role-aware project authorization;
@@ -290,7 +491,7 @@ Argus is intended to monitor public network targets. Before direct HTTP and keyw
 - Fiber recovery, Helmet security headers, ETags, and response compression.
 
 > [!WARNING]
-> Treat Argus as privileged infrastructure. Put it behind TLS and a trusted reverse proxy, set `API_KEY`, use strong MySQL/Redis credentials, restrict database ports, and review outbound-network policy before exposing it publicly. The newer route evaluator revalidates redirect hops and resolved addresses; the legacy website checker still uses a less-hardened client and should not be treated as equivalent.
+> Treat Argus as privileged infrastructure. Put it behind TLS and a trusted reverse proxy, set `API_KEY`, use strong MySQL/Redis credentials, restrict database ports, and review outbound-network policy before exposing it publicly.
 
 Please report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
 
