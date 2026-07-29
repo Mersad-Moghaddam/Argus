@@ -21,6 +21,40 @@ func (s *Service) ListProjectEnvironments(ctx context.Context, projectID int64) 
 }
 
 func (s *Service) CreateProjectEnvironment(ctx context.Context, projectID int64, input CreateEnvironmentInput) (models.ProjectEnvironment, error) {
+	env, err := normalizedEnvironment(projectID, input)
+	if err != nil {
+		return models.ProjectEnvironment{}, err
+	}
+	id, err := s.projects.CreateProjectEnvironment(ctx, env)
+	if err != nil {
+		return models.ProjectEnvironment{}, err
+	}
+	env.ID = id
+	return env, nil
+}
+
+func (s *Service) UpdateProjectEnvironment(ctx context.Context, projectID, environmentID int64, input CreateEnvironmentInput) (models.ProjectEnvironment, error) {
+	items, err := s.projects.ListProjectEnvironments(ctx, projectID)
+	if err != nil {
+		return models.ProjectEnvironment{}, err
+	}
+	for _, existing := range items {
+		if existing.ID == environmentID {
+			env, normalizeErr := normalizedEnvironment(projectID, input)
+			if normalizeErr != nil {
+				return models.ProjectEnvironment{}, normalizeErr
+			}
+			env.ID, env.IsDefault = existing.ID, existing.IsDefault
+			if err = s.projects.UpdateProjectEnvironment(ctx, env); err != nil {
+				return models.ProjectEnvironment{}, err
+			}
+			return env, nil
+		}
+	}
+	return models.ProjectEnvironment{}, domain.ErrProjectNotFound
+}
+
+func normalizedEnvironment(projectID int64, input CreateEnvironmentInput) (models.ProjectEnvironment, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return models.ProjectEnvironment{}, domain.ErrInvalidInput
@@ -37,13 +71,7 @@ func (s *Service) CreateProjectEnvironment(ctx context.Context, projectID int64,
 		}
 		origin = parsed.Scheme + "://" + parsed.Host
 	}
-	env := models.ProjectEnvironment{ProjectID: projectID, Name: name, CanonicalBaseURL: base, CanonicalOrigin: origin}
-	id, err := s.projects.CreateProjectEnvironment(ctx, env)
-	if err != nil {
-		return models.ProjectEnvironment{}, err
-	}
-	env.ID = id
-	return env, nil
+	return models.ProjectEnvironment{ProjectID: projectID, Name: name, CanonicalBaseURL: base, CanonicalOrigin: origin}, nil
 }
 
 var (

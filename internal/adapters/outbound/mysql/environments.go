@@ -30,3 +30,8 @@ func (r *Store) CreateProjectEnvironment(ctx context.Context, env models.Project
 	}
 	return res.LastInsertId()
 }
+
+func (r *Store) UpdateProjectEnvironment(ctx context.Context, env models.ProjectEnvironment) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE project_environments SET name=?, canonical_base_url=?, canonical_origin=? WHERE id=? AND project_id=?`, env.Name, env.CanonicalBaseURL, env.CanonicalOrigin, env.ID, env.ProjectID)
+	return err
+}

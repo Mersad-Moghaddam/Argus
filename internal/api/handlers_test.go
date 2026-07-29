@@ -1607,6 +1607,17 @@ func TestProjectEnvironmentEndpoints(t *testing.T) {
 	if created.CanonicalBaseURL != "https://api.example.com/v1" || created.CanonicalOrigin != "https://api.example.com" {
 		t.Fatalf("environment was not canonicalized: %+v", created)
 	}
+	resp = a.do(t, http.MethodPut, fmt.Sprintf("/environment/catalog/%d/%d", project.ID, created.ID), token, map[string]string{
+		"name": "pre-production", "baseUrl": "https://api.example.com:443/v2/",
+	})
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("update environment: %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+	var updated models.ProjectEnvironment
+	decode(t, resp, &updated)
+	if updated.Name != "pre-production" || updated.CanonicalBaseURL != "https://api.example.com/v2" {
+		t.Fatalf("updated environment: %+v", updated)
+	}
 
 	var listed struct {
 		Items []models.ProjectEnvironment `json:"items"`

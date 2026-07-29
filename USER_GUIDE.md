@@ -227,7 +227,7 @@ does not exist — so project IDs cannot be probed.
 
 ### 9.2 Create a project
 
-Click **New project**. The authenticated four-step flow first asks for the project identity, then
+Click **New project**. The authenticated source-aware flow first asks for the project identity, then
 asks how it should be observed: **OpenTelemetry** (recommended), an **OpenAPI catalog**, a disabled
 **Synthetic check**, a **Heartbeat**, clearly labeled non-production **Sample data**, or **Do this later**. It preserves a non-sensitive local draft
 until the project is created and does not create target traffic during setup. OpenAPI continues to
@@ -318,6 +318,8 @@ What re-importing guarantees:
 - **Telemetry route mappings** — editors can bind a trusted environment and service/deployment
   identity to one catalog route. The mapping never grants a telemetry sender the ability to choose
   a project or route outside the credential's server-side scope.
+- **Environments** — editors can add or edit an environment’s name and optional base URL. The URL
+  is normalized server-side before it is saved; updating one environment never changes another.
 - **Heartbeats** — editors create a heartbeat for a selected environment and save the generated
   `argus_hb_...` token once. Send `POST /heartbeat/ping` with that token in `Authorization: Bearer`
   and a distinct `Idempotency-Key` for every scheduled run. The optional body only accepts

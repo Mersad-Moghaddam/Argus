@@ -1110,7 +1110,7 @@
 
       <section class="card">
         <div class="card-header"><h2>Environments</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-environment">Add environment</button>' : ''}</div>
-        ${state.project.environments.length ? `<div class="list">${state.project.environments.map((env) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(env.name)}</span><span class="list-item-meta">${escapeHtml(env.canonicalBaseUrl || 'Base URL not configured')}</span></div>${env.isDefault ? '<span class="badge status-up">default</span>' : ''}</div>`).join('')}</div>` : '<div class="empty-state"><span>No environments configured.</span></div>'}
+        ${state.project.environments.length ? `<div class="list">${state.project.environments.map((env) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(env.name)}</span><span class="list-item-meta">${escapeHtml(env.canonicalBaseUrl || 'Base URL not configured')}</span></div>${env.isDefault ? '<span class="badge status-up">default</span>' : ''}${canEdit ? `<button class="secondary sm" type="button" data-action="edit-environment" data-id="${Number(env.id)}">Edit</button>` : ''}</div>`).join('')}</div>` : '<div class="empty-state"><span>No environments configured.</span></div>'}
       </section>
 
       <section class="card">
@@ -2301,8 +2301,16 @@
     openModal(pel.projectModal);
   }
 
-  function openEnvironmentModal() {
+  let editingEnvironmentId = null;
+  function openEnvironmentModal(environment = null) {
     pel.environmentForm.reset();
+    editingEnvironmentId = environment ? Number(environment.id) : null;
+    document.getElementById('projEnvironmentModalTitle').textContent = environment ? `Edit ${environment.name}` : 'Add environment';
+    pel.environmentSubmit.textContent = environment ? 'Save environment' : 'Create environment';
+    if (environment) {
+      pel.environmentName.value = environment.name || '';
+      pel.environmentBaseURL.value = environment.canonicalBaseUrl || '';
+    }
     hideFormError(pel.environmentFormError);
     openModal(pel.environmentModal);
   }
@@ -2313,12 +2321,12 @@
     hideFormError(pel.environmentFormError);
     setButtonLoading(pel.environmentSubmit, true, 'Creating...');
     try {
-	  await apiProjects(`/environment/catalog/${state.project.id}`, {
-        method: 'POST',
+      await apiProjects(`/environment/catalog/${state.project.id}${editingEnvironmentId ? `/${editingEnvironmentId}` : ''}`, {
+        method: editingEnvironmentId ? 'PUT' : 'POST',
         body: JSON.stringify({ name: pel.environmentName.value, baseUrl: pel.environmentBaseURL.value }),
       });
       closeModal(pel.environmentModal);
-      showToast('Environment created.', 'success');
+      showToast(editingEnvironmentId ? 'Environment updated.' : 'Environment created.', 'success');
       loadProjectDetail({ silent: true });
     } catch (err) {
       if (!(err instanceof SessionExpired)) showFormError(pel.environmentFormError, err.message);
@@ -2940,6 +2948,11 @@
           break;
         case 'create-environment': {
           openEnvironmentModal();
+          break;
+        }
+        case 'edit-environment': {
+          const environment = state.project.environments.find((item) => Number(item.id) === id);
+          if (environment) openEnvironmentModal(environment);
           break;
         }
         case 'create-telemetry-credential':

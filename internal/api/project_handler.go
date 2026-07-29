@@ -28,6 +28,7 @@ func RegisterProjectRoutes(app fiber.Router, h *ProjectHandler, guards ...fiber.
 	app.Delete("/project/catalog/:projectId", guarded(guards, h.DeleteProject)...)
 	app.Get("/environment/catalog/:projectId", guarded(guards, h.ListEnvironments)...)
 	app.Post("/environment/catalog/:projectId", guarded(guards, h.CreateEnvironment)...)
+	app.Put("/environment/catalog/:projectId/:environmentId", guarded(guards, h.UpdateEnvironment)...)
 	app.Get("/telemetry/credentials/:projectId", guarded(guards, h.ListTelemetryCredentials)...)
 	app.Get("/telemetry/ingress/:projectId", guarded(guards, h.ListTelemetryIngress)...)
 	app.Get("/telemetry/mappings/:projectId", guarded(guards, h.ListTelemetryMappings)...)
@@ -163,6 +164,25 @@ func (h *ProjectHandler) CreateEnvironment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.Status(fiber.StatusCreated).JSON(env)
+}
+func (h *ProjectHandler) UpdateEnvironment(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	environmentID, err := parseIDParam(c, "environmentId")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	var req environmentRequest
+	if err = c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	env, err := h.service.UpdateProjectEnvironment(c.UserContext(), project.ID, environmentID, application.CreateEnvironmentInput{Name: req.Name, BaseURL: req.BaseURL})
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(env)
 }
 
 type telemetryCredentialRequest struct {

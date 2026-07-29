@@ -53,6 +53,7 @@ type ProjectStore interface {
 	AddProjectMember(ctx context.Context, member models.ProjectMember) error
 	ListProjectEnvironments(ctx context.Context, projectID int64) ([]models.ProjectEnvironment, error)
 	CreateProjectEnvironment(ctx context.Context, environment models.ProjectEnvironment) (int64, error)
+	UpdateProjectEnvironment(ctx context.Context, environment models.ProjectEnvironment) error
 }
 
 // TelemetryCredentialStore persists server-side OTLP ingestion credentials.

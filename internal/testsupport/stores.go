@@ -807,6 +807,21 @@ func (f *ProjectStore) CreateProjectEnvironment(_ context.Context, env models.Pr
 	return env.ID, nil
 }
 
+func (f *ProjectStore) UpdateProjectEnvironment(_ context.Context, env models.ProjectEnvironment) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := f.environments[env.ProjectID]
+	for i := range items {
+		if items[i].ID == env.ID {
+			env.IsDefault = items[i].IsDefault
+			items[i] = env
+			f.environments[env.ProjectID] = items
+			return nil
+		}
+	}
+	return nil
+}
+
 func (f *ProjectStore) UpdateProject(_ context.Context, project models.Project) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
