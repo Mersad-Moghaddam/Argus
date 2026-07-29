@@ -238,6 +238,22 @@ func TestPrivateAgentManagementIsProjectScopedAndRevokesCredentials(t *testing.T
 	if len(signed.Configuration.Assignments) != 1 || signed.Configuration.Assignments[0].ID != assignment.ID || signed.Configuration.Assignments[0].Target != assignment.Target {
 		t.Fatalf("assignment configuration: %#v", signed.Configuration.Assignments)
 	}
+	assignmentResult := httptest.NewRequest(http.MethodPost, resultPath, strings.NewReader(fmt.Sprintf(`{"assignmentId":%d,"outcome":"failure","summary":"bounded failure"}`, assignment.ID)))
+	assignmentResult.Header.Set("Content-Type", "application/json")
+	assignmentResult.Header.Set("Authorization", "Bearer "+issued.EnrollmentToken)
+	assignmentResult.Header.Set("Idempotency-Key", "agent-assignment-result-0001")
+	response, err = a.app.Test(assignmentResult, -1)
+	if err != nil || response.StatusCode != fiber.StatusAccepted {
+		t.Fatalf("assignment result: response=%v status=%v", err, response.StatusCode)
+	}
+	invalidAssignmentResult := httptest.NewRequest(http.MethodPost, resultPath, strings.NewReader(`{"assignmentId":999999,"outcome":"failure","summary":"bounded failure"}`))
+	invalidAssignmentResult.Header.Set("Content-Type", "application/json")
+	invalidAssignmentResult.Header.Set("Authorization", "Bearer "+issued.EnrollmentToken)
+	invalidAssignmentResult.Header.Set("Idempotency-Key", "agent-assignment-result-0002")
+	response, err = a.app.Test(invalidAssignmentResult, -1)
+	if err != nil || response.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("foreign assignment result: response=%v status=%v", err, response.StatusCode)
+	}
 	resp = a.do(t, http.MethodPost, fmt.Sprintf("/agent/assignments/revoke/%d/%d", project.ID, assignment.ID), ownerToken, nil)
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("revoke assignment: %d (%s)", resp.StatusCode, bodyString(t, resp))
