@@ -14,10 +14,10 @@
 | --- | --- | --- | --- | --- |
 | Identity | Token-based project auth; legacy API is fail-closed without an API key | Cookie sessions, CSRF, expiry, revocation, secure defaults | `internal/application/auth.go`, `internal/adapters/inbound/http/middleware.go`, `frontend/projects.js` | In progress — cookie sessions, global routable account access, password change/session revocation, and secure recovery landed; endpoint-specific limits remain |
 | Product shell | Guest and project controls can coexist | Separate public, identity, and authenticated shells | `frontend/index.html`, `frontend/app.js`, `frontend/projects.js` | In progress — global account, authentication, and isolated project shells landed; authenticated navigation/onboarding remain |
-| Route monitoring | Imported routes can be evaluated as recurring requests | Catalog-only import; explicit budgeted synthetics | `internal/application/imports.go`, `internal/worker/route_processor.go` | Planned |
+| Route monitoring | Imported routes are catalog-only by default | Explicit, budgeted, safe synthetics | `internal/application/imports.go`, `internal/worker/route_processor.go` | In progress — imports create disabled catalog entries; broad polling is opt-in and route evaluation has bounded hardened egress |
 | URL handling | Validation is split and partly deferred | One canonical backend pipeline and preview API | `internal/domain/endpoint.go`, route/import services, worker composer | In progress — core canonical pipeline, authenticated preview endpoint, hash migration, and default production environment creation complete; environment management remains |
-| Telemetry and SLOs | No telemetry-first pipeline or SLO control plane | Authenticated OTLP, mapping, SLOs, incidents, self-monitoring | New v2 components | Planned |
-| Accessibility and motion | Known hidden-state, dialog, table, refresh, and motion defects | WCAG 2.2 AA and all five motion plans | `animation-plans/`, blueprint §5 | Planned |
+| Telemetry and SLOs | Telemetry-first OTLP, mappings, SLOs, and incident evidence are implemented | Authenticated OTLP, mapping, SLOs, incidents, self-monitoring | `internal/api/telemetry_ingest_handler.go`, `internal/application/slos.go`, `internal/worker/slo_evaluator.go` | In progress — core control plane landed; operational rollout and complete evidence remain |
+| Accessibility and motion | Hidden-state, dialog, table, refresh, and motion baseline implemented | WCAG 2.2 AA and all five motion plans | `animation-plans/`, `frontend/projects.js` | In progress — core hidden-state, focus-dialog, sorting, and motion work landed; full keyboard evidence remains |
 
 ## Security, threat, and migration traceability
 
