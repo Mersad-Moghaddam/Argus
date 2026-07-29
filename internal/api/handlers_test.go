@@ -42,6 +42,7 @@ func newTestAPI(t *testing.T) *testAPI {
 	service := application.NewService(s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Outbox,
 		observability.NewLogStore(100), s.Users, s.Tokens, s.PasswordRecovery, s.RecoveryDelivery, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings, s.SLOs, s.Heartbeats)
 	service.SetPrivateAgentStore(s.PrivateAgents)
+	service.SetPrivateAgentResultStore(s.PrivateAgentResults)
 	service.SetProjectIncidentStore(s.ProjectIncidents)
 	service.SetAgentConfigurationSigner(mustTestAgentSigner(t))
 	return &testAPI{

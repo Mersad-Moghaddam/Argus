@@ -45,6 +45,7 @@ type Stores struct {
 	SLOs                 *SLOStore
 	Heartbeats           *HeartbeatStore
 	PrivateAgents        *PrivateAgentStore
+	PrivateAgentResults  *PrivateAgentResultStore
 	ProjectIncidents     *ProjectIncidentStore
 	Outbox               *OutboxStore
 	Legacy               LegacyStore
@@ -67,9 +68,29 @@ func NewStores() *Stores {
 		SLOs:                 NewSLOStore(),
 		Heartbeats:           NewHeartbeatStore(),
 		PrivateAgents:        NewPrivateAgentStore(),
+		PrivateAgentResults:  NewPrivateAgentResultStore(),
 		ProjectIncidents:     NewProjectIncidentStore(),
 		Outbox:               &OutboxStore{},
 	}
+}
+
+type PrivateAgentResultStore struct {
+	mu   sync.Mutex
+	keys map[string]struct{}
+}
+
+func NewPrivateAgentResultStore() *PrivateAgentResultStore {
+	return &PrivateAgentResultStore{keys: map[string]struct{}{}}
+}
+func (f *PrivateAgentResultStore) RecordPrivateAgentResult(_ context.Context, r models.PrivateAgentResult, key string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	k := strconv.FormatInt(r.AgentID, 10) + ":" + key
+	if _, ok := f.keys[k]; ok {
+		return false, nil
+	}
+	f.keys[k] = struct{}{}
+	return true, nil
 }
 
 // ---------------------------------------------------------------- heartbeats

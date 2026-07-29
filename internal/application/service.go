@@ -42,6 +42,7 @@ type Service struct {
 	slos                 ports.SLOStore
 	heartbeats           ports.HeartbeatStore
 	privateAgents        ports.PrivateAgentStore
+	privateAgentResults  ports.PrivateAgentResultStore
 	agentConfigSigner    *agent.ConfigurationSigner
 	projectIncidents     ports.ProjectIncidentStore
 }
@@ -53,6 +54,9 @@ func NewService(monitors ports.MonitorStore, incidents ports.IncidentStore, main
 }
 
 func (s *Service) SetPrivateAgentStore(store ports.PrivateAgentStore) { s.privateAgents = store }
+func (s *Service) SetPrivateAgentResultStore(store ports.PrivateAgentResultStore) {
+	s.privateAgentResults = store
+}
 
 // SetProjectIncidentStore attaches the source-agnostic incident lifecycle.
 // It is optional during the additive migration so older callers remain valid.

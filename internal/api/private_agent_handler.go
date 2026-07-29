@@ -18,6 +18,11 @@ func NewPrivateAgentHandler(s *application.Service) *PrivateAgentHandler {
 type agentHeartbeatRequest struct {
 	Version string `json:"version"`
 }
+type agentResultRequest struct {
+	Outcome string `json:"outcome"`
+	Summary string `json:"summary"`
+	Version string `json:"version"`
+}
 
 type privateAgentRequest struct {
 	Name                    string `json:"name"`
@@ -59,6 +64,25 @@ func (h *PrivateAgentHandler) Configuration(c *fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": "agent configuration unavailable"})
 	}
 	return c.JSON(signed)
+}
+func (h *PrivateAgentHandler) Result(c *fiber.Ctx) error {
+	var req agentResultRequest
+	if c.BodyParser(&req) != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid agent result"})
+	}
+	auth := strings.TrimSpace(c.Get(fiber.HeaderAuthorization))
+	const p = "Bearer "
+	if !strings.HasPrefix(auth, p) {
+		return c.Status(401).JSON(fiber.Map{"error": "invalid agent credentials"})
+	}
+	created, err := h.service.RecordPrivateAgentResult(c.UserContext(), strings.TrimSpace(strings.TrimPrefix(auth, p)), req.Version, c.Get("Idempotency-Key"), req.Outcome, req.Summary)
+	if errors.Is(err, application.ErrPrivateAgentNotFound) {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid agent result"})
+	}
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "agent result service unavailable"})
+	}
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"accepted": created})
 }
 
 func (h *PrivateAgentHandler) List(c *fiber.Ctx) error {
@@ -109,6 +133,7 @@ func (h *PrivateAgentHandler) Revoke(c *fiber.Ctx) error {
 func RegisterPrivateAgentRoutes(app fiber.Router, h *PrivateAgentHandler) {
 	app.Post("/agent/heartbeat", h.Heartbeat)
 	app.Get("/agent/config", h.Configuration)
+	app.Post("/agent/result", h.Result)
 }
 
 func RegisterPrivateAgentManagementRoutes(app fiber.Router, h *PrivateAgentHandler, guards ...fiber.Handler) {
