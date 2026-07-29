@@ -229,7 +229,7 @@ does not exist — so project IDs cannot be probed.
 
 Click **New project**. The authenticated four-step flow first asks for the project identity, then
 asks how it should be observed: **OpenTelemetry** (recommended), an **OpenAPI catalog**, a disabled
-**Synthetic check**, a **Heartbeat**, or **Do this later**. It preserves a non-sensitive local draft
+**Synthetic check**, a **Heartbeat**, clearly labeled non-production **Sample data**, or **Do this later**. It preserves a non-sensitive local draft
 until the project is created and does not create target traffic during setup. OpenAPI continues to
 the import wizard; every other choice opens the project dashboard with the relevant next action.
 The completion step also offers an explicit starter 99.9% availability SLO; it remains `no data`

@@ -2206,6 +2206,7 @@
       openapi: ['OpenAPI catalog', 'Import a specification after creation. It adds catalog entries only and sends zero requests to imported operations.'],
       synthetic: ['Synthetic check', 'Create a disabled GET or HEAD canary after creation, then review its target and request budget before enabling it.'],
       heartbeat: ['Heartbeat', 'Create a project first; heartbeat setup is the next recommended action for jobs and scheduled workloads.'],
+      sample: ['Sample data', 'This guided evaluation option is non-production only. It does not connect to or report health for your service.'],
       later: ['Do this later', 'Create a project with no connected signal. You can connect telemetry, an OpenAPI catalog, a safe canary, or a heartbeat later.'],
     }[source] || ['Monitoring source', 'Connect a monitoring source after the project is created.'];
   }
