@@ -123,6 +123,18 @@
     agentSecretValue: document.getElementById('projAgentSecretValue'),
     agentSecretCopy: document.getElementById('projAgentSecretCopy'),
     agentSecretClose: document.getElementById('projAgentSecretClose'),
+    agentAssignmentModal: document.getElementById('projAgentAssignmentModal'),
+    agentAssignmentForm: document.getElementById('projAgentAssignmentForm'),
+    agentAssignmentName: document.getElementById('projAgentAssignmentName'),
+    agentAssignmentEnvironment: document.getElementById('projAgentAssignmentEnvironment'),
+    agentAssignmentRoute: document.getElementById('projAgentAssignmentRoute'),
+    agentAssignmentMethod: document.getElementById('projAgentAssignmentMethod'),
+    agentAssignmentTarget: document.getElementById('projAgentAssignmentTarget'),
+    agentAssignmentInterval: document.getElementById('projAgentAssignmentInterval'),
+    agentAssignmentTimeout: document.getElementById('projAgentAssignmentTimeout'),
+    agentAssignmentFormError: document.getElementById('projAgentAssignmentFormError'),
+    agentAssignmentCancel: document.getElementById('projAgentAssignmentCancel'),
+    agentAssignmentSubmit: document.getElementById('projAgentAssignmentSubmit'),
 
     sloModal: document.getElementById('projSLOModal'),
     sloForm: document.getElementById('projSLOForm'),
@@ -215,7 +227,7 @@ agentAssignments: [],
   let modalReturnFocus = null;
   let confirmAction = null;
   const ONBOARDING_DRAFT_KEY = 'argus_project_onboarding_draft_v1';
-  const projectModals = [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.heartbeatModal, pel.heartbeatSecretModal, pel.agentModal, pel.agentSecretModal, pel.sloModal, pel.telemetryMappingModal, pel.routeModal, pel.bulkModal, pel.confirmModal];
+  const projectModals = [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.heartbeatModal, pel.heartbeatSecretModal, pel.agentModal, pel.agentSecretModal, pel.agentAssignmentModal, pel.sloModal, pel.telemetryMappingModal, pel.routeModal, pel.bulkModal, pel.confirmModal];
 
   /* ------------------------------------------------------- auth + api client */
 
@@ -1142,7 +1154,7 @@ apiProjects(`/agent/assignments/${id}`),
       </section>
 
       <section class="card">
-        <div class="card-header"><h2>Private agents</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-agent">Enroll agent</button>' : ''}</div>
+        <div class="card-header"><h2>Private agents</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-agent">Enroll agent</button><button class="secondary sm" type="button" data-action="create-agent-assignment">Create assignment</button>' : ''}</div>
         <p class="hint">Agents report outbound liveness only. Argus never connects into your private network. The enrollment token is shown once and can be revoked at any time.</p>
         ${privateAgentsHtml(state.project.agents, canEdit)}
         <h3 class="section-subheading">Scoped assignments</h3>
@@ -2628,6 +2640,25 @@ apiProjects(`/agent/assignments/${id}`),
   pel.agentSecretCopy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(pel.agentSecretValue.value); showToast('Agent token copied. Keep it out of source control.', 'success'); } catch (_) { pel.agentSecretValue.select(); document.execCommand('copy'); showToast('Agent token selected for copying.', 'info'); } });
   pel.agentSecretClose.addEventListener('click', closeAgentSecret);
 
+  function openAgentAssignmentModal() {
+    pel.agentAssignmentForm.reset();
+    pel.agentAssignmentInterval.value = '60'; pel.agentAssignmentTimeout.value = '5000';
+    pel.agentAssignmentEnvironment.replaceChildren(); pel.agentAssignmentRoute.replaceChildren();
+    state.project.environments.forEach((environment) => { const option = document.createElement('option'); option.value = environment.id; option.textContent = environment.name; pel.agentAssignmentEnvironment.append(option); });
+    state.project.routes.filter((route) => route.method === 'GET' || route.method === 'HEAD').forEach((route) => { const option = document.createElement('option'); option.value = route.id; option.textContent = `${route.method} ${route.path}`; pel.agentAssignmentRoute.append(option); });
+    const unavailable = !state.project.environments.length || !pel.agentAssignmentRoute.options.length;
+    pel.agentAssignmentSubmit.disabled = unavailable; hideFormError(pel.agentAssignmentFormError);
+    if (unavailable) showFormError(pel.agentAssignmentFormError, 'Create an environment and a GET or HEAD catalog route first.');
+    openModal(pel.agentAssignmentModal);
+  }
+  pel.agentAssignmentCancel.addEventListener('click', () => closeModal(pel.agentAssignmentModal));
+  pel.agentAssignmentForm.addEventListener('submit', async (event) => {
+    event.preventDefault(); const interval = Number(pel.agentAssignmentInterval.value); const timeout = Number(pel.agentAssignmentTimeout.value);
+    if (!pel.agentAssignmentName.value.trim() || !pel.agentAssignmentTarget.value.trim() || !Number.isInteger(interval) || interval < 15 || interval > 86400 || !Number.isInteger(timeout) || timeout < 200 || timeout > 60000) { showFormError(pel.agentAssignmentFormError, 'Provide a name, target, 15-second to 24-hour interval, and 200–60000 ms timeout.'); return; }
+    setButtonLoading(pel.agentAssignmentSubmit, true, 'Creating...'); hideFormError(pel.agentAssignmentFormError);
+    try { await apiProjects(`/agent/assignments/${state.project.id}`, { method: 'POST', body: JSON.stringify({ name: pel.agentAssignmentName.value.trim(), environmentId: Number(pel.agentAssignmentEnvironment.value), routeId: Number(pel.agentAssignmentRoute.value), method: pel.agentAssignmentMethod.value, target: pel.agentAssignmentTarget.value.trim(), intervalSeconds: interval, timeoutMs: timeout }) }); closeModal(pel.agentAssignmentModal); showToast('Private-agent assignment created.', 'success'); loadProjectDetail({ silent: true }); } catch (err) { if (!(err instanceof SessionExpired)) showFormError(pel.agentAssignmentFormError, err.message); } finally { setButtonLoading(pel.agentAssignmentSubmit, false); }
+  });
+
   pel.projectCancel.addEventListener('click', () => {
     saveOnboardingDraft();
     closeModal(pel.projectModal);
@@ -3057,6 +3088,9 @@ apiProjects(`/agent/assignments/${id}`),
           break;
         case 'create-agent':
           openAgentModal();
+          break;
+        case 'create-agent-assignment':
+          openAgentAssignmentModal();
           break;
         case 'revoke-agent':
           askConfirm({ title: 'Revoke this private-agent token?', body: 'The agent will no longer be able to report liveness. Create a replacement agent and update its local secret before revoking this one.', confirmLabel: 'Revoke agent' }, async () => {

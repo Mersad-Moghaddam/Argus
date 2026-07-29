@@ -613,6 +613,22 @@
       </div>
     </div>
 
+    <div class="modal-overlay hidden" id="projAgentAssignmentModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projAgentAssignmentModalTitle" tabindex="-1">
+        <h3 id="projAgentAssignmentModalTitle">Create private-agent assignment</h3>
+        <form id="projAgentAssignmentForm" class="stack">
+          <div class="field"><label for="projAgentAssignmentName">Name</label><input id="projAgentAssignmentName" placeholder="Internal readiness" required maxlength="120" /></div>
+          <div class="field"><label for="projAgentAssignmentEnvironment">Environment</label><select id="projAgentAssignmentEnvironment" required></select></div>
+          <div class="field"><label for="projAgentAssignmentRoute">Catalog route</label><select id="projAgentAssignmentRoute" required></select></div>
+          <div class="field-row"><div class="field"><label for="projAgentAssignmentMethod">Method</label><select id="projAgentAssignmentMethod"><option>GET</option><option>HEAD</option></select></div><div class="field"><label for="projAgentAssignmentTarget">Private target</label><input id="projAgentAssignmentTarget" placeholder="http://service.internal/ready" required maxlength="2083" /></div></div>
+          <div class="field-row"><div class="field"><label for="projAgentAssignmentInterval">Interval (seconds)</label><input id="projAgentAssignmentInterval" type="number" min="15" max="86400" value="60" required /></div><div class="field"><label for="projAgentAssignmentTimeout">Timeout (ms)</label><input id="projAgentAssignmentTimeout" type="number" min="200" max="60000" value="5000" required /></div></div>
+          <p class="hint">Only a signed GET or HEAD assignment reaches the environment-local agent. Argus never dials this private target.</p>
+          <p class="proj-form-error hidden" id="projAgentAssignmentFormError" role="alert"></p>
+          <div class="modal-actions"><button class="secondary" type="button" id="projAgentAssignmentCancel">Cancel</button><button type="submit" id="projAgentAssignmentSubmit">Create assignment</button></div>
+        </form>
+      </div>
+    </div>
+
     <!-- SLO definition create -->
     <div class="modal-overlay hidden" id="projSLOModal">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projSLOModalTitle" tabindex="-1">
