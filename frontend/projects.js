@@ -72,9 +72,12 @@
     projectBack: document.getElementById('projProjectBack'),
     projectSubmit: document.getElementById('projProjectSubmit'),
     projectSteps: document.getElementById('projProjectSteps'),
-    projectAdvanced: document.getElementById('projProjectAdvanced'),
-    projectReview: document.getElementById('projOnboardingReview'),
-    projectNext: document.getElementById('projOnboardingNext'),
+projectAdvanced: document.getElementById('projProjectAdvanced'),
+projectReview: document.getElementById('projOnboardingReview'),
+projectVerification: document.getElementById('projOnboardingVerification'),
+projectSLO: document.getElementById('projOnboardingSLO'),
+projectNotification: document.getElementById('projOnboardingNotification'),
+projectNext: document.getElementById('projOnboardingNext'),
 
     environmentModal: document.getElementById('projEnvironmentModal'),
     environmentForm: document.getElementById('projEnvironmentForm'),
@@ -2249,9 +2252,10 @@ apiProjects(`/agent/assignments/${id}`),
       item.classList.toggle('is-active', index + 1 === step);
       item.classList.toggle('is-done', index + 1 < step);
     });
-    pel.projectBack.classList.toggle('hidden', isEdit || step <= 1 || step >= 4);
-    pel.projectCancel.textContent = step === 4 ? 'Close' : 'Cancel';
-    pel.projectSubmit.classList.toggle('hidden', step === 4);
+    const created = Boolean(state.onboarding.createdProject);
+    pel.projectBack.classList.toggle('hidden', isEdit || created || step <= 1 || step >= 7);
+    pel.projectCancel.textContent = step === 7 ? 'Close' : 'Cancel';
+    pel.projectSubmit.classList.toggle('hidden', step >= 4);
     pel.projectSubmit.textContent = isEdit ? 'Save project' : step === 3 ? 'Create project' : 'Continue';
     if (step === 3) {
       const [title, detail] = sourceSummary(selectedOnboardingSource());
@@ -2269,15 +2273,15 @@ apiProjects(`/agent/assignments/${id}`),
     const [title, detail] = sourceSummary(source);
     state.onboarding.createdProject = project;
     clearOnboardingDraft();
-    pel.projectNext.replaceChildren();
+    pel.projectVerification.replaceChildren();
     const strong = document.createElement('strong');
-    strong.textContent = `${project.name} is ready.`;
+    strong.textContent = `${project.name} was created. Signal verification is still pending.`;
     const p = document.createElement('p');
-    p.textContent = detail;
+    p.textContent = `${detail} Argus does not treat this project as verified until it receives telemetry, a heartbeat, or an explicitly configured check.`;
     const link = document.createElement('a');
     link.className = 'btn-link';
     link.href = source === 'openapi' ? `#/projects/${project.id}/import` : `#/projects/${project.id}`;
-    link.textContent = source === 'openapi' ? 'Import your OpenAPI catalog' : 'Open project dashboard';
+    link.textContent = source === 'openapi' ? 'Import your OpenAPI catalog' : 'Open project dashboard to connect and verify';
     const sourceAction = {
       telemetry: ['Connect OpenTelemetry', openTelemetryCredentialModal],
       synthetic: ['Create disabled canary', () => openRouteModal(null)],
@@ -2292,6 +2296,16 @@ apiProjects(`/agent/assignments/${id}`),
       connect.addEventListener('click', () => openOnboardingSource(project, sourceAction[1]));
       sourceButton = connect;
     }
+    const continueToSLO = document.createElement('button');
+    continueToSLO.type = 'button';
+    continueToSLO.className = 'secondary sm';
+    continueToSLO.textContent = 'Continue to starter SLO';
+    continueToSLO.addEventListener('click', () => setOnboardingStep(5));
+    pel.projectVerification.append(strong, p, ...(sourceButton ? [sourceButton] : []), link, continueToSLO);
+
+    pel.projectSLO.replaceChildren();
+    const sloIntro = document.createElement('p');
+    sloIntro.textContent = 'An availability objective gives the first verified signal a clear service-level target. It remains no data until eligible evidence arrives.';
     const starterSLO = document.createElement('button');
     starterSLO.type = 'button';
     starterSLO.className = 'secondary sm';
@@ -2317,7 +2331,34 @@ apiProjects(`/agent/assignments/${id}`),
         setButtonLoading(starterSLO, false);
       }
     });
-    pel.projectNext.append(strong, p, ...(sourceButton ? [sourceButton] : []), starterSLO, link);
+    const skipSLO = document.createElement('button');
+    skipSLO.type = 'button';
+    skipSLO.className = 'secondary sm';
+    skipSLO.textContent = 'Continue without an SLO';
+    skipSLO.addEventListener('click', () => setOnboardingStep(6));
+    const continueAfterSLO = document.createElement('button');
+    continueAfterSLO.type = 'button';
+    continueAfterSLO.className = 'secondary sm';
+    continueAfterSLO.textContent = 'Continue to notifications';
+    continueAfterSLO.addEventListener('click', () => setOnboardingStep(6));
+    pel.projectSLO.append(sloIntro, starterSLO, skipSLO, continueAfterSLO);
+
+    pel.projectNotification.replaceChildren();
+    const notificationIntro = document.createElement('p');
+    notificationIntro.textContent = 'Connect a notification channel before relying on incidents. Open the Notifications tab to create a webhook, Slack, or email channel; no channel is silently enabled here.';
+    const finish = document.createElement('button');
+    finish.type = 'button';
+    finish.className = 'secondary sm';
+    finish.textContent = 'Finish setup';
+    finish.addEventListener('click', () => setOnboardingStep(7));
+    pel.projectNotification.append(notificationIntro, finish);
+
+    pel.projectNext.replaceChildren();
+    const complete = document.createElement('strong');
+    complete.textContent = `${project.name} is ready for its first verified signal.`;
+    const completeDetail = document.createElement('p');
+    completeDetail.textContent = 'The dashboard keeps source freshness, SLO state, and incident evidence together. Return after connecting your source to confirm that Argus has received evidence.';
+    pel.projectNext.append(complete, completeDetail, link.cloneNode(true));
     setOnboardingStep(4);
   }
 

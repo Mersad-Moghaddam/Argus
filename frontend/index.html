@@ -416,8 +416,11 @@
           <ol class="wizard-steps project-onboarding-steps" id="projProjectSteps" aria-label="Project setup progress">
             <li class="wizard-step is-active"><span class="wizard-step-num">1</span>Project</li>
             <li class="wizard-step"><span class="wizard-step-num">2</span>Source</li>
-            <li class="wizard-step"><span class="wizard-step-num">3</span>Review</li>
-            <li class="wizard-step"><span class="wizard-step-num">4</span>Next steps</li>
+            <li class="wizard-step"><span class="wizard-step-num">3</span>Connect</li>
+            <li class="wizard-step"><span class="wizard-step-num">4</span>Verify</li>
+            <li class="wizard-step"><span class="wizard-step-num">5</span>SLO</li>
+            <li class="wizard-step"><span class="wizard-step-num">6</span>Notify</li>
+            <li class="wizard-step"><span class="wizard-step-num">7</span>Complete</li>
           </ol>
           <div class="project-onboarding-step" data-project-step="1">
           <div class="field">
@@ -453,12 +456,24 @@
             </div>
           </fieldset>
           <section class="project-onboarding-step hidden" data-project-step="3" aria-labelledby="projOnboardingReviewTitle">
-            <h4 id="projOnboardingReviewTitle">Review the setup</h4>
+            <h4 id="projOnboardingReviewTitle">Connect your selected source</h4>
             <div id="projOnboardingReview" class="onboarding-review"></div>
             <p class="hint">Argus will create the initial environment you chose. It will not make an outbound request or enable a synthetic check.</p>
           </section>
           <section class="project-onboarding-step hidden" data-project-step="4" aria-labelledby="projOnboardingNextTitle">
-            <h4 id="projOnboardingNextTitle">Project created</h4>
+            <h4 id="projOnboardingNextTitle">Verify your signal</h4>
+            <div id="projOnboardingVerification" class="onboarding-review"></div>
+          </section>
+          <section class="project-onboarding-step hidden" data-project-step="5" aria-labelledby="projOnboardingSLOTitle">
+            <h4 id="projOnboardingSLOTitle">Create a starter SLO</h4>
+            <div id="projOnboardingSLO" class="onboarding-review"></div>
+          </section>
+          <section class="project-onboarding-step hidden" data-project-step="6" aria-labelledby="projOnboardingNotificationTitle">
+            <h4 id="projOnboardingNotificationTitle">Choose an incident notification path</h4>
+            <div id="projOnboardingNotification" class="onboarding-review"></div>
+          </section>
+          <section class="project-onboarding-step hidden" data-project-step="7" aria-labelledby="projOnboardingCompleteTitle">
+            <h4 id="projOnboardingCompleteTitle">Setup summary</h4>
             <div id="projOnboardingNext" class="onboarding-review"></div>
           </section>
           <div id="projProjectAdvanced" class="project-advanced hidden">
