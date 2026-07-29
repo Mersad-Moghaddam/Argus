@@ -15,6 +15,7 @@ import (
 )
 
 const heartbeatPath = "/agent/heartbeat"
+const resultPath = "/agent/result"
 
 type Config struct {
 	ControlURL      string
@@ -116,6 +117,35 @@ func (c *Client) Heartbeat(ctx context.Context) error {
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		return fmt.Errorf("agent heartbeat rejected with HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// ReportResult sends bounded outcome evidence only; it never includes targets,
+// headers, request bodies, or local logs.
+func (c *Client) ReportResult(ctx context.Context, idempotencyKey, outcome, summary string) error {
+	if len(strings.TrimSpace(idempotencyKey)) < 16 || len(idempotencyKey) > 200 || (outcome != "success" && outcome != "failure") || len(summary) > 240 {
+		return errors.New("agent result is invalid")
+	}
+	body, err := json.Marshal(map[string]string{"outcome": outcome, "summary": summary, "version": c.version})
+	if err != nil {
+		return err
+	}
+	endpoint := strings.TrimSuffix(c.endpoint, heartbeatPath) + resultPath
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", idempotencyKey)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("send agent result: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("agent result rejected with HTTP %d", resp.StatusCode)
 	}
 	return nil
 }
