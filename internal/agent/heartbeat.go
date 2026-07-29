@@ -4,6 +4,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,19 +17,22 @@ import (
 const heartbeatPath = "/agent/heartbeat"
 
 type Config struct {
-	ControlURL string
-	Token      string
-	Version    string
-	HTTPClient *http.Client
+	ControlURL      string
+	Token           string
+	Version         string
+	HTTPClient      *http.Client
+	ConfigPublicKey string
 }
 
 // Client owns no listener and only sends an authenticated HTTPS request to
 // Argus. It never receives target addresses, work, or reverse-connect traffic.
 type Client struct {
-	endpoint string
-	token    string
-	version  string
-	http     *http.Client
+	endpoint        string
+	configEndpoint  string
+	configPublicKey []byte
+	token           string
+	version         string
+	http            *http.Client
 }
 
 func NewClient(config Config) (*Client, error) {
@@ -43,14 +47,51 @@ func NewClient(config Config) (*Client, error) {
 	if !strings.HasPrefix(token, "argus_agent_") || len(token) < len("argus_agent_")+16 {
 		return nil, errors.New("agent token is invalid")
 	}
-	base.Path = strings.TrimRight(base.Path, "/") + heartbeatPath
+	base.Path = strings.TrimRight(base.Path, "/")
 	base.RawQuery = ""
 	base.Fragment = ""
 	client := config.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
-	return &Client{endpoint: base.String(), token: token, version: strings.TrimSpace(config.Version), http: client}, nil
+	configEndpoint := base.String() + "/agent/config"
+	base.Path += heartbeatPath
+	var public []byte
+	if raw := strings.TrimSpace(config.ConfigPublicKey); raw != "" {
+		public, err = base64.RawURLEncoding.DecodeString(raw)
+		if err != nil || len(public) != 32 {
+			return nil, errors.New("agent configuration public key is invalid")
+		}
+	}
+	return &Client{endpoint: base.String(), configEndpoint: configEndpoint, configPublicKey: public, token: token, version: strings.TrimSpace(config.Version), http: client}, nil
+}
+
+func (c *Client) FetchConfiguration(ctx context.Context) (Configuration, error) {
+	if len(c.configPublicKey) == 0 {
+		return Configuration{}, errors.New("agent configuration public key is not configured")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.configEndpoint, nil)
+	if err != nil {
+		return Configuration{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Argus-Agent-Version", c.version)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return Configuration{}, fmt.Errorf("fetch agent configuration: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return Configuration{}, fmt.Errorf("agent configuration rejected with HTTP %d", resp.StatusCode)
+	}
+	var signed SignedConfiguration
+	if err = json.NewDecoder(resp.Body).Decode(&signed); err != nil {
+		return Configuration{}, err
+	}
+	if err = VerifyConfiguration(c.configPublicKey, signed, time.Now().UTC()); err != nil {
+		return Configuration{}, err
+	}
+	return signed.Configuration, nil
 }
 
 func (c *Client) Heartbeat(ctx context.Context) error {

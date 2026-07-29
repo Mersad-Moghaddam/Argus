@@ -340,6 +340,9 @@ When `AGENT_CONFIG_SIGNING_KEY` is configured, an enrolled agent can also call
 Ed25519-signed identity/liveness envelope bound to that token's server-side
 project and environment. It contains no private target, executable work, or
 reverse-connect instruction; without the signing key this route fails closed.
+Provision the matching base64url public key to the agent as
+`ARGUS_AGENT_CONFIG_PUBLIC_KEY`; it verifies the envelope before adopting the
+server-bound heartbeat interval.
 The included `argus-agent` process is an outbound-only liveness client:
 
 ```bash
