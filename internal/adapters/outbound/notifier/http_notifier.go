@@ -12,7 +12,12 @@ import (
 type HTTPNotifier struct{ client *http.Client }
 
 func NewHTTPNotifier() *HTTPNotifier {
-	return &HTTPNotifier{client: &http.Client{Timeout: 4 * time.Second}}
+	return &HTTPNotifier{client: &http.Client{
+		Timeout: 4 * time.Second,
+		// Notification destinations are configured explicitly. Do not follow a
+		// redirect that could move an incident payload to another origin.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}}
 }
 
 func (n *HTTPNotifier) Notify(ctx context.Context, channels []models.AlertChannel, payload []byte) error {
