@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -30,11 +31,13 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	lastRuns := map[int64]time.Time{}
 	if *configPublicKey != "" {
 		if signed, configErr := client.FetchConfiguration(ctx); configErr != nil {
 			log.Fatalf("verify agent configuration: %v", configErr)
 		} else {
 			*interval = time.Duration(signed.HeartbeatIntervalSeconds) * time.Second
+			runAssignments(ctx, client, signed.Assignments, lastRuns)
 		}
 	}
 	for {
@@ -44,12 +47,39 @@ func main() {
 		} else {
 			log.Printf("agent heartbeat accepted (version %s)", version)
 		}
+		if *configPublicKey != "" {
+			if signed, configErr := client.FetchConfiguration(ctx); configErr != nil {
+				log.Printf("agent configuration refresh failed: %v", configErr)
+			} else {
+				*interval = time.Duration(signed.HeartbeatIntervalSeconds) * time.Second
+				runAssignments(ctx, client, signed.Assignments, lastRuns)
+			}
+		}
 		timer := time.NewTimer(*interval)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
 			return
 		case <-timer.C:
+		}
+	}
+}
+
+func runAssignments(ctx context.Context, client *agent.Client, assignments []agent.Assignment, lastRuns map[int64]time.Time) {
+	for _, assignment := range assignments {
+		now := time.Now().UTC()
+		if assignment.IntervalSecs <= 0 || now.Sub(lastRuns[assignment.ID]) < time.Duration(assignment.IntervalSecs)*time.Second {
+			continue
+		}
+		lastRuns[assignment.ID] = now
+		ok, summary := agent.ExecuteAssignment(ctx, assignment, nil)
+		outcome := "success"
+		if !ok {
+			outcome = "failure"
+		}
+		key := fmt.Sprintf("agent-assignment-%d-%d", assignment.ID, now.UnixNano())
+		if err := client.ReportResult(ctx, key, outcome, fmt.Sprintf("assignment %d: %s", assignment.ID, summary)); err != nil {
+			log.Printf("agent assignment %d result delivery failed: %v", assignment.ID, err)
 		}
 	}
 }

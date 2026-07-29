@@ -108,6 +108,15 @@ type PrivateAgentResultStore interface {
 	RecordPrivateAgentResult(ctx context.Context, result models.PrivateAgentResult, idempotencyKey string) (created bool, err error)
 }
 
+// PrivateAgentAssignmentStore persists editor-approved, environment-bound
+// work for outbound-only agents. It never grants the control plane a dial path.
+type PrivateAgentAssignmentStore interface {
+	CreatePrivateAgentAssignment(ctx context.Context, assignment models.PrivateAgentAssignment) (int64, error)
+	ListPrivateAgentAssignments(ctx context.Context, projectID int64) ([]models.PrivateAgentAssignment, error)
+	ListPrivateAgentAssignmentsForEnvironment(ctx context.Context, projectID, environmentID int64) ([]models.PrivateAgentAssignment, error)
+	RevokePrivateAgentAssignment(ctx context.Context, projectID, id int64, revokedAt time.Time) error
+}
+
 // SLOStore persists versioned SLO policy and the bounded aggregate evidence
 // used to explain every evaluation to project members.
 type SLOStore interface {

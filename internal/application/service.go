@@ -31,23 +31,24 @@ type Service struct {
 	logger      *observability.LogStore
 
 	// Project-based API route monitoring dependencies.
-	users                ports.UserStore
-	tokens               ports.AuthTokenStore
-	passwordRecovery     ports.PasswordRecoveryStore
-	recoveryDelivery     ports.RecoveryDelivery
-	projects             ports.ProjectStore
-	routes               ports.RouteStore
-	routeIncidents       ports.RouteIncidentStore
-	imports              ports.ImportStore
-	telemetryCredentials ports.TelemetryCredentialStore
-	telemetryIngress     ports.TelemetryIngressStore
-	telemetryMappings    ports.TelemetryMappingStore
-	slos                 ports.SLOStore
-	heartbeats           ports.HeartbeatStore
-	privateAgents        ports.PrivateAgentStore
-	privateAgentResults  ports.PrivateAgentResultStore
-	agentConfigSigner    *agent.ConfigurationSigner
-	projectIncidents     ports.ProjectIncidentStore
+	users                   ports.UserStore
+	tokens                  ports.AuthTokenStore
+	passwordRecovery        ports.PasswordRecoveryStore
+	recoveryDelivery        ports.RecoveryDelivery
+	projects                ports.ProjectStore
+	routes                  ports.RouteStore
+	routeIncidents          ports.RouteIncidentStore
+	imports                 ports.ImportStore
+	telemetryCredentials    ports.TelemetryCredentialStore
+	telemetryIngress        ports.TelemetryIngressStore
+	telemetryMappings       ports.TelemetryMappingStore
+	slos                    ports.SLOStore
+	heartbeats              ports.HeartbeatStore
+	privateAgents           ports.PrivateAgentStore
+	privateAgentResults     ports.PrivateAgentResultStore
+	privateAgentAssignments ports.PrivateAgentAssignmentStore
+	agentConfigSigner       *agent.ConfigurationSigner
+	projectIncidents        ports.ProjectIncidentStore
 }
 
 func NewService(monitors ports.MonitorStore, incidents ports.IncidentStore, maintenance ports.MaintenanceStore, statusPages ports.StatusPageStore, alerts ports.AlertChannelStore, outbox ports.OutboxStore, logger *observability.LogStore,
@@ -59,6 +60,9 @@ func NewService(monitors ports.MonitorStore, incidents ports.IncidentStore, main
 func (s *Service) SetPrivateAgentStore(store ports.PrivateAgentStore) { s.privateAgents = store }
 func (s *Service) SetPrivateAgentResultStore(store ports.PrivateAgentResultStore) {
 	s.privateAgentResults = store
+}
+func (s *Service) SetPrivateAgentAssignmentStore(store ports.PrivateAgentAssignmentStore) {
+	s.privateAgentAssignments = store
 }
 
 // SetProjectIncidentStore attaches the source-agnostic incident lifecycle.

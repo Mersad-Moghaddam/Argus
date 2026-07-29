@@ -12,13 +12,25 @@ import (
 // Configuration contains only control-plane identity and liveness settings.
 // It deliberately contains no target addresses or executable work.
 type Configuration struct {
-	Version                  int       `json:"version"`
-	AgentID                  int64     `json:"agentId"`
-	ProjectID                int64     `json:"projectId"`
-	EnvironmentID            int64     `json:"environmentId"`
-	HeartbeatIntervalSeconds int       `json:"heartbeatIntervalSeconds"`
-	IssuedAt                 time.Time `json:"issuedAt"`
-	ExpiresAt                time.Time `json:"expiresAt"`
+	Version                  int          `json:"version"`
+	AgentID                  int64        `json:"agentId"`
+	ProjectID                int64        `json:"projectId"`
+	EnvironmentID            int64        `json:"environmentId"`
+	HeartbeatIntervalSeconds int          `json:"heartbeatIntervalSeconds"`
+	Assignments              []Assignment `json:"assignments"`
+	IssuedAt                 time.Time    `json:"issuedAt"`
+	ExpiresAt                time.Time    `json:"expiresAt"`
+}
+
+// Assignment is the agent-facing projection of an editor-approved private
+// check. It excludes request headers, credentials, bodies, and all arbitrary
+// command fields.
+type Assignment struct {
+	ID           int64  `json:"id"`
+	Method       string `json:"method"`
+	Target       string `json:"target"`
+	IntervalSecs int    `json:"intervalSeconds"`
+	TimeoutMS    int    `json:"timeoutMs"`
 }
 
 type SignedConfiguration struct {

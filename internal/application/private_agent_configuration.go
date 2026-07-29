@@ -20,5 +20,17 @@ func (s *Service) IssuePrivateAgentConfiguration(ctx context.Context, token, ver
 		return agent.SignedConfiguration{}, err
 	}
 	now := time.Now().UTC()
-	return s.agentConfigSigner.Sign(agent.Configuration{Version: 1, AgentID: privateAgent.ID, ProjectID: privateAgent.ProjectID, EnvironmentID: privateAgent.EnvironmentID, HeartbeatIntervalSeconds: privateAgent.ExpectedIntervalSeconds, IssuedAt: now, ExpiresAt: now.Add(15 * time.Minute)})
+	config := agent.Configuration{Version: 2, AgentID: privateAgent.ID, ProjectID: privateAgent.ProjectID, EnvironmentID: privateAgent.EnvironmentID, HeartbeatIntervalSeconds: privateAgent.ExpectedIntervalSeconds, IssuedAt: now, ExpiresAt: now.Add(15 * time.Minute)}
+	if s.privateAgentAssignments != nil {
+		assignments, listErr := s.privateAgentAssignments.ListPrivateAgentAssignmentsForEnvironment(ctx, privateAgent.ProjectID, privateAgent.EnvironmentID)
+		if listErr != nil {
+			return agent.SignedConfiguration{}, listErr
+		}
+		for _, assignment := range assignments {
+			if assignment.Enabled && assignment.RevokedAt == nil {
+				config.Assignments = append(config.Assignments, agent.Assignment{ID: assignment.ID, Method: assignment.Method, Target: assignment.Target, IntervalSecs: assignment.IntervalSecs, TimeoutMS: assignment.TimeoutMS})
+			}
+		}
+	}
+	return s.agentConfigSigner.Sign(config)
 }

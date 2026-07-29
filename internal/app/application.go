@@ -59,6 +59,7 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	appService := application.NewService(store, store, store, store, store, store, logger, store, store, store, recoveryDelivery, store, store, store, store, store, store, store, store, store)
 	appService.SetPrivateAgentStore(store)
 	appService.SetPrivateAgentResultStore(store)
+	appService.SetPrivateAgentAssignmentStore(store)
 	if len(cfg.AgentConfigSigningKey) > 0 {
 		signer, signerErr := agent.NewConfigurationSigner(cfg.AgentConfigSigningKey)
 		if signerErr != nil {

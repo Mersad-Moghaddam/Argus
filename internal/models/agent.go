@@ -39,3 +39,24 @@ type PrivateAgentResult struct {
 	Summary       string    `json:"summary,omitempty"`
 	ReceivedAt    time.Time `json:"receivedAt"`
 }
+
+// PrivateAgentAssignment is a deliberately narrow, environment-bound unit of
+// work. It is not a general remote-command channel: only a pre-approved GET
+// or HEAD target can be assigned, and the agent receives it through a signed,
+// expiry-bound configuration document.
+type PrivateAgentAssignment struct {
+	ID            int64      `json:"id"`
+	ProjectID     int64      `json:"projectId"`
+	EnvironmentID int64      `json:"environmentId"`
+	RouteID       int64      `json:"routeId"`
+	Name          string     `json:"name"`
+	Method        string     `json:"method"`
+	Target        string     `json:"target"`
+	IntervalSecs  int        `json:"intervalSeconds"`
+	TimeoutMS     int        `json:"timeoutMs"`
+	Enabled       bool       `json:"enabled"`
+	CreatedByID   int64      `json:"createdByUserId"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+	RevokedAt     *time.Time `json:"revokedAt,omitempty"`
+}
