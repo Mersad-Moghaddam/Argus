@@ -103,6 +103,10 @@ type PrivateAgentStore interface {
 	SetPrivateAgentLivenessState(ctx context.Context, id int64, state string) (bool, error)
 }
 
+type PrivateAgentResultStore interface {
+	RecordPrivateAgentResult(ctx context.Context, result models.PrivateAgentResult, idempotencyKey string) (created bool, err error)
+}
+
 // SLOStore persists versioned SLO policy and the bounded aggregate evidence
 // used to explain every evaluation to project members.
 type SLOStore interface {

@@ -27,3 +27,15 @@ type IssuedPrivateAgent struct {
 	Agent           PrivateAgent `json:"agent"`
 	EnrollmentToken string       `json:"enrollmentToken"`
 }
+
+// PrivateAgentResult is deliberately bounded operational evidence. It never
+// carries URLs, request headers, payloads, stack traces, or arbitrary logs.
+type PrivateAgentResult struct {
+	ID            int64     `json:"id"`
+	AgentID       int64     `json:"agentId"`
+	ProjectID     int64     `json:"projectId"`
+	EnvironmentID int64     `json:"environmentId"`
+	Outcome       string    `json:"outcome"`
+	Summary       string    `json:"summary,omitempty"`
+	ReceivedAt    time.Time `json:"receivedAt"`
+}
