@@ -169,6 +169,33 @@ func TestPrivateAgentManagementIsProjectScopedAndRevokesCredentials(t *testing.T
 	if issued.EnrollmentToken == "" {
 		t.Fatal("expected one-time enrollment token")
 	}
+	resultPath := "/agent/result"
+	response := a.do(t, http.MethodPost, resultPath, issued.EnrollmentToken, map[string]string{"outcome": "failure", "summary": "bounded failure"})
+	if response.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("result without idempotency key: %d", response.StatusCode)
+	}
+	request := httptest.NewRequest(http.MethodPost, resultPath, strings.NewReader(`{"outcome":"failure","summary":"bounded failure"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+issued.EnrollmentToken)
+	request.Header.Set("Idempotency-Key", "agent-result-key-0001")
+	response, err := a.app.Test(request, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != fiber.StatusAccepted {
+		t.Fatalf("agent result: %d (%s)", response.StatusCode, bodyString(t, response))
+	}
+	requestReplay := httptest.NewRequest(http.MethodPost, resultPath, strings.NewReader(`{"outcome":"failure","summary":"bounded failure"}`))
+	requestReplay.Header.Set("Content-Type", "application/json")
+	requestReplay.Header.Set("Authorization", "Bearer "+issued.EnrollmentToken)
+	requestReplay.Header.Set("Idempotency-Key", "agent-result-key-0001")
+	replay, err := a.app.Test(requestReplay, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replay.StatusCode != fiber.StatusAccepted || !strings.Contains(bodyString(t, replay), `"accepted":false`) {
+		t.Fatalf("agent result replay: %d", replay.StatusCode)
+	}
 	resp = a.do(t, http.MethodGet, "/agent/config", issued.EnrollmentToken, nil)
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("agent config: %d (%s)", resp.StatusCode, bodyString(t, resp))
