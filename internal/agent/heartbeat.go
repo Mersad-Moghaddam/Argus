@@ -54,7 +54,9 @@ func NewClient(config Config) (*Client, error) {
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
-	configEndpoint := base.String() + "/agent/config"
+	configURL := *base
+	configURL.Path = base.Path + "/agent/config"
+	configEndpoint := configURL.String()
 	base.Path += heartbeatPath
 	var public []byte
 	if raw := strings.TrimSpace(config.ConfigPublicKey); raw != "" {
