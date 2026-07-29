@@ -68,6 +68,7 @@
 | 3b | Low-cardinality HTTP trace and metric instrumentation | Complete | `d6fd3b4`, `8e7c619` |
 | 3c | Tenant-bound telemetry ingestion credentials | Complete | Current checkpoint |
 | 3d | Authenticated OTLP/HTTP receiver and bounded ingestion diagnostics | Complete | Current checkpoint |
+| 3x | Authenticated OTLP/gRPC receiver | Complete — opt-in dedicated listener shares OTLP/HTTP credential, quota, bounded-record, and metric-sanitization policy; startup binds listeners atomically | `b564797` |
 | 3e | Project-visible telemetry freshness and mapping diagnostics | Complete | Current checkpoint |
 | 3f | Editor OTLP credential and one-time-secret workflow | Complete | Current checkpoint |
 | 3g | Durable Prometheus-compatible metrics-store foundation | Complete | Current checkpoint |

@@ -271,7 +271,7 @@ curl http://localhost:8080/project/catalog \
 | Operational incidents | `GET /incident/catalog/:projectId` lists source-aware project incidents; editors acknowledge an open incident with `POST /incident/acknowledge/:projectId/:incidentId`. |
 | Imports | `/import/validation/:projectId`, `/import/job/:projectId/:jobId`, and `/import/commit/:projectId/:jobId` support OpenAPI 3.x or Swagger 2.0 JSON/YAML documents up to 10 MiB. |
 
-### OTLP/HTTP ingestion
+### OTLP ingestion
 
 Argus currently accepts OTLP protobuf exports at `POST /v1/metrics` and
 `POST /v1/traces`. Send `Content-Type: application/x-protobuf` (or
@@ -285,6 +285,14 @@ and per-minute request ceiling; requests above the ceiling receive `429`.
 Project editors can create the credential from the **Telemetry signals** card;
 the secret dialog is intentionally one-time and clears its displayed value when
 it is dismissed.
+
+When `OTLP_GRPC_ADDR` is explicitly configured, Argus also accepts the standard
+OTLP/gRPC Metrics and Trace `Export` services on that dedicated listener. Send
+the same `Authorization: Bearer <one-time-credential>` metadata. HTTP and gRPC
+share credential scope checks, the per-minute quota, resource/item limits,
+sanitized metric translation, and bounded diagnostics. The gRPC listener caps
+incoming messages at 4 MiB and responses at 1 MiB; it is intentionally disabled
+by default and must be protected with TLS termination and network policy.
 
 Recognized HTTP server-duration histograms are written to VictoriaMetrics as
 the `argus_http_server_request_duration_seconds` histogram family. The bridge
