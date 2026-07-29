@@ -95,14 +95,18 @@ func NewFiberAppWithMetricSink(service *application.Service, logStore *observabi
 	importHandler := api.NewImportHandler(service)
 	telemetryIngestHandler := api.NewTelemetryIngestHandler(service, metricSink)
 	heartbeatHandler := api.NewHeartbeatHandler(service)
-	api.RegisterProjectRoutes(controlGroup, projectHandler, bearerGuard, adapterhttp.CSRFProtect)
-	api.RegisterRouteRoutes(controlGroup, routeHandler, bearerGuard, adapterhttp.CSRFProtect)
+	// Project-management requests are small JSON control payloads. Keep their
+	// route-local bound separate from import validation, which legitimately
+	// carries a 10 MiB OpenAPI document.
+	projectControlGroup := controlGroup.Group("", controlBodyLimit(maxControlBodyBytes))
+	api.RegisterProjectRoutes(projectControlGroup, projectHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterRouteRoutes(projectControlGroup, routeHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterImportRoutes(controlGroup, importHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterTelemetryIngestRoutes(app, telemetryIngestHandler)
 	privateAgentHandler := api.NewPrivateAgentHandler(service)
 	api.RegisterPrivateAgentRoutes(app, privateAgentHandler)
-	api.RegisterPrivateAgentManagementRoutes(controlGroup, privateAgentHandler, bearerGuard, adapterhttp.CSRFProtect)
-	api.RegisterHeartbeatRoutes(controlGroup, heartbeatHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterPrivateAgentManagementRoutes(projectControlGroup, privateAgentHandler, bearerGuard, adapterhttp.CSRFProtect)
+	api.RegisterHeartbeatRoutes(projectControlGroup, heartbeatHandler, bearerGuard, adapterhttp.CSRFProtect)
 
 	app.Static("/", "./frontend", fiber.Static{
 		Compress:      true,

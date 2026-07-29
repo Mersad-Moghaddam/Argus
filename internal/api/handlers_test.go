@@ -241,6 +241,16 @@ func TestPrivateAgentManagementIsProjectScopedAndRevokesCredentials(t *testing.T
 	}
 }
 
+func TestProjectControlPayloadsAreBounded(t *testing.T) {
+	a := newTestAPI(t)
+	_, token := a.register(t, "project-payload-limit@example.com")
+	response := a.do(t, http.MethodPost, "/project/catalog", token, map[string]string{"name": strings.Repeat("x", 256*1024)})
+	if response.StatusCode != fiber.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized project payload: got %d, want 413", response.StatusCode)
+	}
+	_ = response.Body.Close()
+}
+
 func TestProjectIncidentEndpointsAreTenantScopedAndRoleAware(t *testing.T) {
 	a := newTestAPI(t)
 	viewerID, viewerToken := a.register(t, "project-incident-viewer@example.com")
@@ -946,10 +956,10 @@ func TestBulkCreateRoutesEndpoint(t *testing.T) {
 			rows[i] = map[string]any{"method": "GET", "path": fmt.Sprintf("/r%d", i), "baseUrl": "https://api.example.com"}
 		}
 		resp := a.do(t, http.MethodPost, path, token, map[string]any{"routes": rows})
-		if resp.StatusCode != fiber.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", resp.StatusCode)
+		if resp.StatusCode != fiber.StatusRequestEntityTooLarge {
+			t.Fatalf("expected 413, got %d", resp.StatusCode)
 		}
-		if body := bodyString(t, resp); !strings.Contains(body, "too many routes") {
+		if body := bodyString(t, resp); !strings.Contains(body, "request payload is too large") {
 			t.Fatalf("expected an explicit limit message, got %s", body)
 		}
 	})
