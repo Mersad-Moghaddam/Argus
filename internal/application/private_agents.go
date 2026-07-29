@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -18,6 +19,62 @@ type CreatePrivateAgentInput struct {
 	Name                    string
 	EnvironmentID           int64
 	ExpectedIntervalSeconds int
+}
+
+type CreatePrivateAgentAssignmentInput struct {
+	EnvironmentID int64
+	RouteID       int64
+	Name          string
+	Method        string
+	Target        string
+	IntervalSecs  int
+	TimeoutMS     int
+}
+
+func (s *Service) CreatePrivateAgentAssignment(ctx context.Context, projectID, userID int64, in CreatePrivateAgentAssignmentInput) (models.PrivateAgentAssignment, error) {
+	if s.privateAgentAssignments == nil || in.EnvironmentID <= 0 || in.RouteID <= 0 || !s.projectHasEnvironment(ctx, projectID, in.EnvironmentID) {
+		return models.PrivateAgentAssignment{}, domain.ErrInvalidInput
+	}
+	route, err := s.routes.GetRouteByID(ctx, in.RouteID)
+	if err != nil || route == nil || route.ProjectID != projectID {
+		return models.PrivateAgentAssignment{}, domain.ErrInvalidInput
+	}
+	method := strings.ToUpper(strings.TrimSpace(in.Method))
+	if method != "GET" && method != "HEAD" {
+		return models.PrivateAgentAssignment{}, domain.ErrInvalidInput
+	}
+	target := strings.TrimSpace(in.Target)
+	u, parseErr := url.Parse(target)
+	if parseErr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.Fragment != "" {
+		return models.PrivateAgentAssignment{}, domain.ErrInvalidInput
+	}
+	if in.IntervalSecs < 15 || in.IntervalSecs > 86400 || in.TimeoutMS < 200 || in.TimeoutMS > 60000 {
+		return models.PrivateAgentAssignment{}, domain.ErrInvalidInput
+	}
+	a := models.PrivateAgentAssignment{ProjectID: projectID, EnvironmentID: in.EnvironmentID, RouteID: in.RouteID, Name: strings.TrimSpace(in.Name), Method: method, Target: u.String(), IntervalSecs: in.IntervalSecs, TimeoutMS: in.TimeoutMS, Enabled: true, CreatedByID: userID}
+	if a.Name == "" || len(a.Name) > 120 {
+		return models.PrivateAgentAssignment{}, domain.ErrInvalidInput
+	}
+	id, err := s.privateAgentAssignments.CreatePrivateAgentAssignment(ctx, a)
+	if err != nil {
+		return a, err
+	}
+	a.ID = id
+	return a, nil
+}
+
+func (s *Service) ListPrivateAgentAssignments(ctx context.Context, projectID int64) ([]models.PrivateAgentAssignment, error) {
+	if s.privateAgentAssignments == nil {
+		return nil, ErrPrivateAgentNotFound
+	}
+	return s.privateAgentAssignments.ListPrivateAgentAssignments(ctx, projectID)
+}
+
+func (s *Service) RevokePrivateAgentAssignment(ctx context.Context, projectID, id int64) error {
+	if s.privateAgentAssignments == nil {
+		return ErrPrivateAgentNotFound
+	}
+	return s.privateAgentAssignments.RevokePrivateAgentAssignment(ctx, projectID, id, time.Now().UTC())
 }
 
 const (

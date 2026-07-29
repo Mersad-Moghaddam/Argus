@@ -29,6 +29,15 @@ type privateAgentRequest struct {
 	EnvironmentID           int64  `json:"environmentId"`
 	ExpectedIntervalSeconds int    `json:"expectedIntervalSeconds"`
 }
+type privateAgentAssignmentRequest struct {
+	EnvironmentID int64  `json:"environmentId"`
+	RouteID       int64  `json:"routeId"`
+	Name          string `json:"name"`
+	Method        string `json:"method"`
+	Target        string `json:"target"`
+	IntervalSecs  int    `json:"intervalSeconds"`
+	TimeoutMS     int    `json:"timeoutMs"`
+}
 
 func (h *PrivateAgentHandler) Heartbeat(c *fiber.Ctx) error {
 	var req agentHeartbeatRequest
@@ -133,6 +142,47 @@ func (h *PrivateAgentHandler) Revoke(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+func (h *PrivateAgentHandler) ListAssignments(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleViewer)
+	if !ok {
+		return nil
+	}
+	items, err := h.service.ListPrivateAgentAssignments(c.UserContext(), project.ID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "failed to list private-agent assignments"})
+	}
+	return c.JSON(fiber.Map{"items": items})
+}
+func (h *PrivateAgentHandler) CreateAssignment(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	var req privateAgentAssignmentRequest
+	if c.BodyParser(&req) != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	a, err := h.service.CreatePrivateAgentAssignment(c.UserContext(), project.ID, currentUserID(c), application.CreatePrivateAgentAssignmentInput{EnvironmentID: req.EnvironmentID, RouteID: req.RouteID, Name: req.Name, Method: req.Method, Target: req.Target, IntervalSecs: req.IntervalSecs, TimeoutMS: req.TimeoutMS})
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid private-agent assignment"})
+	}
+	return c.Status(201).JSON(a)
+}
+func (h *PrivateAgentHandler) RevokeAssignment(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	id, err := strconv.ParseInt(c.Params("assignmentId"), 10, 64)
+	if err != nil || id <= 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid assignment id"})
+	}
+	if err = h.service.RevokePrivateAgentAssignment(c.UserContext(), project.ID, id); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "failed to revoke private-agent assignment"})
+	}
+	return c.SendStatus(204)
+}
+
 func RegisterPrivateAgentRoutes(app fiber.Router, h *PrivateAgentHandler) {
 	app.Post("/agent/heartbeat", h.Heartbeat)
 	app.Get("/agent/config", h.Configuration)
@@ -143,4 +193,7 @@ func RegisterPrivateAgentManagementRoutes(app fiber.Router, h *PrivateAgentHandl
 	app.Get("/agent/catalog/:projectId", guarded(guards, h.List)...)
 	app.Post("/agent/catalog/:projectId", guarded(guards, h.Create)...)
 	app.Post("/agent/revoke/:projectId/:agentId", guarded(guards, h.Revoke)...)
+	app.Get("/agent/assignments/:projectId", guarded(guards, h.ListAssignments)...)
+	app.Post("/agent/assignments/:projectId", guarded(guards, h.CreateAssignment)...)
+	app.Post("/agent/assignments/revoke/:projectId/:assignmentId", guarded(guards, h.RevokeAssignment)...)
 }
