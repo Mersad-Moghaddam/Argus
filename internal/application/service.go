@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"argus/internal/agent"
@@ -113,6 +115,16 @@ func (s *Service) ListIncidents(ctx context.Context, websiteID *int64, state str
 	return s.incidents.ListIncidents(ctx, websiteID, state, limit, offset)
 }
 func (s *Service) CreateAlertChannel(ctx context.Context, channel models.AlertChannel) (int64, error) {
+	channel.Name = strings.TrimSpace(channel.Name)
+	channel.ChannelType = strings.ToLower(strings.TrimSpace(channel.ChannelType))
+	channel.Target = strings.TrimSpace(channel.Target)
+	if channel.Name == "" || len(channel.Name) > 120 || (channel.ChannelType != "webhook" && channel.ChannelType != "slack") {
+		return 0, errors.New("invalid alert channel")
+	}
+	target, err := url.Parse(channel.Target)
+	if err != nil || target.Scheme != "https" || target.Host == "" || target.User != nil || target.Fragment != "" {
+		return 0, errors.New("alert channel target must be an absolute HTTPS URL without userinfo or fragment")
+	}
 	return s.alerts.CreateAlertChannel(ctx, channel)
 }
 func (s *Service) CreateMaintenanceWindow(ctx context.Context, window models.MaintenanceWindow) (int64, error) {
