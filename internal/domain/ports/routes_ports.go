@@ -156,6 +156,17 @@ type RouteIncidentStore interface {
 	ListRouteIncidents(ctx context.Context, projectID int64, routeID *int64, state string, limit, offset int) ([]models.RouteIncident, error)
 }
 
+// ProjectIncidentStore owns source-agnostic incident lifecycle state. Its
+// source key is stable per producer (for example agent:42) so repeated worker
+// evaluation can deduplicate an open incident without creating noise.
+type ProjectIncidentStore interface {
+	GetOpenProjectIncident(ctx context.Context, projectID int64, source, sourceKey string) (*models.ProjectIncident, error)
+	CreateProjectIncident(ctx context.Context, incident models.ProjectIncident) (int64, error)
+	ResolveProjectIncident(ctx context.Context, id int64, resolvedAt time.Time) error
+	AcknowledgeProjectIncident(ctx context.Context, projectID, id, userID int64, acknowledgedAt time.Time) error
+	ListProjectIncidents(ctx context.Context, projectID, state string, limit, offset int) ([]models.ProjectIncident, error)
+}
+
 // ImportStore persists OpenAPI/Swagger import jobs.
 type ImportStore interface {
 	CreateImportJob(ctx context.Context, job models.ImportJob) (int64, error)
