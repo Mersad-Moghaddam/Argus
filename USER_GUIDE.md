@@ -412,6 +412,9 @@ GET    /route/checks/:projectId/:routeId?limit=&offset=
 GET    /route/incidents/:projectId?routeId=&state=&limit=&offset=
 GET    /route/metrics/:projectId?range=1h|6h|24h|7d|30d&routeId=
 
+GET    /incident/catalog/:projectId?state=&limit=&offset=
+POST   /incident/acknowledge/:projectId/:incidentId
+
 POST   /import/validation/:projectId      (multipart "file", or JSON {"spec": "..."})
 GET    /import/job/:projectId/:jobId
 POST   /import/commit/:projectId/:jobId

@@ -187,6 +187,7 @@
       range: '24h',
       series: null,
       incidents: [],
+	  projectIncidents: [],
       environments: [],
       telemetryIngress: [],
       telemetryMappings: [],
@@ -1000,10 +1001,11 @@
     }
     try {
       const p = state.project;
-	  const [project, series, incidents, routes, environments, telemetryIngress, telemetryMappings, slos, heartbeats, agents] = await Promise.all([
+	  const [project, series, incidents, projectIncidents, routes, environments, telemetryIngress, telemetryMappings, slos, heartbeats, agents] = await Promise.all([
 		apiProjects(`/project/catalog/${id}`),
 		apiProjects(`/route/metrics/${id}${qs({ range: p.range })}`),
 		apiProjects(`/route/incidents/${id}${qs({ limit: 15 })}`),
+		apiProjects(`/incident/catalog/${id}${qs({ limit: 15 })}`),
 		apiProjects(`/route/catalog/${id}${routeQuery(p)}`),
 		apiProjects(`/environment/catalog/${id}`),
 		apiProjects(`/telemetry/ingress/${id}${qs({ limit: 20 })}`),
@@ -1015,6 +1017,7 @@
       state.project.project = project;
       state.project.series = series;
       state.project.incidents = incidents || [];
+	  state.project.projectIncidents = projectIncidents.items || [];
       state.project.routes = routes.items || [];
       state.project.routesTotal = routes.total || 0;
       state.project.environments = environments.items || [];
@@ -1138,6 +1141,12 @@
         <div class="card-header"><h2>Private agents</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-agent">Enroll agent</button>' : ''}</div>
         <p class="hint">Agents report outbound liveness only. Argus never connects into your private network. The enrollment token is shown once and can be revoked at any time.</p>
         ${privateAgentsHtml(state.project.agents, canEdit)}
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Operational incidents</h2></div>
+        <p class="hint">Source-aware incidents cover agents, heartbeats, telemetry, and SLOs. Acknowledgement records ownership but does not suppress automatic recovery.</p>
+        ${projectIncidentsHtml(state.project.projectIncidents, canEdit)}
       </section>
 
       <section class="card">
@@ -1364,6 +1373,19 @@
       const tone = agent.status === 'healthy' ? 'status-up' : agent.status === 'stale' ? 'route-degraded' : agent.status === 'revoked' ? 'status-resolved' : 'route-unknown';
       const interval = agent.expectedIntervalSeconds >= 60 ? `${num(Math.round(agent.expectedIntervalSeconds / 60))} min` : `${num(agent.expectedIntervalSeconds)} sec`;
       return `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(agent.name)}</span><span class="list-item-meta">environment #${num(agent.environmentId)} &middot; every ${interval} &middot; ${agent.lastSeenAt ? `last seen ${escapeHtml(relativeTime(agent.lastSeenAt))}` : 'no signal received'}${agent.version ? ` &middot; version ${escapeHtml(agent.version)}` : ''}</span></div><div class="row-actions"><span class="badge ${tone}">${escapeHtml(agent.status || 'offline')}</span>${canEdit && !agent.revokedAt ? `<button class="danger sm" type="button" data-action="revoke-agent" data-id="${agent.id}">Revoke</button>` : ''}</div></div>`;
+    }).join('')}</div>`;
+  }
+
+  function projectIncidentsHtml(incidents, canEdit) {
+    if (!incidents.length) return emptyPanel(ICON.incident, 'No operational incidents', 'Agent, heartbeat, telemetry, and SLO problems will appear here with their source and evidence.');
+    return `<div class="list">${incidents.map((incident) => {
+      const tone = incident.state === 'resolved' ? 'status-resolved' : incident.state === 'acknowledged' ? 'route-degraded' : 'route-failing';
+      let evidence = '';
+      try {
+        const parsed = JSON.parse(incident.evidence || '{}');
+        if (parsed.livenessState) evidence = ` &middot; state ${escapeHtml(parsed.livenessState)}`;
+      } catch (_) { /* Evidence stays intentionally opaque if it is not structured JSON. */ }
+      return `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(incident.title || 'Operational incident')}</span><span class="list-item-meta">${escapeHtml(incident.source || 'unknown source')} &middot; opened ${incident.startedAt ? escapeHtml(relativeTime(incident.startedAt)) : 'at an unknown time'}${evidence}</span></div><div class="row-actions"><span class="badge ${tone}">${escapeHtml(incident.state || 'open')}</span>${canEdit && incident.state === 'open' ? `<button class="secondary sm" type="button" data-action="acknowledge-project-incident" data-id="${incident.id}">Acknowledge</button>` : ''}</div></div>`;
     }).join('')}</div>`;
   }
 
@@ -2962,6 +2984,11 @@
           if (state.route.name === 'route') loadRouteDetail({ silent: true });
           else loadProjectDetail({ silent: true });
           break;
+		case 'acknowledge-project-incident':
+		  await apiProjects(`/incident/acknowledge/${state.project.id}/${id}`, { method: 'POST' });
+		  showToast('Operational incident acknowledged.', 'success');
+		  loadProjectDetail({ silent: true });
+		  break;
         case 'edit-route': {
           const route = state.project.routes.find((r) => r.id === id) || (state.routeDetail.route && state.routeDetail.route.id === id ? state.routeDetail.route : null);
 		  openRouteModal(route || (await apiProjects(`/route/catalog/${state.project.id}/${id}`)));

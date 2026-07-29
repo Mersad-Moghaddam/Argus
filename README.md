@@ -235,6 +235,7 @@ curl http://localhost:8080/project/catalog \
 | Telemetry | Editor-only `GET/POST /telemetry/credentials/:projectId`, plus `/telemetry/rotate/:projectId/:credentialId` and `/telemetry/revoke/:projectId/:credentialId`. Any project viewer can read freshness diagnostics at `/telemetry/ingress/:projectId`. |
 | Heartbeats | Viewer-readable `GET /heartbeat/catalog/:projectId`; editors create and revoke monitors with `POST /heartbeat/catalog/:projectId` and `POST /heartbeat/revoke/:projectId/:monitorId`. Jobs send `POST /heartbeat/ping` with the one-time Bearer token and a unique `Idempotency-Key`. |
 | Routes | `/route/catalog/:projectId` for project-scoped list/create; focused family/purpose routes handle mutations, checks, incidents, and metrics. |
+| Operational incidents | `GET /incident/catalog/:projectId` lists source-aware project incidents; editors acknowledge an open incident with `POST /incident/acknowledge/:projectId/:incidentId`. |
 | Imports | `/import/validation/:projectId`, `/import/job/:projectId/:jobId`, and `/import/commit/:projectId/:jobId` support OpenAPI 3.x or Swagger 2.0 JSON/YAML documents up to 10 MiB. |
 
 ### OTLP/HTTP ingestion

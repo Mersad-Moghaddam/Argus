@@ -36,9 +36,40 @@ func RegisterProjectRoutes(app fiber.Router, h *ProjectHandler, guards ...fiber.
 	app.Get("/slo/catalog/:projectId", guarded(guards, h.ListSLODefinitions)...)
 	app.Post("/slo/catalog/:projectId", guarded(guards, h.CreateSLODefinition)...)
 	app.Get("/slo/evaluations/:projectId/:sloId", guarded(guards, h.ListSLOEvaluations)...)
+	app.Get("/incident/catalog/:projectId", guarded(guards, h.ListProjectIncidents)...)
+	app.Post("/incident/acknowledge/:projectId/:incidentId", guarded(guards, h.AcknowledgeProjectIncident)...)
 	app.Post("/telemetry/credentials/:projectId", guarded(guards, h.CreateTelemetryCredential)...)
 	app.Post("/telemetry/rotate/:projectId/:credentialId", guarded(guards, h.RotateTelemetryCredential)...)
 	app.Post("/telemetry/revoke/:projectId/:credentialId", guarded(guards, h.RevokeTelemetryCredential)...)
+}
+
+func (h *ProjectHandler) ListProjectIncidents(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleViewer)
+	if !ok {
+		return nil
+	}
+	limit, _ := strconv.Atoi(c.Query("limit", "100"))
+	offset, _ := strconv.Atoi(c.Query("offset", "0"))
+	items, err := h.service.ListProjectIncidents(c.UserContext(), project.ID, c.Query("state"), limit, offset)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list project incidents"})
+	}
+	return c.JSON(fiber.Map{"items": items})
+}
+
+func (h *ProjectHandler) AcknowledgeProjectIncident(c *fiber.Ctx) error {
+	project, ok := authorizeProject(c, h.service, models.ProjectRoleEditor)
+	if !ok {
+		return nil
+	}
+	incidentID, err := parseIDParam(c, "incidentId")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if err = h.service.AcknowledgeProjectIncident(c.UserContext(), project.ID, incidentID, currentUserID(c)); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to acknowledge project incident"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 type sloDefinitionRequest struct {

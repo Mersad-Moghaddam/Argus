@@ -40,6 +40,7 @@ func newTestAPI(t *testing.T) *testAPI {
 	service := application.NewService(s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Legacy, s.Outbox,
 		observability.NewLogStore(100), s.Users, s.Tokens, s.PasswordRecovery, s.RecoveryDelivery, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings, s.SLOs, s.Heartbeats)
 	service.SetPrivateAgentStore(s.PrivateAgents)
+	service.SetProjectIncidentStore(s.ProjectIncidents)
 	return &testAPI{
 		app:     httpserver.NewFiberApp(service, observability.NewLogStore(100), legacyAPIKey),
 		service: service,
@@ -176,6 +177,51 @@ func TestPrivateAgentManagementIsProjectScopedAndRevokesCredentials(t *testing.T
 	resp = a.do(t, http.MethodPost, "/agent/heartbeat", issued.EnrollmentToken, map[string]string{"version": "1.0.0"})
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("revoked heartbeat: expected 401, got %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+}
+
+func TestProjectIncidentEndpointsAreTenantScopedAndRoleAware(t *testing.T) {
+	a := newTestAPI(t)
+	viewerID, viewerToken := a.register(t, "project-incident-viewer@example.com")
+	_, ownerToken := a.register(t, "project-incident-owner@example.com")
+	_, outsiderToken := a.register(t, "project-incident-outsider@example.com")
+	project := a.createProject(t, ownerToken, "Project incident API")
+	if err := a.stores.Projects.AddProjectMember(context.Background(), models.ProjectMember{ProjectID: project.ID, UserID: viewerID, Role: models.ProjectRoleViewer}); err != nil {
+		t.Fatal(err)
+	}
+	incidentID, err := a.stores.ProjectIncidents.CreateProjectIncident(context.Background(), models.ProjectIncident{
+		ProjectID: project.ID, Source: "private_agent", SourceKey: "agent:12", Title: "Private agent is offline", Evidence: `{"agentId":12}`, StartedAt: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := fmt.Sprintf("/incident/catalog/%d", project.ID)
+	response := a.do(t, http.MethodGet, path, viewerToken, nil)
+	if response.StatusCode != fiber.StatusOK {
+		t.Fatalf("viewer list incidents: %d (%s)", response.StatusCode, bodyString(t, response))
+	}
+	var listed struct {
+		Items []models.ProjectIncident `json:"items"`
+	}
+	decode(t, response, &listed)
+	if len(listed.Items) != 1 || listed.Items[0].Source != "private_agent" || listed.Items[0].Evidence != `{"agentId":12}` {
+		t.Fatalf("unexpected incidents: %#v", listed.Items)
+	}
+	response = a.do(t, http.MethodPost, fmt.Sprintf("/incident/acknowledge/%d/%d", project.ID, incidentID), viewerToken, nil)
+	if response.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("viewer must not acknowledge: %d (%s)", response.StatusCode, bodyString(t, response))
+	}
+	response = a.do(t, http.MethodGet, path, outsiderToken, nil)
+	if response.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("outsider must not list incidents: %d (%s)", response.StatusCode, bodyString(t, response))
+	}
+	response = a.do(t, http.MethodPost, fmt.Sprintf("/incident/acknowledge/%d/%d", project.ID, incidentID), ownerToken, nil)
+	if response.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("owner acknowledge: %d (%s)", response.StatusCode, bodyString(t, response))
+	}
+	items, err := a.stores.ProjectIncidents.ListProjectIncidents(context.Background(), project.ID, "acknowledged", 10, 0)
+	if err != nil || len(items) != 1 || items[0].AcknowledgedAt == nil {
+		t.Fatalf("acknowledged incident: %v %#v", err, items)
 	}
 }
 
