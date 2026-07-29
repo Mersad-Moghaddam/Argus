@@ -31,7 +31,12 @@ func NewWebhookDelivery(endpoint string, timeout time.Duration) (*WebhookDeliver
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	return &WebhookDelivery{endpoint: endpoint, client: &http.Client{Timeout: timeout}}, nil
+	return &WebhookDelivery{endpoint: endpoint, client: &http.Client{
+		Timeout: timeout,
+		// Reset tokens are in the request body. Never follow a redirect that
+		// could change the configured trusted delivery origin.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}}, nil
 }
 
 func (d *WebhookDelivery) DeliverPasswordRecovery(ctx context.Context, email, token string, expiresAt time.Time) error {
