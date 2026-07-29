@@ -354,7 +354,9 @@ editor creates a project/environment-bound assignment with a catalog route refer
 60-second timeout. The agent receives assignments only in its verified, 15-minute signed
 configuration envelope for that exact project and environment. It never accepts inbound
 connections, redirects, credentials, request bodies, or arbitrary commands; its local executor
-drains at most 1 MiB and reports bounded success/failure evidence outbound to Argus.
+drains at most 1 MiB and reports bounded success/failure evidence outbound to Argus. Project
+editors create or revoke assignments from the **Private agents** card; project viewers can inspect
+the resulting bounded assignment metadata without seeing agent enrollment credentials.
 
 Current assignment-management endpoints are `GET`/`POST /agent/assignments/:projectId` and
 `POST /agent/assignments/revoke/:projectId/:assignmentId`. Viewers can list assignments; only
