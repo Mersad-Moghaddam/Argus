@@ -27,6 +27,11 @@ func TestIsIgnorableMigrationError(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "duplicate index",
+			err:  &mysqlDriver.MySQLError{Number: 1061, Message: "Duplicate key name"},
+			want: true,
+		},
+		{
 			name: "other mysql error",
 			err:  &mysqlDriver.MySQLError{Number: 1064, Message: "Syntax error"},
 			want: false,

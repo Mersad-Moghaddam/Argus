@@ -64,17 +64,22 @@ func executeSQLBatch(ctx context.Context, exec sqlExecutor, sqlText string) erro
 	return nil
 }
 
-// isIgnorableMigrationError reports whether err is the specific "column already
-// exists" failure that makes a re-run of an additive migration a no-op.
+// isIgnorableMigrationError reports whether err is a duplicate additive-schema
+// failure that makes a re-run of a migration a no-op.
 //
 // MySQL has no `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (that syntax is a
 // MariaDB extension), so the compatibility migration issues plain ADD COLUMN
-// statements and relies on this narrow allowance for idempotency. Nothing else
-// is tolerated: every other error still aborts startup.
+// statements and relies on this narrow allowance for idempotency. MySQL also
+// reports an already-created secondary index as error 1061, so that equally
+// harmless re-run is accepted. Nothing else is tolerated: every other error
+// still aborts startup.
 func isIgnorableMigrationError(err error) bool {
 	var mysqlErr *mysqlDriver.MySQLError
-	const errDupFieldName = 1060
-	return errors.As(err, &mysqlErr) && mysqlErr.Number == errDupFieldName
+	const (
+		errDupFieldName = 1060
+		errDupKeyName   = 1061
+	)
+	return errors.As(err, &mysqlErr) && (mysqlErr.Number == errDupFieldName || mysqlErr.Number == errDupKeyName)
 }
 
 // SplitStatements splits a SQL batch into individual statements.
