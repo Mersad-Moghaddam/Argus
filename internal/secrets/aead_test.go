@@ -23,3 +23,21 @@ func TestAEADRoundTripAndWrongKeyRejection(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRewrapRejectsWrongCurrentKey(t *testing.T) {
+	oldKey, newKey := bytes.Repeat([]byte{1}, 32), bytes.Repeat([]byte{2}, 32)
+	sealed, err := Seal(oldKey, "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rotated, err := Rewrap(oldKey, newKey, sealed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Open(newKey, rotated); err != nil || got != "secret" {
+		t.Fatalf("rewrap: %q %v", got, err)
+	}
+	if _, err := Rewrap(newKey, oldKey, sealed); err == nil {
+		t.Fatal("wrong current key accepted")
+	}
+}

@@ -69,3 +69,14 @@ func Open(key []byte, ciphertext string) (string, error) {
 	plain, err := gcm.Open(nil, raw[:gcm.NonceSize()], raw[gcm.NonceSize():], nil)
 	return string(plain), err
 }
+
+// Rewrap verifies ciphertext with the current key before encrypting it with a
+// replacement key. It is the primitive used by the operator-run rotation
+// command; callers must not rotate by copying opaque ciphertext.
+func Rewrap(currentKey, replacementKey []byte, ciphertext string) (string, error) {
+	plaintext, err := Open(currentKey, ciphertext)
+	if err != nil {
+		return "", err
+	}
+	return Seal(replacementKey, plaintext)
+}
