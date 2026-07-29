@@ -1594,7 +1594,11 @@ func TestProjectListingEndpoint(t *testing.T) {
 func TestProjectEnvironmentEndpoints(t *testing.T) {
 	a := newTestAPI(t)
 	_, token := a.register(t, "environment-api@example.com")
+	viewerID, viewerToken := a.register(t, "environment-viewer@example.com")
 	project := a.createProject(t, token, "Environment API")
+	if err := a.stores.Projects.AddProjectMember(context.Background(), models.ProjectMember{ProjectID: project.ID, UserID: viewerID, Role: models.ProjectRoleViewer}); err != nil {
+		t.Fatal(err)
+	}
 
 	resp := a.do(t, http.MethodPost, fmt.Sprintf("/environment/catalog/%d", project.ID), token, map[string]string{
 		"name": "staging", "baseUrl": "HTTPS://API.Example.com:443/v1/",
@@ -1617,6 +1621,10 @@ func TestProjectEnvironmentEndpoints(t *testing.T) {
 	decode(t, resp, &updated)
 	if updated.Name != "pre-production" || updated.CanonicalBaseURL != "https://api.example.com/v2" {
 		t.Fatalf("updated environment: %+v", updated)
+	}
+	resp = a.do(t, http.MethodPut, fmt.Sprintf("/environment/catalog/%d/%d", project.ID, created.ID), viewerToken, map[string]string{"name": "blocked"})
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("viewer update environment: got %d, want 403", resp.StatusCode)
 	}
 
 	var listed struct {
