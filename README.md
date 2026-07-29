@@ -457,7 +457,7 @@ Named Docker volumes retain both MySQL and Redis state across container restarts
 
 ## Security model
 
-Argus is intended to monitor public network targets. Before direct HTTP and keyword checks, it resolves the hostname and blocks loopback, RFC1918/private, link-local, and cloud metadata addresses. Additional safeguards include:
+Argus is intended to monitor public network targets. Legacy website monitors and project-route checks enforce the same public-target policy at URL validation, every resolved socket dial, and each redirect hop. They block loopback, RFC1918/private, link-local, and cloud metadata addresses. Additional safeguards include:
 
 - optional global API-key protection through Fiber middleware;
 - independent bearer auth for project APIs, bcrypt password hashing, hashed session tokens, and role-aware project authorization;
@@ -468,7 +468,7 @@ Argus is intended to monitor public network targets. Before direct HTTP and keyw
 - Fiber recovery, Helmet security headers, ETags, and response compression.
 
 > [!WARNING]
-> Treat Argus as privileged infrastructure. Put it behind TLS and a trusted reverse proxy, set `API_KEY`, use strong MySQL/Redis credentials, restrict database ports, and review outbound-network policy before exposing it publicly. The newer route evaluator revalidates redirect hops and resolved addresses; the legacy website checker still uses a less-hardened client and should not be treated as equivalent.
+> Treat Argus as privileged infrastructure. Put it behind TLS and a trusted reverse proxy, set `API_KEY`, use strong MySQL/Redis credentials, restrict database ports, and review outbound-network policy before exposing it publicly.
 
 Please report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
 

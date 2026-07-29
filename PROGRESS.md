@@ -29,7 +29,7 @@
 | SEC-006 | Encrypted/rotatable synthetic secret references | secrets, migrations | redaction and rotation tests | In progress — versioned AEAD writes, restartable legacy backfill, and durable key-fingerprinted rotation checkpoints landed; production migration/rotation remains operator-run | Pending |
 | SEC-008 | Endpoint limits and server timeouts | HTTP platform | configuration and slow-client tests | In progress — explicit server timeouts, security headers, 256 KiB auth/project-control limits, and a dedicated 1 MiB import-commit limit landed; large import validation and slow-client integration evidence remain | Pending |
 | Threat model: tenant isolation | Scope every request, job, token, mapping, incident, and export | API, stores, workers | cross-tenant negative tests | Planned | — |
-| Threat model: SSRF | Preserve dial- and redirect-time address validation | worker, synthetic policy | redirect, DNS, IPv4/IPv6 test suite | Planned | — |
+| Threat model: SSRF | Preserve dial- and redirect-time address validation | worker, synthetic policy | redirect, DNS, IPv4/IPv6 test suite | In progress — hardened dial/redirect policy now protects both project-route and legacy website HTTP/TLS checks; broader end-to-end evidence remains | Pending |
 | Migration | Additive, restartable, reversible changes and conflict reporting | migrations, backfill | fresh and legacy migration tests | In progress — additive schema, canonical dual-write, and an operator-run restartable legacy backfill/conflict workflow landed; cutover remains | Pending |
 
 ## Delivery roadmap
