@@ -357,7 +357,10 @@ connections, follows redirects, permits non-HTTP(S) targets, sends credentials o
 or accepts arbitrary commands; its local executor treats every non-2xx response as failure,
 drains at most 1 MiB, and reports bounded success/failure evidence outbound to Argus. Project
 editors create or revoke assignments from the **Private agents** card; project viewers can inspect
-the resulting bounded assignment metadata without seeing agent enrollment credentials.
+the resulting bounded assignment metadata without seeing agent enrollment credentials. Each result
+is accepted only when its assignment remains active for the reporting agent's exact environment;
+failure and recovery incidents are consequently scoped to that assignment instead of being merged
+across unrelated local checks.
 
 Current assignment-management endpoints are `GET`/`POST /agent/assignments/:projectId` and
 `POST /agent/assignments/revoke/:projectId/:assignmentId`. Viewers can list assignments; only

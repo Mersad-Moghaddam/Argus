@@ -53,7 +53,7 @@
 | 3s | Source-aware project incident API and dashboard | Complete | Current checkpoint |
 | 3t | Project heartbeat liveness incidents | Complete | Current checkpoint |
 | 3u | Signed private-agent configuration envelope | Complete | Current checkpoint |
-| 3w | Scoped private-agent assignment protocol and bounded local executor | Complete — durable assignments, editor/viewer API, signed environment-bound delivery, GET/HEAD-only local execution, and dashboard create/list/revoke management landed | `516431a`, `f8827c9`, `b968847` |
+| 3w | Scoped private-agent assignment protocol and bounded local executor | Complete — durable assignments, editor/viewer API, signed environment-bound delivery, GET/HEAD-only local execution, assignment-attributed results, and dashboard create/list/revoke management landed | `516431a`, `f8827c9`, `b968847`, `bc090ca` |
 | 2j | Route-header encryption backfill and durable rotation command | Complete | Current checkpoint |
 | 1 | Identity, authorization, secure global shell | In progress | — |
 | 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | `8ab613a` |
