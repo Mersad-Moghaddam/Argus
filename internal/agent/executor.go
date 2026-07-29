@@ -20,7 +20,7 @@ func ExecuteAssignment(ctx context.Context, a Assignment, client *http.Client) (
 		return false, "invalid assignment"
 	}
 	u, err := url.Parse(strings.TrimSpace(a.Target))
-	if err != nil || u.Scheme == "" || u.Host == "" || u.User != nil || u.Fragment != "" {
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.Fragment != "" {
 		return false, "invalid assignment target"
 	}
 	timeout := time.Duration(a.TimeoutMS) * time.Millisecond

@@ -37,6 +37,7 @@ func TestExecuteAssignmentRejectsUnsignedLikeWork(t *testing.T) {
 	for _, assignment := range []Assignment{
 		{ID: 0, Method: http.MethodGet, Target: "https://example.com", TimeoutMS: 200},
 		{ID: 1, Method: http.MethodPost, Target: "https://example.com", TimeoutMS: 200},
+		{ID: 1, Method: http.MethodGet, Target: "file:///etc/passwd", TimeoutMS: 200},
 		{ID: 1, Method: http.MethodGet, Target: "https://user:pass@example.com", TimeoutMS: 200},
 		{ID: 1, Method: http.MethodGet, Target: "https://example.com#fragment", TimeoutMS: 200},
 	} {
