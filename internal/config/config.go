@@ -15,7 +15,10 @@ import (
 
 type Config struct {
 	HTTPAddr string
-	MySQLDSN string
+	// OTLPGRPCAddr is a dedicated OTLP/gRPC listener. Empty disables gRPC
+	// ingestion; operators must explicitly bind and protect this port.
+	OTLPGRPCAddr string
+	MySQLDSN     string
 
 	RedisAddr     string
 	RedisPassword string
@@ -80,7 +83,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	_ = godotenv.Load()
-	cfg := Config{HTTPAddr: envOrDefault("HTTP_ADDR", ":8080"), MySQLDSN: envOrDefault("MYSQL_DSN", "argus:argus@tcp(localhost:3306)/argus?parseTime=true"), RedisAddr: envOrDefault("REDIS_ADDR", "localhost:6379"), RedisPassword: envOrDefault("REDIS_PASSWORD", ""), SchedulerInterval: mustDuration("SCHEDULER_INTERVAL", 30*time.Second), WorkerConcurrency: mustInt("WORKER_CONCURRENCY", 10), QueueCriticalWeight: mustInt("QUEUE_CRITICAL_WEIGHT", 6), QueueDefaultWeight: mustInt("QUEUE_DEFAULT_WEIGHT", 4), DueCheckBatchSize: mustInt("DUE_CHECK_BATCH_SIZE", 200), APIKey: os.Getenv("API_KEY"), DBMaxOpenConns: mustInt("DB_MAX_OPEN_CONNS", 25), DBMaxIdleConns: mustInt("DB_MAX_IDLE_CONNS", 25), DBConnMaxLifetime: mustDuration("DB_CONN_MAX_LIFETIME", 5*time.Minute)}
+	cfg := Config{HTTPAddr: envOrDefault("HTTP_ADDR", ":8080"), OTLPGRPCAddr: os.Getenv("OTLP_GRPC_ADDR"), MySQLDSN: envOrDefault("MYSQL_DSN", "argus:argus@tcp(localhost:3306)/argus?parseTime=true"), RedisAddr: envOrDefault("REDIS_ADDR", "localhost:6379"), RedisPassword: envOrDefault("REDIS_PASSWORD", ""), SchedulerInterval: mustDuration("SCHEDULER_INTERVAL", 30*time.Second), WorkerConcurrency: mustInt("WORKER_CONCURRENCY", 10), QueueCriticalWeight: mustInt("QUEUE_CRITICAL_WEIGHT", 6), QueueDefaultWeight: mustInt("QUEUE_DEFAULT_WEIGHT", 4), DueCheckBatchSize: mustInt("DUE_CHECK_BATCH_SIZE", 200), APIKey: os.Getenv("API_KEY"), DBMaxOpenConns: mustInt("DB_MAX_OPEN_CONNS", 25), DBMaxIdleConns: mustInt("DB_MAX_IDLE_CONNS", 25), DBConnMaxLifetime: mustDuration("DB_CONN_MAX_LIFETIME", 5*time.Minute)}
 	cfg.MetricsBackendURL = envOrDefault("METRICS_BACKEND_URL", "http://localhost:8428")
 	cfg.MetricsBackendTimeout = mustDuration("METRICS_BACKEND_TIMEOUT", 5*time.Second)
 	cfg.SLOEvaluationInterval = mustDuration("SLO_EVALUATION_INTERVAL", time.Minute)

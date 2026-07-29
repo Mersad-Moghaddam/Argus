@@ -153,6 +153,7 @@ Argus reads environment variables and automatically loads a local `.env` file wh
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `HTTP_ADDR` | `:8080` | API and dashboard listen address. |
+| `OTLP_GRPC_ADDR` | empty | Optional dedicated OTLP/gRPC listener address. Empty leaves OTLP/gRPC disabled; terminate TLS and restrict network access before enabling it. |
 | `MYSQL_DSN` | `argus:argus@tcp(localhost:3306)/argus?parseTime=true` | Go MySQL driver DSN. Keep `parseTime=true`. |
 | `REDIS_ADDR` | `localhost:6379` | Redis address used by Asynq. |
 | `REDIS_PASSWORD` | empty | Redis password. |
