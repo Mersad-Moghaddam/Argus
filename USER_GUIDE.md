@@ -346,7 +346,22 @@ What re-importing guarantees:
   `100000`), plus `ROUTE_PROJECT_CONCURRENCY` (default `4`) and
   `ROUTE_GLOBAL_CONCURRENCY` (default `50`).
 
-### 9.6 Route health states
+### 9.6 Private-agent assignments
+
+Use a private agent only for a target that the central Argus control plane must not reach. An
+editor creates a project/environment-bound assignment with a catalog route reference, a deliberate
+`GET` or `HEAD` method, an HTTP(S) target, a 15-second to 24-hour interval, and a 200 ms to
+60-second timeout. The agent receives assignments only in its verified, 15-minute signed
+configuration envelope for that exact project and environment. It never accepts inbound
+connections, redirects, credentials, request bodies, or arbitrary commands; its local executor
+drains at most 1 MiB and reports bounded success/failure evidence outbound to Argus.
+
+Current assignment-management endpoints are `GET`/`POST /agent/assignments/:projectId` and
+`POST /agent/assignments/revoke/:projectId/:assignmentId`. Viewers can list assignments; only
+project editors can create or revoke them. The project dashboard’s assignment UI is a follow-up;
+use the authenticated API until it lands.
+
+### 9.7 Route health states
 
 One definition, applied everywhere (`internal/domain/route.go`):
 
@@ -363,14 +378,14 @@ The incident rule is configurable per project and per route: an incident **opens
 consecutive successes (default 1). Repeated failures while an incident is already open do not open a
 second one.
 
-### 9.7 Route detail
+### 9.8 Route detail
 
 Each route has its own page showing configuration (target URL, interval, timeout, retries, expected
 status range, incident rule, next check, tags, headers, and the imported parameters/request
 body/responses/security blocks), current health, 24h uptime and latency, a status-code distribution,
 the recent check log with failure reasons and attempt counts, and its incidents.
 
-### 9.8 How checking works
+### 9.9 How checking works
 
 Checks run entirely in the background worker — there are no frontend timers involved. Four scheduled
 asynq tasks:
@@ -385,7 +400,7 @@ asynq tasks:
 Route checks run on the `default` queue so they can never starve the legacy website checks on
 `critical`; total in-flight work is bounded by `WORKER_CONCURRENCY`.
 
-### 9.9 Monitored URLs are untrusted
+### 9.10 Monitored URLs are untrusted
 
 Every outbound check is treated as hostile input:
 
@@ -406,7 +421,7 @@ Every outbound check is treated as hostile input:
 - Configured header values that look like secrets are masked in every API response, import preview
   and log line. The stored value stays intact so checks still authenticate.
 
-### 9.10 Project API reference
+### 9.11 Project API reference
 
 All of these require `Authorization: Bearer <token>`.
 
@@ -441,7 +456,7 @@ GET    /import/job/:projectId/:jobId
 POST   /import/commit/:projectId/:jobId
 ```
 
-### 9.11 Configuration
+### 9.12 Configuration
 
 All route-monitoring settings have safe defaults; none are required.
 
