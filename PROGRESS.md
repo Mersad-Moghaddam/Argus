@@ -52,6 +52,7 @@
 | 3r | Private-agent generic incident lifecycle | Complete | Current checkpoint |
 | 3s | Source-aware project incident API and dashboard | Complete | Current checkpoint |
 | 3t | Project heartbeat liveness incidents | Complete | Current checkpoint |
+| 3u | Signed private-agent configuration envelope | Complete | Current checkpoint |
 | 1 | Identity, authorization, secure global shell | In progress | — |
 | 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | `8ab613a` |
 | 2b | Canonical endpoint pipeline and preview API | Complete | `580e1bb` |
@@ -147,3 +148,4 @@
 | 2026-07-29 | 3r | Completed the generic project-incident lifecycle for private-agent liveness. State transitions to stale or offline now open one source-scoped `private_agent` incident with bounded operational evidence; recovery and operator revocation resolve it. The evaluator keeps existing liveness-outbox events and does not open duplicates on repeated runs. Focused worker tests and full Go regression tests passed. | Complete |
 | 2026-07-29 | 3s | Exposed source-aware project incidents through viewer-scoped listing and editor-only acknowledgement routes, then surfaced them in the authenticated dashboard. Project membership is enforced before listing or acknowledgement; the UI shows source, state, safe liveness evidence, and acknowledgement without treating it as resolution. Focused API/application tests and frontend syntax checks passed. | Complete |
 | 2026-07-29 | 3t | Added a minute-scheduled heartbeat liveness evaluator. Late or missing project heartbeats open one deduplicated `heartbeat` incident with bounded evidence; a fresh receipt resolves it, and revocation resolves the obligation. Liveness evaluation deliberately preserves the job's separately reported success/failure outcome. Full Go regression tests and frontend syntax checks passed. | Complete |
+| 2026-07-29 | 3u | Added an optional fail-closed, Ed25519-signed private-agent configuration envelope. An authenticated enrolled agent receives only its server-bound project/environment identity, heartbeat expectation, key identifier, and 15-minute expiry; no target address, executable work, or reverse connection is issued. Cryptographic tamper/expiry and API binding coverage passed. Agent-side key provisioning and configuration consumption remain the next protocol step. | Complete |

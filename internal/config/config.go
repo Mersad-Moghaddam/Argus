@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strconv"
@@ -65,6 +67,9 @@ type Config struct {
 	// endpoints stay blocked even when this is enabled.
 	RouteAllowPrivateTargets bool
 	RouteUserAgent           string
+	// AgentConfigSigningKey signs short-lived, outbound-only private-agent
+	// configuration envelopes. Empty disables the config endpoint safely.
+	AgentConfigSigningKey []byte
 }
 
 func Load() (Config, error) {
@@ -92,6 +97,13 @@ func Load() (Config, error) {
 	var keyErr error
 	if cfg.RouteSecretEncryptionKey, keyErr = secrets.ParseKey(os.Getenv("ROUTE_SECRET_ENCRYPTION_KEY")); keyErr != nil {
 		return Config{}, keyErr
+	}
+	if raw := os.Getenv("AGENT_CONFIG_SIGNING_KEY"); raw != "" {
+		key, decodeErr := base64.RawURLEncoding.DecodeString(raw)
+		if decodeErr != nil || len(key) != ed25519.PrivateKeySize {
+			return Config{}, fmt.Errorf("AGENT_CONFIG_SIGNING_KEY must be a base64url Ed25519 private key")
+		}
+		cfg.AgentConfigSigningKey = key
 	}
 
 	dbIndex, err := strconv.Atoi(envOrDefault("REDIS_DB", "0"))

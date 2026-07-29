@@ -335,6 +335,11 @@ job's optional `success` or `failure` outcome.
 The service returns the agent's server-bound project and environment identity;
 the agent must not select those values itself. Revocation immediately rejects
 the credential, and project non-members receive a non-enumerating response.
+When `AGENT_CONFIG_SIGNING_KEY` is configured, an enrolled agent can also call
+`GET /agent/config` with its Bearer token. Argus returns a 15-minute,
+Ed25519-signed identity/liveness envelope bound to that token's server-side
+project and environment. It contains no private target, executable work, or
+reverse-connect instruction; without the signing key this route fails closed.
 The included `argus-agent` process is an outbound-only liveness client:
 
 ```bash

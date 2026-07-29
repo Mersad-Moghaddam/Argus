@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"argus/internal/agent"
 	"argus/internal/application"
 	"argus/internal/models"
 	"argus/internal/observability"
@@ -41,11 +43,22 @@ func newTestAPI(t *testing.T) *testAPI {
 		observability.NewLogStore(100), s.Users, s.Tokens, s.PasswordRecovery, s.RecoveryDelivery, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings, s.SLOs, s.Heartbeats)
 	service.SetPrivateAgentStore(s.PrivateAgents)
 	service.SetProjectIncidentStore(s.ProjectIncidents)
+	service.SetAgentConfigurationSigner(mustTestAgentSigner(t))
 	return &testAPI{
 		app:     httpserver.NewFiberApp(service, observability.NewLogStore(100), legacyAPIKey),
 		service: service,
 		stores:  s,
 	}
+}
+
+func mustTestAgentSigner(t *testing.T) *agent.ConfigurationSigner {
+	t.Helper()
+	private := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))
+	signer, err := agent.NewConfigurationSigner(private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signer
 }
 
 // do executes a request against the app. A nil body sends no payload; a
@@ -154,6 +167,15 @@ func TestPrivateAgentManagementIsProjectScopedAndRevokesCredentials(t *testing.T
 	decode(t, resp, &issued)
 	if issued.EnrollmentToken == "" {
 		t.Fatal("expected one-time enrollment token")
+	}
+	resp = a.do(t, http.MethodGet, "/agent/config", issued.EnrollmentToken, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("agent config: %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+	var signed agent.SignedConfiguration
+	decode(t, resp, &signed)
+	if signed.Configuration.AgentID != issued.Agent.ID || signed.Configuration.ProjectID != project.ID || signed.Configuration.EnvironmentID != environments.Items[0].ID || signed.Signature == "" {
+		t.Fatalf("unsafe or mismatched agent config: %#v", signed)
 	}
 	resp = a.do(t, http.MethodGet, fmt.Sprintf("/agent/catalog/%d", project.ID), ownerToken, nil)
 	if resp.StatusCode != fiber.StatusOK {

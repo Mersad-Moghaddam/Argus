@@ -45,6 +45,22 @@ func (h *PrivateAgentHandler) Heartbeat(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"agentId": agent.ID, "projectId": agent.ProjectID, "environmentId": agent.EnvironmentID})
 }
 
+func (h *PrivateAgentHandler) Configuration(c *fiber.Ctx) error {
+	auth := strings.TrimSpace(c.Get(fiber.HeaderAuthorization))
+	const p = "Bearer "
+	if !strings.HasPrefix(auth, p) {
+		return c.Status(401).JSON(fiber.Map{"error": "invalid agent credentials"})
+	}
+	signed, err := h.service.IssuePrivateAgentConfiguration(c.UserContext(), strings.TrimSpace(strings.TrimPrefix(auth, p)), c.Get("Argus-Agent-Version"))
+	if errors.Is(err, application.ErrPrivateAgentNotFound) {
+		return c.Status(401).JSON(fiber.Map{"error": "invalid agent credentials"})
+	}
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "agent configuration unavailable"})
+	}
+	return c.JSON(signed)
+}
+
 func (h *PrivateAgentHandler) List(c *fiber.Ctx) error {
 	project, ok := authorizeProject(c, h.service, models.ProjectRoleViewer)
 	if !ok {
@@ -92,6 +108,7 @@ func (h *PrivateAgentHandler) Revoke(c *fiber.Ctx) error {
 
 func RegisterPrivateAgentRoutes(app fiber.Router, h *PrivateAgentHandler) {
 	app.Post("/agent/heartbeat", h.Heartbeat)
+	app.Get("/agent/config", h.Configuration)
 }
 
 func RegisterPrivateAgentManagementRoutes(app fiber.Router, h *PrivateAgentHandler, guards ...fiber.Handler) {

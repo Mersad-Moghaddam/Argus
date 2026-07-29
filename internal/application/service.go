@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"argus/internal/agent"
 	"argus/internal/domain"
 	"argus/internal/domain/ports"
 	"argus/internal/models"
@@ -41,6 +42,7 @@ type Service struct {
 	slos                 ports.SLOStore
 	heartbeats           ports.HeartbeatStore
 	privateAgents        ports.PrivateAgentStore
+	agentConfigSigner    *agent.ConfigurationSigner
 	projectIncidents     ports.ProjectIncidentStore
 }
 

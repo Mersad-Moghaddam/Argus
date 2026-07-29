@@ -12,6 +12,7 @@ import (
 	"argus/internal/adapters/outbound/notifier"
 	"argus/internal/adapters/outbound/recovery"
 	"argus/internal/adapters/outbound/victoriametrics"
+	"argus/internal/agent"
 	"argus/internal/application"
 	"argus/internal/config"
 	"argus/internal/observability"
@@ -57,6 +58,15 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	}
 	appService := application.NewService(store, store, store, store, store, store, logger, store, store, store, recoveryDelivery, store, store, store, store, store, store, store, store, store)
 	appService.SetPrivateAgentStore(store)
+	if len(cfg.AgentConfigSigningKey) > 0 {
+		signer, signerErr := agent.NewConfigurationSigner(cfg.AgentConfigSigningKey)
+		if signerErr != nil {
+			_ = db.Close()
+			_ = telemetry.Shutdown(ctx)
+			return nil, fmt.Errorf("configure agent configuration signing: %w", signerErr)
+		}
+		appService.SetAgentConfigurationSigner(signer)
+	}
 	appService.SetProjectIncidentStore(store)
 	metricSink, err := victoriametrics.NewWriter(cfg.MetricsBackendURL, cfg.MetricsBackendTimeout)
 	if err != nil {
