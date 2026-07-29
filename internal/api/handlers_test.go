@@ -161,6 +161,24 @@ func TestPrivateAgentManagementIsProjectScopedAndRevokesCredentials(t *testing.T
 	if len(environments.Items) == 0 {
 		t.Fatal("project should have a default environment")
 	}
+	routeResponse := a.do(t, http.MethodPost, fmt.Sprintf("/route/catalog/%d", project.ID), ownerToken, map[string]any{"method": "GET", "path": "/health", "baseUrl": "https://api.example.com"})
+	if routeResponse.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create assignment route: %d (%s)", routeResponse.StatusCode, bodyString(t, routeResponse))
+	}
+	var route models.APIRoute
+	decode(t, routeResponse, &route)
+	assignmentResponse := a.do(t, http.MethodPost, fmt.Sprintf("/agent/assignments/%d", project.ID), ownerToken, map[string]any{"name": "private health", "environmentId": environments.Items[0].ID, "routeId": route.ID, "method": "GET", "target": "http://service.internal/health", "intervalSeconds": 60, "timeoutMs": 5000})
+	if assignmentResponse.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create assignment: %d (%s)", assignmentResponse.StatusCode, bodyString(t, assignmentResponse))
+	}
+	var assignment models.PrivateAgentAssignment
+	decode(t, assignmentResponse, &assignment)
+	if assignment.ID == 0 || assignment.ProjectID != project.ID || assignment.EnvironmentID != environments.Items[0].ID {
+		t.Fatalf("unexpected assignment: %+v", assignment)
+	}
+	if response := a.do(t, http.MethodGet, fmt.Sprintf("/agent/assignments/%d", project.ID), outsiderToken, nil); response.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("outsider assignment list: expected non-enumerating 404, got %d", response.StatusCode)
+	}
 	resp = a.do(t, http.MethodPost, fmt.Sprintf("/agent/catalog/%d", project.ID), ownerToken, map[string]any{"name": "private edge", "environmentId": environments.Items[0].ID})
 	if resp.StatusCode != fiber.StatusCreated {
 		t.Fatalf("create agent: %d (%s)", resp.StatusCode, bodyString(t, resp))
@@ -216,6 +234,21 @@ func TestPrivateAgentManagementIsProjectScopedAndRevokesCredentials(t *testing.T
 	decode(t, resp, &signed)
 	if signed.Configuration.AgentID != issued.Agent.ID || signed.Configuration.ProjectID != project.ID || signed.Configuration.EnvironmentID != environments.Items[0].ID || signed.Signature == "" {
 		t.Fatalf("unsafe or mismatched agent config: %#v", signed)
+	}
+	if len(signed.Configuration.Assignments) != 1 || signed.Configuration.Assignments[0].ID != assignment.ID || signed.Configuration.Assignments[0].Target != assignment.Target {
+		t.Fatalf("assignment configuration: %#v", signed.Configuration.Assignments)
+	}
+	resp = a.do(t, http.MethodPost, fmt.Sprintf("/agent/assignments/revoke/%d/%d", project.ID, assignment.ID), ownerToken, nil)
+	if resp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("revoke assignment: %d (%s)", resp.StatusCode, bodyString(t, resp))
+	}
+	resp = a.do(t, http.MethodGet, "/agent/config", issued.EnrollmentToken, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("agent config after assignment revoke: %d", resp.StatusCode)
+	}
+	decode(t, resp, &signed)
+	if len(signed.Configuration.Assignments) != 0 {
+		t.Fatalf("revoked assignment leaked into config: %#v", signed.Configuration.Assignments)
 	}
 	resp = a.do(t, http.MethodGet, fmt.Sprintf("/agent/catalog/%d", project.ID), ownerToken, nil)
 	if resp.StatusCode != fiber.StatusOK {
