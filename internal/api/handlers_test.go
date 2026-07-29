@@ -174,11 +174,22 @@ func TestPrivateAgentManagementIsProjectScopedAndRevokesCredentials(t *testing.T
 	if response.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("result without idempotency key: %d", response.StatusCode)
 	}
+	invalidCredentialRequest := httptest.NewRequest(http.MethodPost, resultPath, strings.NewReader(`{"outcome":"failure","summary":"bounded failure"}`))
+	invalidCredentialRequest.Header.Set("Content-Type", "application/json")
+	invalidCredentialRequest.Header.Set("Authorization", "Bearer argus_agent_not-a-real-agent")
+	invalidCredentialRequest.Header.Set("Idempotency-Key", "agent-result-key-0002")
+	response, err := a.app.Test(invalidCredentialRequest, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("result with invalid credentials: %d", response.StatusCode)
+	}
 	request := httptest.NewRequest(http.MethodPost, resultPath, strings.NewReader(`{"outcome":"failure","summary":"bounded failure"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+issued.EnrollmentToken)
 	request.Header.Set("Idempotency-Key", "agent-result-key-0001")
-	response, err := a.app.Test(request, -1)
+	response, err = a.app.Test(request, -1)
 	if err != nil {
 		t.Fatal(err)
 	}

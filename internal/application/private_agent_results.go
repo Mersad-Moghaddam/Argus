@@ -9,12 +9,14 @@ import (
 	"time"
 )
 
+var ErrInvalidPrivateAgentResult = errors.New("invalid private agent result")
+
 func (s *Service) RecordPrivateAgentResult(ctx context.Context, token, version, idempotencyKey, outcome, summary string) (bool, error) {
 	if s.privateAgentResults == nil {
 		return false, errors.New("agent result service unavailable")
 	}
 	if len(strings.TrimSpace(idempotencyKey)) < 16 || len(idempotencyKey) > 200 || (outcome != "success" && outcome != "failure") || len(summary) > 240 {
-		return false, ErrPrivateAgentNotFound
+		return false, ErrInvalidPrivateAgentResult
 	}
 	agent, err := s.AuthenticatePrivateAgent(ctx, token, version)
 	if err != nil {

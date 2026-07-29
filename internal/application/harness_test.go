@@ -8,15 +8,16 @@ import (
 // testHarness wires a real Service to the shared in-memory fakes so tests can
 // drive use cases end to end and then assert on persisted state.
 type testHarness struct {
-	service   *Service
-	users     *testsupport.UserStore
-	tokens    *testsupport.AuthTokenStore
-	recovery  *testsupport.RecoveryDelivery
-	projects  *testsupport.ProjectStore
-	routes    *testsupport.RouteStore
-	incidents *testsupport.RouteIncidentStore
-	imports   *testsupport.ImportStore
-	outbox    *testsupport.OutboxStore
+	service          *Service
+	users            *testsupport.UserStore
+	tokens           *testsupport.AuthTokenStore
+	recovery         *testsupport.RecoveryDelivery
+	projects         *testsupport.ProjectStore
+	routes           *testsupport.RouteStore
+	incidents        *testsupport.RouteIncidentStore
+	imports          *testsupport.ImportStore
+	outbox           *testsupport.OutboxStore
+	projectIncidents *testsupport.ProjectIncidentStore
 }
 
 func newTestHarness() *testHarness {
@@ -27,13 +28,14 @@ func newTestHarness() *testHarness {
 	service.SetPrivateAgentResultStore(s.PrivateAgentResults)
 	service.SetProjectIncidentStore(s.ProjectIncidents)
 	return &testHarness{service: service,
-		users:     s.Users,
-		tokens:    s.Tokens,
-		recovery:  s.RecoveryDelivery,
-		projects:  s.Projects,
-		routes:    s.Routes,
-		incidents: s.Incidents,
-		imports:   s.Imports,
-		outbox:    s.Outbox,
+		users:            s.Users,
+		tokens:           s.Tokens,
+		recovery:         s.RecoveryDelivery,
+		projects:         s.Projects,
+		routes:           s.Routes,
+		incidents:        s.Incidents,
+		imports:          s.Imports,
+		outbox:           s.Outbox,
+		projectIncidents: s.ProjectIncidents,
 	}
 }

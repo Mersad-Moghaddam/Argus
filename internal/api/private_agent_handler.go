@@ -77,6 +77,9 @@ func (h *PrivateAgentHandler) Result(c *fiber.Ctx) error {
 	}
 	created, err := h.service.RecordPrivateAgentResult(c.UserContext(), strings.TrimSpace(strings.TrimPrefix(auth, p)), req.Version, c.Get("Idempotency-Key"), req.Outcome, req.Summary)
 	if errors.Is(err, application.ErrPrivateAgentNotFound) {
+		return c.Status(401).JSON(fiber.Map{"error": "invalid agent credentials"})
+	}
+	if errors.Is(err, application.ErrInvalidPrivateAgentResult) {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid agent result"})
 	}
 	if err != nil {
