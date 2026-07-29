@@ -2249,8 +2249,11 @@ apiProjects(`/agent/assignments/${id}`),
       section.classList.toggle('hidden', isEdit || Number(section.dataset.projectStep) !== step);
     });
     pel.projectSteps.querySelectorAll('.wizard-step').forEach((item, index) => {
-      item.classList.toggle('is-active', index + 1 === step);
+      const current = index + 1 === step;
+      item.classList.toggle('is-active', current);
       item.classList.toggle('is-done', index + 1 < step);
+      if (current) item.setAttribute('aria-current', 'step');
+      else item.removeAttribute('aria-current');
     });
     const created = Boolean(state.onboarding.createdProject);
     pel.projectBack.classList.toggle('hidden', isEdit || created || step <= 1 || step >= 7);
