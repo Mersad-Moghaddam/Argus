@@ -41,6 +41,12 @@ func NewFiberApp(service *application.Service, logStore *observability.LogStore,
 // NewFiberAppWithMetricSink wires the production telemetry metric sink while
 // keeping tests and non-ingesting callers explicit about their no-op sink.
 func NewFiberAppWithMetricSink(service *application.Service, logStore *observability.LogStore, apiKey string, metricSink observability.MetricSink, authCookieSecure ...bool) *fiber.App {
+	return NewFiberAppWithMetricSinkAndTelemetryHandler(service, logStore, apiKey, metricSink, nil, authCookieSecure...)
+}
+
+// NewFiberAppWithMetricSinkAndTelemetryHandler permits an OTLP transport
+// companion (gRPC) to share the exact same credential quota state as HTTP.
+func NewFiberAppWithMetricSinkAndTelemetryHandler(service *application.Service, logStore *observability.LogStore, apiKey string, metricSink observability.MetricSink, telemetryIngestHandler *api.TelemetryIngestHandler, authCookieSecure ...bool) *fiber.App {
 	cookieSecure := false
 	if len(authCookieSecure) > 0 {
 		cookieSecure = authCookieSecure[0]
@@ -93,7 +99,9 @@ func NewFiberAppWithMetricSink(service *application.Service, logStore *observabi
 	projectHandler := api.NewProjectHandler(service)
 	routeHandler := api.NewRouteHandler(service)
 	importHandler := api.NewImportHandler(service)
-	telemetryIngestHandler := api.NewTelemetryIngestHandler(service, metricSink)
+	if telemetryIngestHandler == nil {
+		telemetryIngestHandler = api.NewTelemetryIngestHandler(service, metricSink)
+	}
 	heartbeatHandler := api.NewHeartbeatHandler(service)
 	// Project-management requests are small JSON control payloads. Keep their
 	// route-local bound separate from import validation, which legitimately

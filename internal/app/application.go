@@ -13,6 +13,7 @@ import (
 	"argus/internal/adapters/outbound/recovery"
 	"argus/internal/adapters/outbound/victoriametrics"
 	"argus/internal/agent"
+	"argus/internal/api"
 	"argus/internal/application"
 	"argus/internal/config"
 	"argus/internal/observability"
@@ -24,6 +25,9 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gofiber/fiber/v2"
 	"github.com/hibiken/asynq"
+	metricscollector "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
+	tracecollector "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	"google.golang.org/grpc"
 )
 
 type Application struct {
@@ -34,6 +38,7 @@ type Application struct {
 	asynqClient *asynq.Client
 	logger      *observability.LogStore
 	telemetry   *observability.Telemetry
+	otlpGRPC    *grpc.Server
 }
 
 func New(ctx context.Context, cfg config.Config) (*Application, error) {
@@ -82,7 +87,15 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 		_ = telemetry.Shutdown(ctx)
 		return nil, fmt.Errorf("configure metrics reader: %w", err)
 	}
-	httpApp := httpserver.NewFiberAppWithMetricSink(appService, logger, cfg.APIKey, metricSink, cfg.AuthCookieSecure)
+	telemetryIngestHandler := api.NewTelemetryIngestHandler(appService, metricSink)
+	httpApp := httpserver.NewFiberAppWithMetricSinkAndTelemetryHandler(appService, logger, cfg.APIKey, metricSink, telemetryIngestHandler, cfg.AuthCookieSecure)
+	var otlpGRPC *grpc.Server
+	if cfg.OTLPGRPCAddr != "" {
+		metricsServer, tracesServer := api.NewTelemetryGRPCServers(telemetryIngestHandler)
+		otlpGRPC = grpc.NewServer(grpc.MaxRecvMsgSize(4*1024*1024), grpc.MaxSendMsgSize(1024*1024))
+		metricscollector.RegisterMetricsServiceServer(otlpGRPC, metricsServer)
+		tracecollector.RegisterTraceServiceServer(otlpGRPC, tracesServer)
+	}
 	asynqClient := asynq.NewClient(workerplatform.RedisClientOptions(cfg))
 	routeEvaluator := worker.NewRouteEvaluator(worker.EvaluatorConfig{
 		AllowPrivateTargets: cfg.RouteAllowPrivateTargets,
@@ -111,12 +124,23 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 		_ = telemetry.Shutdown(ctx)
 		return nil, err
 	}
-	return &Application{cfg: cfg, db: db, httpApp: httpApp, workerRt: workerRt, asynqClient: asynqClient, logger: logger, telemetry: telemetry}, nil
+	return &Application{cfg: cfg, db: db, httpApp: httpApp, workerRt: workerRt, asynqClient: asynqClient, logger: logger, telemetry: telemetry, otlpGRPC: otlpGRPC}, nil
 }
 
 func (a *Application) Start() error {
+	var grpcListener net.Listener
+	if a.otlpGRPC != nil {
+		var grpcErr error
+		grpcListener, grpcErr = net.Listen("tcp", a.cfg.OTLPGRPCAddr)
+		if grpcErr != nil {
+			return fmt.Errorf("listen OTLP gRPC on %s: %w", a.cfg.OTLPGRPCAddr, grpcErr)
+		}
+	}
 	l, err := net.Listen("tcp", a.cfg.HTTPAddr)
 	if err != nil {
+		if grpcListener != nil {
+			_ = grpcListener.Close()
+		}
 		return fmt.Errorf("listen on %s: %w", a.cfg.HTTPAddr, err)
 	}
 	go func() {
@@ -124,10 +148,20 @@ func (a *Application) Start() error {
 			log.Printf("fiber server stopped: %v", e)
 		}
 	}()
+	if grpcListener != nil {
+		go func() {
+			if e := a.otlpGRPC.Serve(grpcListener); e != nil {
+				log.Printf("OTLP gRPC server stopped: %v", e)
+			}
+		}()
+	}
 	return nil
 }
 func (a *Application) Shutdown(ctx context.Context) error {
 	shutdownErr := a.httpApp.ShutdownWithContext(ctx)
+	if a.otlpGRPC != nil {
+		a.otlpGRPC.Stop()
+	}
 	a.workerRt.Shutdown()
 	_ = a.asynqClient.Close()
 	_ = a.db.Close()

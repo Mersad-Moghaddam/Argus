@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"math"
 	"mime"
@@ -344,8 +345,12 @@ func (h *TelemetryIngestHandler) authorize(c *fiber.Ctx, requiredScope string) (
 }
 
 func (h *TelemetryIngestHandler) record(c *fiber.Ctx, credential *models.TelemetryCredential, records []models.TelemetryIngressRecord) error {
+	return h.recordContext(c.UserContext(), credential, records)
+}
+
+func (h *TelemetryIngestHandler) recordContext(ctx context.Context, credential *models.TelemetryCredential, records []models.TelemetryIngressRecord) error {
 	for _, record := range records {
-		if err := h.service.RecordTelemetryIngress(c.UserContext(), credential, record); err != nil {
+		if err := h.service.RecordTelemetryIngress(ctx, credential, record); err != nil {
 			return err
 		}
 	}
