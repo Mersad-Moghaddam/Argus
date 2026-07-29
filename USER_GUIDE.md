@@ -334,6 +334,17 @@ What re-importing guarantees:
   evidence. Editors can choose **Acknowledge** to show that a person is responding; this never
   hides the incident or changes the recovery rule. A healthy check resolves the acknowledged
   incident, while viewers can still inspect its source, timing, and failure reason.
+- **Synthetic safety and cost** — before enabling a GET or HEAD canary, its form shows the
+  maximum daily request attempts implied by the interval and retry count. Argus reserves that
+  allowance atomically against both a project and a global UTC-day budget before it queues work.
+  Before a worker dials the target it also acquires a short-lived project and global execution
+  lease, preventing a backlog from becoming a request burst. Normal runs receive deterministic
+  jitter of up to 10% of their interval (capped at 30 seconds), avoiding synchronized starts. A budget- or concurrency-exhausted
+  run is deferred to its next interval and recorded as a scheduler skip; it is not misreported as
+  a failed endpoint check. Operators configure the ceilings with
+  `ROUTE_PROJECT_DAILY_BUDGET` (default `10000`) and `ROUTE_GLOBAL_DAILY_BUDGET` (default
+  `100000`), plus `ROUTE_PROJECT_CONCURRENCY` (default `4`) and
+  `ROUTE_GLOBAL_CONCURRENCY` (default `50`).
 
 ### 9.6 Route health states
 

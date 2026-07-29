@@ -59,8 +59,14 @@ type Config struct {
 	RouteCheckPruneBatch     int
 	RouteAggregateInterval   time.Duration
 	RouteAggregateWindow     time.Duration
-	RouteMaxTimeout          time.Duration
-	RouteMaxRedirects        int
+	// RouteProjectDailyBudget and RouteGlobalDailyBudget are hard request
+	// ceilings for explicit synthetic canaries in a UTC day.
+	RouteProjectDailyBudget int
+	RouteGlobalDailyBudget  int
+	RouteProjectConcurrency int
+	RouteGlobalConcurrency  int
+	RouteMaxTimeout         time.Duration
+	RouteMaxRedirects       int
 	// RouteAllowPrivateTargets opts in to monitoring hosts on private or
 	// loopback networks. It defaults to false so untrusted, user-supplied
 	// URLs cannot be used to reach internal services (SSRF). Cloud metadata
@@ -87,6 +93,10 @@ func Load() (Config, error) {
 	cfg.RouteCheckPruneBatch = mustInt("ROUTE_CHECK_PRUNE_BATCH", 5000)
 	cfg.RouteAggregateInterval = mustDuration("ROUTE_AGGREGATE_INTERVAL", 60*time.Second)
 	cfg.RouteAggregateWindow = mustDuration("ROUTE_AGGREGATE_WINDOW", 24*time.Hour)
+	cfg.RouteProjectDailyBudget = mustInt("ROUTE_PROJECT_DAILY_BUDGET", 10000)
+	cfg.RouteGlobalDailyBudget = mustInt("ROUTE_GLOBAL_DAILY_BUDGET", 100000)
+	cfg.RouteProjectConcurrency = mustInt("ROUTE_PROJECT_CONCURRENCY", 4)
+	cfg.RouteGlobalConcurrency = mustInt("ROUTE_GLOBAL_CONCURRENCY", 50)
 	cfg.RouteMaxTimeout = mustDuration("ROUTE_MAX_TIMEOUT", 30*time.Second)
 	cfg.RouteMaxRedirects = mustInt("ROUTE_MAX_REDIRECTS", 5)
 	cfg.RouteAllowPrivateTargets = mustBool("ROUTE_ALLOW_PRIVATE_TARGETS", false)

@@ -140,6 +140,24 @@ type RouteStore interface {
 	ListAllRouteKeys(ctx context.Context, projectID int64) (map[string]int64, error)
 	ListRouteSpecHashes(ctx context.Context, projectID int64) (map[int64]string, error)
 	ListDueRoutes(ctx context.Context, now time.Time, limit int, afterID int64) ([]models.APIRoute, error)
+	// ReserveSyntheticBudget atomically reserves active request attempts against the
+	// UTC-day global and project budgets. A false return is an expected shed,
+	// not an error; callers must defer the route instead of queuing it.
+	ReserveSyntheticBudget(ctx context.Context, projectID int64, day time.Time, requests, projectLimit, globalLimit int) (bool, string, error)
+	// ReleaseSyntheticBudget refunds a reservation when no task was admitted
+	// to the queue (for example an Asynq uniqueness rejection).
+	ReleaseSyntheticBudget(ctx context.Context, projectID int64, day time.Time, requests int) error
+	// AcquireSyntheticLease bounds simultaneous outbound synthetic executions
+	// across scheduler/worker processes. leaseKey is stable per route so a
+	// duplicate task cannot create a second in-flight request for that route.
+	AcquireSyntheticLease(ctx context.Context, projectID int64, leaseKey string, now, expiresAt time.Time, projectLimit, globalLimit int) (bool, string, error)
+	ReleaseSyntheticLease(ctx context.Context, leaseKey string) error
+	// RecordSyntheticSkip preserves bounded operational evidence when the
+	// scheduler deliberately sheds work because a safety budget is exhausted.
+	RecordSyntheticSkip(ctx context.Context, routeID, projectID int64, reason string, skippedAt time.Time) error
+	// DeferRouteCheck moves a shed route forward without changing its health or
+	// fabricating a failed network check.
+	DeferRouteCheck(ctx context.Context, routeID int64, nextCheckAt time.Time) error
 	MarkRouteChecked(ctx context.Context, id int64, status string, statusCode, latencyMS int, failureReason string, consecutiveFailures, consecutiveSuccesses int, routeStatus string, checkedAt, nextCheckAt time.Time) error
 	RecordRouteCheck(ctx context.Context, check models.RouteCheck) error
 	ListRouteChecks(ctx context.Context, routeID int64, limit, offset int) ([]models.RouteCheck, error)

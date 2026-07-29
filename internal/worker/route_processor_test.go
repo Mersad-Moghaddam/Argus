@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -24,6 +25,15 @@ type fakeRouteStore struct {
 	pruneRemaining int64
 	pruneErr       error
 	listDueErr     error
+	projectBudget  map[int64]int
+	globalBudget   int
+	skips          []string
+	leases         map[string]fakeLease
+}
+
+type fakeLease struct {
+	projectID int64
+	expiresAt time.Time
 }
 
 func (f *fakeRouteStore) ListDueRoutes(_ context.Context, now time.Time, limit int, afterID int64) ([]models.APIRoute, error) {
@@ -60,6 +70,93 @@ func (f *fakeRouteStore) GetRouteByID(_ context.Context, id int64) (*models.APIR
 		}
 	}
 	return nil, nil
+}
+
+func (f *fakeRouteStore) ReserveSyntheticBudget(_ context.Context, projectID int64, _ time.Time, requests, projectLimit, globalLimit int) (bool, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.projectBudget == nil {
+		f.projectBudget = map[int64]int{}
+	}
+	if f.globalBudget+requests > globalLimit {
+		return false, "global_daily_budget", nil
+	}
+	if f.projectBudget[projectID]+requests > projectLimit {
+		return false, "project_daily_budget", nil
+	}
+	f.globalBudget += requests
+	f.projectBudget[projectID] += requests
+	return true, "", nil
+}
+
+func (f *fakeRouteStore) ReleaseSyntheticBudget(_ context.Context, projectID int64, _ time.Time, requests int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.globalBudget -= requests
+	if f.globalBudget < 0 {
+		f.globalBudget = 0
+	}
+	f.projectBudget[projectID] -= requests
+	if f.projectBudget[projectID] < 0 {
+		f.projectBudget[projectID] = 0
+	}
+	return nil
+}
+
+func (f *fakeRouteStore) AcquireSyntheticLease(_ context.Context, projectID int64, leaseKey string, now, expiresAt time.Time, projectLimit, globalLimit int) (bool, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.leases == nil {
+		f.leases = map[string]fakeLease{}
+	}
+	for key, lease := range f.leases {
+		if !lease.expiresAt.After(now) {
+			delete(f.leases, key)
+		}
+	}
+	if _, exists := f.leases[leaseKey]; exists {
+		return false, "project_concurrency", nil
+	}
+	globalActive, projectActive := 0, 0
+	for _, lease := range f.leases {
+		globalActive++
+		if lease.projectID == projectID {
+			projectActive++
+		}
+	}
+	if globalActive >= globalLimit {
+		return false, "global_concurrency", nil
+	}
+	if projectActive >= projectLimit {
+		return false, "project_concurrency", nil
+	}
+	f.leases[leaseKey] = fakeLease{projectID: projectID, expiresAt: expiresAt}
+	return true, "", nil
+}
+
+func (f *fakeRouteStore) ReleaseSyntheticLease(_ context.Context, leaseKey string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.leases, leaseKey)
+	return nil
+}
+
+func (f *fakeRouteStore) RecordSyntheticSkip(_ context.Context, routeID, projectID int64, reason string, _ time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.skips = append(f.skips, strconv.FormatInt(routeID, 10)+":"+strconv.FormatInt(projectID, 10)+":"+reason)
+	return nil
+}
+
+func (f *fakeRouteStore) DeferRouteCheck(_ context.Context, routeID int64, nextCheckAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.routes {
+		if f.routes[i].ID == routeID {
+			f.routes[i].NextCheckAt = nextCheckAt
+		}
+	}
+	return nil
 }
 
 func (f *fakeRouteStore) AggregateRouteMetrics(_ context.Context, since time.Time) error {
@@ -206,6 +303,76 @@ func TestHandleEnqueueDueRouteChecksOnlyEnqueuesEnabledDueRoutes(t *testing.T) {
 	}
 }
 
+func TestHandleEnqueueDueRouteChecksShedsProjectBudgetWithoutChangingHealth(t *testing.T) {
+	store := &fakeRouteStore{routes: []models.APIRoute{
+		dueRoute(1, true, time.Minute), dueRoute(2, true, time.Minute), dueRoute(3, true, time.Minute),
+	}}
+	enqueuer := &recordingEnqueuer{}
+	p := &Processor{routes: store, client: enqueuer, routeCfg: RouteMonitorConfig{ProjectDailyBudget: 2, GlobalDailyBudget: 10}}
+
+	if err := p.HandleEnqueueDueRouteChecks(context.Background(), nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := enqueuer.routeIDs(); len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Fatalf("expected first two routes to be admitted, got %v", got)
+	}
+	if len(store.skips) != 1 || store.skips[0] != "3:7:project_daily_budget" {
+		t.Fatalf("expected project budget skip evidence, got %v", store.skips)
+	}
+	deferred, _ := store.GetRouteByID(context.Background(), 3)
+	if deferred == nil || !deferred.NextCheckAt.After(time.Now().UTC()) {
+		t.Fatalf("shed route must be deferred without a fabricated check: %+v", deferred)
+	}
+}
+
+func TestSyntheticJitterIsBoundedAndDeterministic(t *testing.T) {
+	if got := syntheticJitter(123, 1); got != 0 {
+		t.Fatalf("one-second interval must not add jitter, got %s", got)
+	}
+	if got := syntheticJitter(13, 60); got != 6*time.Second {
+		t.Fatalf("unexpected deterministic jitter: %s", got)
+	}
+	if got := syntheticJitter(999, 86400); got > 30*time.Second || got < 0 {
+		t.Fatalf("jitter must stay within the hard 30 second cap, got %s", got)
+	}
+}
+
+func TestHandleEnqueueDueRouteChecksShedsGlobalBudgetAcrossProjects(t *testing.T) {
+	first, second := dueRoute(1, true, time.Minute), dueRoute(2, true, time.Minute)
+	second.ProjectID = 8
+	store := &fakeRouteStore{routes: []models.APIRoute{first, second}}
+	enqueuer := &recordingEnqueuer{}
+	p := &Processor{routes: store, client: enqueuer, routeCfg: RouteMonitorConfig{ProjectDailyBudget: 10, GlobalDailyBudget: 1}}
+
+	if err := p.HandleEnqueueDueRouteChecks(context.Background(), nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := enqueuer.routeIDs(); len(got) != 1 || got[0] != 1 {
+		t.Fatalf("expected only one route within global budget, got %v", got)
+	}
+	if len(store.skips) != 1 || store.skips[0] != "2:8:global_daily_budget" {
+		t.Fatalf("expected global budget skip evidence, got %v", store.skips)
+	}
+}
+
+func TestHandleEnqueueDueRouteChecksBudgetsRetryAttempts(t *testing.T) {
+	first, second := dueRoute(1, true, time.Minute), dueRoute(2, true, time.Minute)
+	first.Retries, second.Retries = 1, 1 // each check can make two HTTP requests
+	store := &fakeRouteStore{routes: []models.APIRoute{first, second}}
+	enqueuer := &recordingEnqueuer{}
+	p := &Processor{routes: store, client: enqueuer, routeCfg: RouteMonitorConfig{ProjectDailyBudget: 3, GlobalDailyBudget: 10}}
+
+	if err := p.HandleEnqueueDueRouteChecks(context.Background(), nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := enqueuer.routeIDs(); len(got) != 1 || got[0] != 1 {
+		t.Fatalf("expected retry budget to admit one check, got %v", got)
+	}
+	if len(store.skips) != 1 || store.skips[0] != "2:7:project_daily_budget" {
+		t.Fatalf("expected retry-aware project budget skip, got %v", store.skips)
+	}
+}
+
 func TestHandleEnqueueDueRouteChecksPaginatesWithoutRepeating(t *testing.T) {
 	routes := make([]models.APIRoute, 0, 25)
 	for i := int64(1); i <= 25; i++ {
@@ -251,6 +418,9 @@ func TestHandleEnqueueDueRouteChecksToleratesDuplicates(t *testing.T) {
 	ids := enqueuer.routeIDs()
 	if len(ids) != 1 || ids[0] != 2 {
 		t.Fatalf("expected only route 2 to be enqueued, got %v", ids)
+	}
+	if store.globalBudget != 1 || store.projectBudget[7] != 1 {
+		t.Fatalf("duplicate enqueue must refund its reservation, got global=%d project=%d", store.globalBudget, store.projectBudget[7])
 	}
 }
 
@@ -320,6 +490,29 @@ func TestHandleCheckRouteSkipsMissingAndDisabledRoutes(t *testing.T) {
 	disabled, _ := NewCheckRouteTask(CheckRoutePayload{RouteID: 2})
 	if err := p.HandleCheckRoute(context.Background(), disabled); err != nil {
 		t.Fatalf("a disabled route must not fail the task: %v", err)
+	}
+}
+
+func TestHandleCheckRouteShedsWhenGlobalConcurrencyIsFull(t *testing.T) {
+	route := dueRoute(2, true, time.Minute)
+	store := &fakeRouteStore{
+		routes: []models.APIRoute{route},
+		leases: map[string]fakeLease{
+			"route:other": {projectID: 99, expiresAt: time.Now().UTC().Add(time.Minute)},
+		},
+	}
+	p := &Processor{routes: store, routeCfg: RouteMonitorConfig{ProjectConcurrency: 4, GlobalConcurrency: 1}}
+	task, _ := NewCheckRouteTask(CheckRoutePayload{RouteID: 2})
+
+	if err := p.HandleCheckRoute(context.Background(), task); err != nil {
+		t.Fatalf("concurrency shed must not retry the task: %v", err)
+	}
+	if len(store.skips) != 1 || store.skips[0] != "2:7:global_concurrency" {
+		t.Fatalf("expected global concurrency skip evidence, got %v", store.skips)
+	}
+	deferred, _ := store.GetRouteByID(context.Background(), 2)
+	if deferred == nil || !deferred.NextCheckAt.After(time.Now().UTC()) {
+		t.Fatalf("concurrency-shed route must be deferred: %+v", deferred)
 	}
 }
 

@@ -170,6 +170,10 @@ Argus reads environment variables and automatically loads a local `.env` file wh
 | `METRICS_BACKEND_TIMEOUT` | `5s` | Timeout for the VictoriaMetrics import request. |
 | `SLO_EVALUATION_INTERVAL` | `1m` | How often the worker evaluates stored SLO definitions from the internal metrics backend. |
 | `SLO_STALE_AFTER` | `10m` | Age after which the most recent telemetry sample produces a stale SLO result. |
+| `ROUTE_PROJECT_DAILY_BUDGET` | `10000` | Maximum synthetic HTTP request attempts admitted for one project in a UTC day. A retry reserves another attempt. |
+| `ROUTE_GLOBAL_DAILY_BUDGET` | `100000` | Maximum synthetic HTTP request attempts admitted across all projects in a UTC day. |
+| `ROUTE_PROJECT_CONCURRENCY` | `4` | Maximum in-flight synthetic HTTP requests for a single project. |
+| `ROUTE_GLOBAL_CONCURRENCY` | `50` | Maximum in-flight synthetic HTTP requests across all projects. |
 | `RECOVERY_DELIVERY_URL` | empty | Optional operator-owned HTTPS webhook for password-recovery delivery. Argus sends the registered email, one-time reset token, and expiry; an empty value safely disables delivery. |
 | `RECOVERY_DELIVERY_TIMEOUT` | `5s` | Maximum duration for the trusted recovery-delivery webhook. |
 | `ROUTE_SECRET_ENCRYPTION_KEY` | empty | Base64-encoded 32-byte AES-256 key required to persist non-empty synthetic request headers. New writes use versioned AEAD ciphertext; keep this key in an operator-managed secret store. |

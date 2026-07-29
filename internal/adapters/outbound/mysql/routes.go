@@ -353,6 +353,168 @@ func (r *Store) ListDueRoutes(ctx context.Context, now time.Time, limit int, aft
 	return out, rows.Err()
 }
 
+// ReserveSyntheticBudget makes the admission decision before an Asynq task is
+// created. Both counters live in the same transaction and are locked in a
+// stable order, so concurrent scheduler processes cannot oversubscribe either
+// the global or project allowance.
+func (r *Store) ReserveSyntheticBudget(ctx context.Context, projectID int64, day time.Time, requests, projectLimit, globalLimit int) (bool, string, error) {
+	if projectID <= 0 || requests <= 0 || projectLimit <= 0 || globalLimit <= 0 {
+		return false, "invalid_budget", fmt.Errorf("invalid synthetic budget reservation")
+	}
+	windowDay := day.UTC().Format("2006-01-02")
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, "", err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Materialize both lock rows before selecting FOR UPDATE. This supports a
+	// fresh installation and makes the global row the serialization point.
+	if _, err = tx.ExecContext(ctx, `INSERT INTO synthetic_budget_windows (scope, project_id, window_day)
+		VALUES ('global', 0, ?), ('project', ?, ?)
+		ON DUPLICATE KEY UPDATE request_count=request_count`, windowDay, projectID, windowDay); err != nil {
+		return false, "", err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT scope, project_id, request_count
+		FROM synthetic_budget_windows
+		WHERE window_day=? AND ((scope='global' AND project_id=0) OR (scope='project' AND project_id=?))
+		ORDER BY scope, project_id FOR UPDATE`, windowDay, projectID)
+	if err != nil {
+		return false, "", err
+	}
+	var globalCount, projectCount int64
+	for rows.Next() {
+		var scope string
+		var id, count int64
+		if err = rows.Scan(&scope, &id, &count); err != nil {
+			_ = rows.Close()
+			return false, "", err
+		}
+		if scope == "global" && id == 0 {
+			globalCount = count
+		} else if scope == "project" && id == projectID {
+			projectCount = count
+		}
+	}
+	if err = rows.Close(); err != nil {
+		return false, "", err
+	}
+	if globalCount+int64(requests) > int64(globalLimit) {
+		return false, "global_daily_budget", nil
+	}
+	if projectCount+int64(requests) > int64(projectLimit) {
+		return false, "project_daily_budget", nil
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE synthetic_budget_windows SET request_count=request_count+?
+		WHERE window_day=? AND ((scope='global' AND project_id=0) OR (scope='project' AND project_id=?))`, requests, windowDay, projectID); err != nil {
+		return false, "", err
+	}
+	if err = tx.Commit(); err != nil {
+		return false, "", err
+	}
+	return true, "", nil
+}
+
+func (r *Store) ReleaseSyntheticBudget(ctx context.Context, projectID int64, day time.Time, requests int) error {
+	if projectID <= 0 || requests <= 0 {
+		return fmt.Errorf("invalid synthetic budget refund")
+	}
+	windowDay := day.UTC().Format("2006-01-02")
+	// GREATEST prevents a corrupted or repeated failure path from creating a
+	// negative counter. Both scope rows must exist after any successful reserve.
+	result, err := r.db.ExecContext(ctx, `UPDATE synthetic_budget_windows
+		SET request_count=GREATEST(0, request_count-?)
+		WHERE window_day=? AND ((scope='global' AND project_id=0) OR (scope='project' AND project_id=?))`, requests, windowDay, projectID)
+	if err != nil {
+		return err
+	}
+	if changed, _ := result.RowsAffected(); changed != 2 {
+		return fmt.Errorf("synthetic budget refund found incomplete counter rows")
+	}
+	return nil
+}
+
+// AcquireSyntheticLease uses two stable lock rows to serialize admission. The
+// actual lease has a bounded TTL, so a process crash cannot permanently spend
+// a concurrency slot. A route-specific lease key also prevents duplicate task
+// delivery from issuing two simultaneous requests to the same target.
+func (r *Store) AcquireSyntheticLease(ctx context.Context, projectID int64, leaseKey string, now, expiresAt time.Time, projectLimit, globalLimit int) (bool, string, error) {
+	if projectID <= 0 || strings.TrimSpace(leaseKey) == "" || !expiresAt.After(now) || projectLimit <= 0 || globalLimit <= 0 {
+		return false, "invalid_concurrency", fmt.Errorf("invalid synthetic lease")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, "", err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.ExecContext(ctx, `INSERT INTO synthetic_concurrency_locks (scope, project_id)
+		VALUES ('global', 0), ('project', ?)
+		ON DUPLICATE KEY UPDATE project_id=VALUES(project_id)`, projectID); err != nil {
+		return false, "", err
+	}
+	lockRows, err := tx.QueryContext(ctx, `SELECT scope, project_id FROM synthetic_concurrency_locks
+		WHERE (scope='global' AND project_id=0) OR (scope='project' AND project_id=?)
+		ORDER BY scope, project_id FOR UPDATE`, projectID)
+	if err != nil {
+		return false, "", err
+	}
+	for lockRows.Next() {
+		var scope string
+		var id int64
+		if err = lockRows.Scan(&scope, &id); err != nil {
+			_ = lockRows.Close()
+			return false, "", err
+		}
+	}
+	if err = lockRows.Close(); err != nil {
+		return false, "", err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM synthetic_execution_leases WHERE expires_at <= ?`, now); err != nil {
+		return false, "", err
+	}
+	var globalActive, projectActive int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM synthetic_execution_leases WHERE expires_at > ?`, now).Scan(&globalActive); err != nil {
+		return false, "", err
+	}
+	if globalActive >= globalLimit {
+		return false, "global_concurrency", nil
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM synthetic_execution_leases WHERE project_id=? AND expires_at > ?`, projectID, now).Scan(&projectActive); err != nil {
+		return false, "", err
+	}
+	if projectActive >= projectLimit {
+		return false, "project_concurrency", nil
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO synthetic_execution_leases (lease_key, project_id, expires_at) VALUES (?, ?, ?)`, leaseKey, projectID, expiresAt); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate") {
+			return false, "project_concurrency", nil
+		}
+		return false, "", err
+	}
+	if err = tx.Commit(); err != nil {
+		return false, "", err
+	}
+	return true, "", nil
+}
+
+func (r *Store) ReleaseSyntheticLease(ctx context.Context, leaseKey string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM synthetic_execution_leases WHERE lease_key=?`, leaseKey)
+	return err
+}
+
+func (r *Store) RecordSyntheticSkip(ctx context.Context, routeID, projectID int64, reason string, skippedAt time.Time) error {
+	if reason != "project_daily_budget" && reason != "global_daily_budget" && reason != "project_concurrency" && reason != "global_concurrency" {
+		return fmt.Errorf("invalid synthetic skip reason")
+	}
+	_, err := r.db.ExecContext(ctx, `INSERT INTO synthetic_check_skips (route_id, project_id, reason, skipped_at) VALUES (?, ?, ?, ?)`, routeID, projectID, reason, skippedAt)
+	return err
+}
+
+func (r *Store) DeferRouteCheck(ctx context.Context, routeID int64, nextCheckAt time.Time) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET next_check_at=?, updated_at=NOW() WHERE id=?`, nextCheckAt, routeID)
+	return err
+}
+
 func (r *Store) MarkRouteChecked(ctx context.Context, id int64, status string, statusCode, latencyMS int, failureReason string, consecutiveFailures, consecutiveSuccesses int, routeStatus string, checkedAt, nextCheckAt time.Time) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE api_routes SET last_checked_at=?, last_status_code=?, last_latency_ms=?, last_failure_reason=?,
 			consecutive_failures=?, consecutive_successes=?, status=?, next_check_at=?, updated_at=NOW()

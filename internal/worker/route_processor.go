@@ -21,6 +21,15 @@ type RouteMonitorConfig struct {
 	PruneBatchSize int
 	// AggregationWindow is the look-back used for the cached 24h metrics.
 	AggregationWindow time.Duration
+	// ProjectDailyBudget and GlobalDailyBudget are durable UTC-day request
+	// ceilings. They protect targets and the control plane before a task enters
+	// the queue; zero or negative values use the conservative defaults.
+	ProjectDailyBudget int
+	GlobalDailyBudget  int
+	// ProjectConcurrency and GlobalConcurrency cap actual in-flight HTTP
+	// executions; queue depth alone is not a safe proxy for outbound pressure.
+	ProjectConcurrency int
+	GlobalConcurrency  int
 }
 
 func (c RouteMonitorConfig) withDefaults() RouteMonitorConfig {
@@ -35,6 +44,18 @@ func (c RouteMonitorConfig) withDefaults() RouteMonitorConfig {
 	}
 	if c.AggregationWindow <= 0 {
 		c.AggregationWindow = 24 * time.Hour
+	}
+	if c.ProjectDailyBudget <= 0 {
+		c.ProjectDailyBudget = 10000
+	}
+	if c.GlobalDailyBudget <= 0 {
+		c.GlobalDailyBudget = 100000
+	}
+	if c.ProjectConcurrency <= 0 {
+		c.ProjectConcurrency = 4
+	}
+	if c.GlobalConcurrency <= 0 {
+		c.GlobalConcurrency = 50
 	}
 	return c
 }
@@ -80,6 +101,27 @@ func (p *Processor) HandleEnqueueDueRouteChecks(ctx context.Context, _ *asynq.Ta
 			if !route.Enabled {
 				continue
 			}
+			requests := route.Retries + 1
+			if requests > MaxRouteRetries+1 {
+				requests = MaxRouteRetries + 1
+			}
+			reserved, reason, reserveErr := p.routes.ReserveSyntheticBudget(ctx, route.ProjectID, now, requests, cfg.ProjectDailyBudget, cfg.GlobalDailyBudget)
+			if reserveErr != nil {
+				return reserveErr
+			}
+			if !reserved {
+				next := now.Add(time.Duration(route.MonitorIntervalSecs) * time.Second)
+				if err := p.routes.DeferRouteCheck(ctx, route.ID, next); err != nil {
+					return err
+				}
+				if err := p.routes.RecordSyntheticSkip(ctx, route.ID, route.ProjectID, reason, now); err != nil {
+					return err
+				}
+				if p.logger != nil {
+					p.logger.Add("info", "worker", "route_check_shed", "Skipped synthetic route check because its request budget is exhausted", nil, map[string]string{"project_id": strconv.FormatInt(route.ProjectID, 10), "route_id": strconv.FormatInt(route.ID, 10), "reason": reason})
+				}
+				continue
+			}
 			task, taskErr := NewCheckRouteTask(CheckRoutePayload{RouteID: route.ID, ProjectID: route.ProjectID, Interval: route.MonitorIntervalSecs})
 			if taskErr != nil {
 				return taskErr
@@ -90,11 +132,15 @@ func (p *Processor) HandleEnqueueDueRouteChecks(ctx context.Context, _ *asynq.Ta
 			}
 			_, enqueueErr := p.client.EnqueueContext(ctx, task,
 				asynq.Queue("default"),
+				asynq.ProcessIn(syntheticJitter(route.ID, route.MonitorIntervalSecs)),
 				asynq.Unique(uniqueFor),
 				asynq.MaxRetry(2),
 				asynq.Timeout(MaxRouteTimeout*time.Duration(MaxRouteRetries+2)),
 			)
 			if enqueueErr != nil {
+				if refundErr := p.routes.ReleaseSyntheticBudget(ctx, route.ProjectID, now, requests); refundErr != nil {
+					return refundErr
+				}
 				if errors.Is(enqueueErr, asynq.ErrDuplicateTask) {
 					continue
 				}
@@ -110,6 +156,23 @@ func (p *Processor) HandleEnqueueDueRouteChecks(ctx context.Context, _ *asynq.Ta
 		p.logger.Add("debug", "worker", "route_checks_enqueued", "Enqueued due route checks", nil, map[string]string{"count": strconv.Itoa(enqueued)})
 	}
 	return nil
+}
+
+// syntheticJitter spreads due checks deterministically over a small fraction
+// of their interval. It avoids synchronized bursts without adding randomness
+// that would make scheduler behaviour hard to test or reproduce.
+func syntheticJitter(routeID int64, intervalSeconds int) time.Duration {
+	if intervalSeconds <= 1 {
+		return 0
+	}
+	maxSeconds := intervalSeconds / 10
+	if maxSeconds < 1 {
+		maxSeconds = 1
+	}
+	if maxSeconds > 30 {
+		maxSeconds = 30
+	}
+	return time.Duration(routeID%int64(maxSeconds+1)) * time.Second
 }
 
 // HandleCheckRoute performs one monitored request and hands the outcome to
@@ -132,6 +195,38 @@ func (p *Processor) HandleCheckRoute(ctx context.Context, task *asynq.Task) erro
 	if !route.Enabled {
 		return nil
 	}
+	cfg := p.routeCfg.withDefaults()
+	leaseKey := "route:" + strconv.FormatInt(route.ID, 10)
+	attempts := route.Retries
+	if attempts < 0 {
+		attempts = 0
+	}
+	if attempts > MaxRouteRetries {
+		attempts = MaxRouteRetries
+	}
+	leaseFor := time.Duration(route.TimeoutMS)*time.Millisecond*time.Duration(attempts+1) + 30*time.Second
+	if leaseFor > MaxRouteTimeout*time.Duration(MaxRouteRetries+1)+30*time.Second {
+		leaseFor = MaxRouteTimeout*time.Duration(MaxRouteRetries+1) + 30*time.Second
+	}
+	now := time.Now().UTC()
+	leased, reason, leaseErr := p.routes.AcquireSyntheticLease(ctx, route.ProjectID, leaseKey, now, now.Add(leaseFor), cfg.ProjectConcurrency, cfg.GlobalConcurrency)
+	if leaseErr != nil {
+		return leaseErr
+	}
+	if !leased {
+		next := now.Add(time.Duration(route.MonitorIntervalSecs) * time.Second)
+		if err := p.routes.DeferRouteCheck(ctx, route.ID, next); err != nil {
+			return err
+		}
+		if err := p.routes.RecordSyntheticSkip(ctx, route.ID, route.ProjectID, reason, now); err != nil {
+			return err
+		}
+		if p.logger != nil {
+			p.logger.Add("info", "worker", "route_check_shed", "Skipped synthetic route check because its concurrency cap is exhausted", nil, map[string]string{"project_id": strconv.FormatInt(route.ProjectID, 10), "route_id": strconv.FormatInt(route.ID, 10), "reason": reason})
+		}
+		return nil
+	}
+	defer func() { _ = p.routes.ReleaseSyntheticLease(context.Background(), leaseKey) }()
 	outcome := p.evaluator.EvaluateRoute(ctx, *route)
 	return p.service.ProcessRouteCheckResult(ctx, *route, outcome.Status, outcome.StatusCode, outcome.LatencyMS, outcome.FailureReason, outcome.Attempts, time.Now().UTC())
 }

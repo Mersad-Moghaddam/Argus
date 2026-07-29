@@ -901,10 +901,13 @@ func (f *ProjectStore) AddProjectMember(_ context.Context, member models.Project
 // ---------------------------------------------------------------- routes
 
 type RouteStore struct {
-	mu     sync.Mutex
-	nextID int64
-	byID   map[int64]models.APIRoute
-	checks map[int64][]models.RouteCheck
+	mu      sync.Mutex
+	nextID  int64
+	byID    map[int64]models.APIRoute
+	checks  map[int64][]models.RouteCheck
+	budgets map[string]int
+	skips   []SyntheticSkip
+	leases  map[string]syntheticLease
 
 	// UpdateMetadataFailFor injects a storage failure for a specific route so
 	// partial-failure reporting can be tested.
@@ -915,9 +918,23 @@ type RouteStore struct {
 	ListErr error
 }
 
+// SyntheticSkip is compact test-only evidence of scheduler shedding.
+type SyntheticSkip struct {
+	RouteID, ProjectID int64
+	Reason             string
+	SkippedAt          time.Time
+}
+
+type syntheticLease struct {
+	projectID int64
+	expiresAt time.Time
+}
+
 func NewRouteStore() *RouteStore {
 	return &RouteStore{
 		byID: map[int64]models.APIRoute{}, checks: map[int64][]models.RouteCheck{},
+		budgets:               map[string]int{},
+		leases:                map[string]syntheticLease{},
 		UpdateMetadataFailFor: map[int64]error{},
 	}
 }
@@ -1193,6 +1210,98 @@ func (f *RouteStore) ListDueRoutes(_ context.Context, now time.Time, limit int, 
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+func (f *RouteStore) ReserveSyntheticBudget(_ context.Context, projectID int64, day time.Time, requests, projectLimit, globalLimit int) (bool, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if projectID <= 0 || requests <= 0 || projectLimit <= 0 || globalLimit <= 0 {
+		return false, "invalid_budget", domain.ErrInvalidRoute
+	}
+	window := day.UTC().Format("2006-01-02")
+	globalKey, projectKey := "global:"+window, "project:"+strconv.FormatInt(projectID, 10)+":"+window
+	if f.budgets[globalKey]+requests > globalLimit {
+		return false, "global_daily_budget", nil
+	}
+	if f.budgets[projectKey]+requests > projectLimit {
+		return false, "project_daily_budget", nil
+	}
+	f.budgets[globalKey] += requests
+	f.budgets[projectKey] += requests
+	return true, "", nil
+}
+
+func (f *RouteStore) ReleaseSyntheticBudget(_ context.Context, projectID int64, day time.Time, requests int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if projectID <= 0 || requests <= 0 {
+		return domain.ErrInvalidRoute
+	}
+	window := day.UTC().Format("2006-01-02")
+	globalKey, projectKey := "global:"+window, "project:"+strconv.FormatInt(projectID, 10)+":"+window
+	f.budgets[globalKey] -= requests
+	if f.budgets[globalKey] < 0 {
+		f.budgets[globalKey] = 0
+	}
+	f.budgets[projectKey] -= requests
+	if f.budgets[projectKey] < 0 {
+		f.budgets[projectKey] = 0
+	}
+	return nil
+}
+
+func (f *RouteStore) AcquireSyntheticLease(_ context.Context, projectID int64, leaseKey string, now, expiresAt time.Time, projectLimit, globalLimit int) (bool, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for key, lease := range f.leases {
+		if !lease.expiresAt.After(now) {
+			delete(f.leases, key)
+		}
+	}
+	if _, exists := f.leases[leaseKey]; exists {
+		return false, "project_concurrency", nil
+	}
+	globalActive, projectActive := 0, 0
+	for _, lease := range f.leases {
+		globalActive++
+		if lease.projectID == projectID {
+			projectActive++
+		}
+	}
+	if globalActive >= globalLimit {
+		return false, "global_concurrency", nil
+	}
+	if projectActive >= projectLimit {
+		return false, "project_concurrency", nil
+	}
+	f.leases[leaseKey] = syntheticLease{projectID: projectID, expiresAt: expiresAt}
+	return true, "", nil
+}
+
+func (f *RouteStore) ReleaseSyntheticLease(_ context.Context, leaseKey string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.leases, leaseKey)
+	return nil
+}
+
+func (f *RouteStore) RecordSyntheticSkip(_ context.Context, routeID, projectID int64, reason string, skippedAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.skips = append(f.skips, SyntheticSkip{RouteID: routeID, ProjectID: projectID, Reason: reason, SkippedAt: skippedAt})
+	return nil
+}
+
+func (f *RouteStore) DeferRouteCheck(_ context.Context, routeID int64, nextCheckAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	route, ok := f.byID[routeID]
+	if !ok {
+		return domain.ErrRouteNotFound
+	}
+	route.NextCheckAt = nextCheckAt
+	f.byID[routeID] = route
+	return nil
 }
 
 func (f *RouteStore) MarkRouteChecked(_ context.Context, id int64, _ string, statusCode, latencyMS int, failureReason string, consecutiveFailures, consecutiveSuccesses int, routeStatus string, checkedAt, nextCheckAt time.Time) error {

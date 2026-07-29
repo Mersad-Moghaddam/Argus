@@ -2681,6 +2681,24 @@
 
   let editingRouteId = null;
 
+  function updateRouteBudgetPreview() {
+    const interval = Number(document.getElementById('projRouteInterval').value);
+    const retries = Math.max(0, Math.min(5, Number(document.getElementById('projRouteRetries').value) || 0));
+    const enabled = document.getElementById('projRouteEnabled').checked;
+    const target = document.getElementById('projRouteBudget');
+    if (!enabled) {
+      target.textContent = 'Synthetic monitoring is disabled: this route creates no outbound requests.';
+      return;
+    }
+    if (!Number.isFinite(interval) || interval < 10) {
+      target.textContent = 'Set an interval to preview this canary’s request cost. Activation is still constrained by project and global safety budgets.';
+      return;
+    }
+    const checksPerDay = Math.ceil(86400 / interval);
+    const requestsPerDay = checksPerDay * (retries + 1);
+    target.textContent = `Estimated maximum: ${requestsPerDay.toLocaleString()} request attempt${requestsPerDay === 1 ? '' : 's'} per day (${checksPerDay.toLocaleString()} scheduled checks, up to ${retries + 1} attempt${retries ? 's' : ''} each). Project and global daily safety budgets can defer a run.`;
+  }
+
   function openRouteModal(route) {
     editingRouteId = route ? route.id : null;
     const project = state.project.project;
@@ -2709,9 +2727,15 @@
       : '{"Authorization":"Bearer ..."}';
     document.getElementById('projRouteDeprecated').checked = route ? !!route.deprecated : false;
     document.getElementById('projRouteEnabled').checked = route ? !!route.enabled : true;
+    updateRouteBudgetPreview();
     hideFormError(pel.routeFormError);
     openModal(pel.routeModal);
   }
+
+  ['projRouteInterval', 'projRouteRetries', 'projRouteEnabled'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', updateRouteBudgetPreview);
+    document.getElementById(id).addEventListener('change', updateRouteBudgetPreview);
+  });
 
   pel.routeCancel.addEventListener('click', () => closeModal(pel.routeModal));
 

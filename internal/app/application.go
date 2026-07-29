@@ -90,10 +90,14 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 		UserAgent:           cfg.RouteUserAgent,
 	})
 	routeMonitorCfg := worker.RouteMonitorConfig{
-		DueBatchSize:      cfg.RouteDueBatchSize,
-		CheckRetention:    cfg.RouteCheckRetention,
-		PruneBatchSize:    cfg.RouteCheckPruneBatch,
-		AggregationWindow: cfg.RouteAggregateWindow,
+		DueBatchSize:       cfg.RouteDueBatchSize,
+		CheckRetention:     cfg.RouteCheckRetention,
+		PruneBatchSize:     cfg.RouteCheckPruneBatch,
+		AggregationWindow:  cfg.RouteAggregateWindow,
+		ProjectDailyBudget: cfg.RouteProjectDailyBudget,
+		GlobalDailyBudget:  cfg.RouteGlobalDailyBudget,
+		ProjectConcurrency: cfg.RouteProjectConcurrency,
+		GlobalConcurrency:  cfg.RouteGlobalConcurrency,
 	}
 	processor := worker.NewProcessor(store, store, store, appService, asynqClient, notifier.NewHTTPNotifier(), logger, store, routeEvaluator, routeMonitorCfg)
 	processor.SetSLOEvaluator(worker.NewSLOEvaluator(store, metricReader, cfg.SLOStaleAfter, store))
