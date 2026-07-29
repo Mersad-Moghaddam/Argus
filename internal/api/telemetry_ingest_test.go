@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"argus/internal/api"
 	"argus/internal/application"
 
 	"github.com/gofiber/fiber/v2"
@@ -16,8 +17,35 @@ import (
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
+
+func TestOTLPGRPCIngestUsesCredentialBoundAttribution(t *testing.T) {
+	a := newTestAPI(t)
+	userID, token := a.register(t, "otlp-grpc@example.com")
+	project := a.createProject(t, token, "OTLP gRPC")
+	environments, _ := a.service.ListProjectEnvironments(context.Background(), project.ID)
+	issued, err := a.service.CreateTelemetryCredential(context.Background(), project.ID, userID, application.CreateTelemetryCredentialInput{Name: "grpc", EnvironmentID: environments[0].ID, RateLimitPerMinute: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	metricsServer, _ := api.NewTelemetryGRPCServers(api.NewTelemetryIngestHandler(a.service))
+	req := &metricscollector.ExportMetricsServiceRequest{ResourceMetrics: []*metricspb.ResourceMetrics{{Resource: resourceWithMetadata("grpc-checkout", "production", "https://forged.invalid"), ScopeMetrics: []*metricspb.ScopeMetrics{{Metrics: []*metricspb.Metric{{Name: "http.server.duration"}}}}}}}
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+issued.Token))
+	if _, err = metricsServer.Export(ctx, req); err != nil {
+		t.Fatalf("grpc metrics export: %v", err)
+	}
+	records, err := a.service.ListTelemetryIngress(context.Background(), project.ID, 10)
+	if err != nil || len(records) != 1 || records[0].ProjectID != project.ID || records[0].EnvironmentID != environments[0].ID || records[0].ServiceName != "grpc-checkout" {
+		t.Fatalf("credential-bound grpc record: %#v %v", records, err)
+	}
+	if _, err = metricsServer.Export(context.Background(), req); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("missing credential code = %v (%v)", status.Code(err), err)
+	}
+}
 
 func TestOTLPHTTPIngestUsesCredentialBoundAttribution(t *testing.T) {
 	a := newTestAPI(t)
