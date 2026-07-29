@@ -232,7 +232,9 @@ an initial environment (with an optional canonical base URL), then
 asks how it should be observed: **OpenTelemetry** (recommended), an **OpenAPI catalog**, a disabled
 **Synthetic check**, a **Heartbeat**, clearly labeled non-production **Sample data**, or **Do this later**. It preserves a non-sensitive local draft
 until the project is created and does not create target traffic during setup. OpenAPI continues to
-the import wizard; every other choice opens the project dashboard with the relevant next action.
+the import wizard. OpenTelemetry, Synthetic, and Heartbeat selections offer a direct handoff to
+their scoped setup dialog after the new project dashboard has loaded; every other choice opens the
+project dashboard with the relevant next action.
 The completion step also offers an explicit starter 99.9% availability SLO; it remains `no data`
 until the configured minimum eligible telemetry events exist.
 

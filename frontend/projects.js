@@ -2254,6 +2254,20 @@
     link.className = 'btn-link';
     link.href = source === 'openapi' ? `#/projects/${project.id}/import` : `#/projects/${project.id}`;
     link.textContent = source === 'openapi' ? 'Import your OpenAPI catalog' : 'Open project dashboard';
+    const sourceAction = {
+      telemetry: ['Connect OpenTelemetry', openTelemetryCredentialModal],
+      synthetic: ['Create disabled canary', () => openRouteModal(null)],
+      heartbeat: ['Create heartbeat', openHeartbeatModal],
+    }[source];
+    let sourceButton;
+    if (sourceAction) {
+      const connect = document.createElement('button');
+      connect.type = 'button';
+      connect.className = 'secondary sm';
+      connect.textContent = sourceAction[0];
+      connect.addEventListener('click', () => openOnboardingSource(project, sourceAction[1]));
+      sourceButton = connect;
+    }
     const starterSLO = document.createElement('button');
     starterSLO.type = 'button';
     starterSLO.className = 'secondary sm';
@@ -2279,8 +2293,24 @@
         setButtonLoading(starterSLO, false);
       }
     });
-    pel.projectNext.append(strong, p, starterSLO, link);
+    pel.projectNext.append(strong, p, ...(sourceButton ? [sourceButton] : []), starterSLO, link);
     setOnboardingStep(4);
+  }
+
+  function openOnboardingSource(project, openDialog) {
+    closeModal(pel.projectModal);
+    navigate(`#/projects/${project.id}`);
+    const deadline = Date.now() + 5000;
+    const waitForProject = () => {
+      if (state.project.id === project.id && state.project.project) {
+        openDialog();
+      } else if (Date.now() < deadline) {
+        window.setTimeout(waitForProject, 50);
+      } else {
+        showToast('Project opened. Choose the recommended setup action from its dashboard.', 'info');
+      }
+    };
+    waitForProject();
   }
 
   function openProjectModal(project) {
