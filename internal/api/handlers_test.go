@@ -274,6 +274,14 @@ func TestPrivateAgentManagementIsProjectScopedAndRevokesCredentials(t *testing.T
 	if len(signed.Configuration.Assignments) != 0 {
 		t.Fatalf("revoked assignment leaked into config: %#v", signed.Configuration.Assignments)
 	}
+	revokedAssignmentResult := httptest.NewRequest(http.MethodPost, resultPath, strings.NewReader(fmt.Sprintf(`{"assignmentId":%d,"outcome":"failure","summary":"bounded failure"}`, assignment.ID)))
+	revokedAssignmentResult.Header.Set("Content-Type", "application/json")
+	revokedAssignmentResult.Header.Set("Authorization", "Bearer "+issued.EnrollmentToken)
+	revokedAssignmentResult.Header.Set("Idempotency-Key", "agent-assignment-result-0004")
+	response, err = a.app.Test(revokedAssignmentResult, -1)
+	if err != nil || response.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("revoked assignment result: response=%v status=%v", err, response.StatusCode)
+	}
 	resp = a.do(t, http.MethodGet, fmt.Sprintf("/agent/catalog/%d", project.ID), ownerToken, nil)
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("list agents: %d (%s)", resp.StatusCode, bodyString(t, resp))
