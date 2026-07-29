@@ -15,7 +15,7 @@ func (s *Service) RecordPrivateAgentResult(ctx context.Context, token, version, 
 	if s.privateAgentResults == nil {
 		return false, errors.New("agent result service unavailable")
 	}
-	if len(strings.TrimSpace(idempotencyKey)) < 16 || len(idempotencyKey) > 200 || (outcome != "success" && outcome != "failure") || len(summary) > 240 {
+	if len(strings.TrimSpace(idempotencyKey)) < 16 || len(idempotencyKey) > 200 || assignmentID < 0 || (outcome != "success" && outcome != "failure") || len(summary) > 240 {
 		return false, ErrInvalidPrivateAgentResult
 	}
 	agent, err := s.AuthenticatePrivateAgent(ctx, token, version)

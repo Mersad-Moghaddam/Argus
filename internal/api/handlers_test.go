@@ -254,6 +254,14 @@ func TestPrivateAgentManagementIsProjectScopedAndRevokesCredentials(t *testing.T
 	if err != nil || response.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("foreign assignment result: response=%v status=%v", err, response.StatusCode)
 	}
+	negativeAssignmentResult := httptest.NewRequest(http.MethodPost, resultPath, strings.NewReader(`{"assignmentId":-1,"outcome":"failure","summary":"bounded failure"}`))
+	negativeAssignmentResult.Header.Set("Content-Type", "application/json")
+	negativeAssignmentResult.Header.Set("Authorization", "Bearer "+issued.EnrollmentToken)
+	negativeAssignmentResult.Header.Set("Idempotency-Key", "agent-assignment-result-0003")
+	response, err = a.app.Test(negativeAssignmentResult, -1)
+	if err != nil || response.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("negative assignment result: response=%v status=%v", err, response.StatusCode)
+	}
 	resp = a.do(t, http.MethodPost, fmt.Sprintf("/agent/assignments/revoke/%d/%d", project.ID, assignment.ID), ownerToken, nil)
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("revoke assignment: %d (%s)", resp.StatusCode, bodyString(t, resp))
