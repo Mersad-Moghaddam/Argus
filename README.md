@@ -190,6 +190,14 @@ Invalid integer or duration values fall back to defaults; an invalid `REDIS_DB` 
 
 ## HTTP API
 
+### Route-header secret migration
+
+After setting `ROUTE_SECRET_ENCRYPTION_KEY`, migrate legacy plaintext route
+headers with `go run ./cmd/migrate-route-secrets -dry-run` and then without
+`-dry-run`. Rotate an existing key with `-rotate -old-key <old> -key <new>`.
+Run rotations in a maintenance window and switch the application key only
+after the command completes successfully.
+
 Responses are JSON unless an endpoint returns `204 No Content`. Every Argus control-plane route uses `/family/purpose[/optional]`; the removed `/api/*` prefix is not accepted. The website API uses optional global API-key auth; the project API uses its own bearer-token sessions.
 
 ### Website monitoring API

@@ -53,6 +53,7 @@
 | 3s | Source-aware project incident API and dashboard | Complete | Current checkpoint |
 | 3t | Project heartbeat liveness incidents | Complete | Current checkpoint |
 | 3u | Signed private-agent configuration envelope | Complete | Current checkpoint |
+| 2j | Route-header encryption backfill and rotation command | Complete | Current checkpoint |
 | 1 | Identity, authorization, secure global shell | In progress | — |
 | 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | `8ab613a` |
 | 2b | Canonical endpoint pipeline and preview API | Complete | `580e1bb` |
