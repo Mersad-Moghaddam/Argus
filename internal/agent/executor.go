@@ -42,7 +42,10 @@ func ExecuteAssignment(ctx context.Context, a Assignment, client *http.Client) (
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+	// A redirect is deliberately not a successful assignment: following it
+	// would make the signed target only an initial hop rather than the exact
+	// approved destination.
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return false, fmt.Sprintf("unexpected HTTP status %d", resp.StatusCode)
 	}
 	return true, ""
