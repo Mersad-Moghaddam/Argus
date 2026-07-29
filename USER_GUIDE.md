@@ -353,15 +353,16 @@ editor creates a project/environment-bound assignment with a catalog route refer
 `GET` or `HEAD` method, an HTTP(S) target, a 15-second to 24-hour interval, and a 200 ms to
 60-second timeout. The agent receives assignments only in its verified, 15-minute signed
 configuration envelope for that exact project and environment. It never accepts inbound
-connections, redirects, credentials, request bodies, or arbitrary commands; its local executor
-drains at most 1 MiB and reports bounded success/failure evidence outbound to Argus. Project
+connections, follows redirects, permits non-HTTP(S) targets, sends credentials or request bodies,
+or accepts arbitrary commands; its local executor treats every non-2xx response as failure,
+drains at most 1 MiB, and reports bounded success/failure evidence outbound to Argus. Project
 editors create or revoke assignments from the **Private agents** card; project viewers can inspect
 the resulting bounded assignment metadata without seeing agent enrollment credentials.
 
 Current assignment-management endpoints are `GET`/`POST /agent/assignments/:projectId` and
 `POST /agent/assignments/revoke/:projectId/:assignmentId`. Viewers can list assignments; only
-project editors can create or revoke them. The project dashboard’s assignment UI is a follow-up;
-use the authenticated API until it lands.
+project editors can create or revoke them. The same scoped management controls are available in
+the project dashboard.
 
 ### 9.7 Route health states
 
