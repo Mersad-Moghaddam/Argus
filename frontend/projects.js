@@ -191,6 +191,11 @@ projectNext: document.getElementById('projOnboardingNext'),
     authReturnTo: null,
     sessionUser: null,
     sessionResolved: false,
+    // Every local session transition advances this version. Responses from a
+    // request started against an older session must never overwrite the newer
+    // state (for example, a delayed /identity/profile 401 after a successful
+    // sign-in).
+    sessionVersion: 0,
     account: { sessions: null, loading: false },
     onboarding: { step: 1, source: 'telemetry', createdProject: null },
     // Projects list view.
@@ -229,6 +234,7 @@ agentAssignments: [],
   let refreshTimer = null;
   let modalReturnFocus = null;
   let confirmAction = null;
+  let sessionRestorePromise = null;
   const ONBOARDING_DRAFT_KEY = 'argus_project_onboarding_draft_v1';
   const projectModals = [pel.projectModal, pel.environmentModal, pel.telemetryCredentialModal, pel.telemetrySecretModal, pel.heartbeatModal, pel.heartbeatSecretModal, pel.agentModal, pel.agentSecretModal, pel.agentAssignmentModal, pel.sloModal, pel.telemetryMappingModal, pel.routeModal, pel.bulkModal, pel.confirmModal];
 
@@ -241,13 +247,25 @@ agentAssignments: [],
   function setSession(user) {
     state.sessionUser = user || null;
     state.sessionResolved = true;
+    state.sessionVersion += 1;
     syncAccountChrome();
   }
 
   function clearSession() {
     state.sessionUser = null;
     state.sessionResolved = true;
+    state.sessionVersion += 1;
     syncAccountChrome();
+  }
+
+  function beginSessionTransition() {
+    // Invalidate any restore/request response that started before this
+    // register/login completed, without briefly rendering an old account.
+    state.sessionUser = null;
+    state.sessionResolved = false;
+    state.sessionVersion += 1;
+    syncAccountChrome();
+    return state.sessionVersion;
   }
 
   function syncAccountChrome() {
@@ -274,6 +292,7 @@ agentAssignments: [],
   /** Cookie-authenticated project API client. The session identifier is
    * HttpOnly and never appears in JavaScript storage or request headers. */
   async function apiProjects(path, options = {}) {
+    const sessionVersion = state.sessionVersion;
     const headers = { ...(options.headers || {}) };
     if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
       headers['Content-Type'] = 'application/json';
@@ -290,8 +309,12 @@ agentAssignments: [],
     }
 
     if (res.status === 401) {
-      clearSession();
-      navigate(authHash('login', window.location.hash));
+      // An earlier request can fail after the user has signed in again. Do not
+      // let that stale response sign out the new session.
+      if (sessionVersion === state.sessionVersion) {
+        clearSession();
+        navigate(authHash('login', window.location.hash));
+      }
       throw new SessionExpired();
     }
     if (res.status === 204) return null;
@@ -709,6 +732,7 @@ agentAssignments: [],
     e.preventDefault();
     hideFormError(pel.authError);
     const registering = state.authMode === 'register';
+    let pendingSessionVersion = null;
     const body = {
       email: pel.authEmail.value.trim(),
       password: pel.authPassword.value,
@@ -717,10 +741,11 @@ agentAssignments: [],
 
     setButtonLoading(pel.authSubmit, true, registering ? 'Creating...' : 'Signing in...');
     try {
-	  const res = await fetch(`/identity/${registering ? 'register' : 'login'}`, {
+      const res = await fetch(`/identity/${registering ? 'register' : 'login'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        credentials: 'same-origin',
       });
       const raw = await res.text();
       let payload = null;
@@ -733,11 +758,31 @@ agentAssignments: [],
         showFormError(pel.authError, (payload && payload.error) || `Request failed (${res.status})`);
         return;
       }
-      setSession(payload.user);
+      const sessionVersion = beginSessionTransition();
+      pendingSessionVersion = sessionVersion;
+      // Registration/login returning 2xx is not enough for the browser UI:
+      // confirm that the HttpOnly session cookie was actually stored before
+      // leaving this form. This makes an HTTP deployment with Secure cookies
+      // fail clearly instead of showing “Signed in” then bouncing back here.
+      const profile = await fetch('/identity/profile', { credentials: 'same-origin' });
+      if (sessionVersion !== state.sessionVersion) return;
+      if (!profile.ok) {
+        clearSession();
+        const guidance = window.location.protocol === 'https:'
+          ? 'Your browser could not verify the new session. Please try again.'
+          : 'Your browser could not start a session over HTTP. Use HTTPS or set AUTH_COOKIE_SECURE=false only for local HTTP development.';
+        showFormError(pel.authError, guidance);
+        return;
+      }
+      const profilePayload = await profile.json();
+      if (sessionVersion !== state.sessionVersion || !profilePayload || !profilePayload.user) return;
+      setSession(profilePayload.user);
+      pendingSessionVersion = null;
       pel.authPassword.value = '';
       showToast(registering ? 'Account created. Welcome to API Projects.' : 'Signed in.', 'success');
       navigate(state.authReturnTo || '#/projects');
     } catch (err) {
+      if (pendingSessionVersion === state.sessionVersion) clearSession();
       showFormError(pel.authError, `Network error: ${err.message}`);
     } finally {
       setButtonLoading(pel.authSubmit, false);
@@ -843,18 +888,36 @@ agentAssignments: [],
 
   async function restoreSession() {
     if (state.sessionResolved) return;
-    try {
-	  const res = await fetch('/identity/profile', { credentials: 'same-origin' });
-      if (res.ok) {
-        const payload = await res.json();
-        setSession(payload.user);
-      } else {
+    // Several routing paths can ask for session restoration during startup.
+    // Share one request so their responses cannot race one another.
+    if (sessionRestorePromise) return sessionRestorePromise;
+
+    const startedAtVersion = state.sessionVersion;
+    sessionRestorePromise = (async () => {
+      let restored = false;
+      try {
+	    const res = await fetch('/identity/profile', { credentials: 'same-origin' });
+        if (startedAtVersion !== state.sessionVersion) return;
+        if (res.ok) {
+          const payload = await res.json();
+          if (startedAtVersion !== state.sessionVersion) return;
+          setSession(payload.user);
+        } else {
+          clearSession();
+        }
+        restored = true;
+      } catch {
+        if (startedAtVersion !== state.sessionVersion) return;
         clearSession();
+        restored = true;
+      } finally {
+        sessionRestorePromise = null;
       }
-    } catch {
-      clearSession();
-    }
-    handleRoute();
+      // A successful login/register may have completed while the old profile
+      // request was in flight. In that case it owns routing; do not redirect.
+      if (restored) handleRoute();
+    })();
+    return sessionRestorePromise;
   }
 
   /* ------------------------------------------------------ projects list view */
