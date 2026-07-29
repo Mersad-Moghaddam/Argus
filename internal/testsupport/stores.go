@@ -31,46 +31,48 @@ import (
 // Stores bundles one instance of every fake so a test can seed and assert on
 // them while handing the same values to application.NewService.
 type Stores struct {
-	Users                *UserStore
-	Tokens               *AuthTokenStore
-	PasswordRecovery     *PasswordRecoveryStore
-	RecoveryDelivery     *RecoveryDelivery
-	Projects             *ProjectStore
-	Routes               *RouteStore
-	Incidents            *RouteIncidentStore
-	Imports              *ImportStore
-	TelemetryCredentials *TelemetryCredentialStore
-	TelemetryIngress     *TelemetryIngressStore
-	TelemetryMappings    *TelemetryMappingStore
-	SLOs                 *SLOStore
-	Heartbeats           *HeartbeatStore
-	PrivateAgents        *PrivateAgentStore
-	PrivateAgentResults  *PrivateAgentResultStore
-	ProjectIncidents     *ProjectIncidentStore
-	Outbox               *OutboxStore
-	Legacy               LegacyStore
+	Users                   *UserStore
+	Tokens                  *AuthTokenStore
+	PasswordRecovery        *PasswordRecoveryStore
+	RecoveryDelivery        *RecoveryDelivery
+	Projects                *ProjectStore
+	Routes                  *RouteStore
+	Incidents               *RouteIncidentStore
+	Imports                 *ImportStore
+	TelemetryCredentials    *TelemetryCredentialStore
+	TelemetryIngress        *TelemetryIngressStore
+	TelemetryMappings       *TelemetryMappingStore
+	SLOs                    *SLOStore
+	Heartbeats              *HeartbeatStore
+	PrivateAgents           *PrivateAgentStore
+	PrivateAgentResults     *PrivateAgentResultStore
+	PrivateAgentAssignments *PrivateAgentAssignmentStore
+	ProjectIncidents        *ProjectIncidentStore
+	Outbox                  *OutboxStore
+	Legacy                  LegacyStore
 }
 
 // NewStores returns a fresh, empty set of fakes.
 func NewStores() *Stores {
 	return &Stores{
-		Users:                NewUserStore(),
-		Tokens:               NewAuthTokenStore(),
-		PasswordRecovery:     NewPasswordRecoveryStore(),
-		RecoveryDelivery:     &RecoveryDelivery{},
-		Projects:             NewProjectStore(),
-		Routes:               NewRouteStore(),
-		Incidents:            NewRouteIncidentStore(),
-		Imports:              NewImportStore(),
-		TelemetryCredentials: NewTelemetryCredentialStore(),
-		TelemetryIngress:     NewTelemetryIngressStore(),
-		TelemetryMappings:    NewTelemetryMappingStore(),
-		SLOs:                 NewSLOStore(),
-		Heartbeats:           NewHeartbeatStore(),
-		PrivateAgents:        NewPrivateAgentStore(),
-		PrivateAgentResults:  NewPrivateAgentResultStore(),
-		ProjectIncidents:     NewProjectIncidentStore(),
-		Outbox:               &OutboxStore{},
+		Users:                   NewUserStore(),
+		Tokens:                  NewAuthTokenStore(),
+		PasswordRecovery:        NewPasswordRecoveryStore(),
+		RecoveryDelivery:        &RecoveryDelivery{},
+		Projects:                NewProjectStore(),
+		Routes:                  NewRouteStore(),
+		Incidents:               NewRouteIncidentStore(),
+		Imports:                 NewImportStore(),
+		TelemetryCredentials:    NewTelemetryCredentialStore(),
+		TelemetryIngress:        NewTelemetryIngressStore(),
+		TelemetryMappings:       NewTelemetryMappingStore(),
+		SLOs:                    NewSLOStore(),
+		Heartbeats:              NewHeartbeatStore(),
+		PrivateAgents:           NewPrivateAgentStore(),
+		PrivateAgentResults:     NewPrivateAgentResultStore(),
+		PrivateAgentAssignments: NewPrivateAgentAssignmentStore(),
+		ProjectIncidents:        NewProjectIncidentStore(),
+		Outbox:                  &OutboxStore{},
 	}
 }
 
@@ -91,6 +93,61 @@ func (f *PrivateAgentResultStore) RecordPrivateAgentResult(_ context.Context, r 
 	}
 	f.keys[k] = struct{}{}
 	return true, nil
+}
+
+type PrivateAgentAssignmentStore struct {
+	mu     sync.Mutex
+	nextID int64
+	byID   map[int64]models.PrivateAgentAssignment
+}
+
+func NewPrivateAgentAssignmentStore() *PrivateAgentAssignmentStore {
+	return &PrivateAgentAssignmentStore{byID: map[int64]models.PrivateAgentAssignment{}}
+}
+func (f *PrivateAgentAssignmentStore) CreatePrivateAgentAssignment(_ context.Context, assignment models.PrivateAgentAssignment) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	assignment.ID = f.nextID
+	f.byID[assignment.ID] = assignment
+	return assignment.ID, nil
+}
+func (f *PrivateAgentAssignmentStore) ListPrivateAgentAssignments(_ context.Context, projectID int64) ([]models.PrivateAgentAssignment, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := []models.PrivateAgentAssignment{}
+	for _, assignment := range f.byID {
+		if assignment.ProjectID == projectID {
+			items = append(items, assignment)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	return items, nil
+}
+func (f *PrivateAgentAssignmentStore) ListPrivateAgentAssignmentsForEnvironment(ctx context.Context, projectID, environmentID int64) ([]models.PrivateAgentAssignment, error) {
+	items, err := f.ListPrivateAgentAssignments(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	filtered := items[:0]
+	for _, assignment := range items {
+		if assignment.EnvironmentID == environmentID {
+			filtered = append(filtered, assignment)
+		}
+	}
+	return filtered, nil
+}
+func (f *PrivateAgentAssignmentStore) RevokePrivateAgentAssignment(_ context.Context, projectID, id int64, revokedAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	assignment, ok := f.byID[id]
+	if !ok || assignment.ProjectID != projectID {
+		return nil
+	}
+	assignment.Enabled = false
+	assignment.RevokedAt = &revokedAt
+	f.byID[id] = assignment
+	return nil
 }
 
 // ---------------------------------------------------------------- heartbeats

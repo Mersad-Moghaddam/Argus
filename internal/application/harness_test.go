@@ -26,6 +26,7 @@ func newTestHarness() *testHarness {
 		s.Users, s.Tokens, s.PasswordRecovery, s.RecoveryDelivery, s.Projects, s.Routes, s.Incidents, s.Imports, s.TelemetryCredentials, s.TelemetryIngress, s.TelemetryMappings, s.SLOs, s.Heartbeats)
 	service.SetPrivateAgentStore(s.PrivateAgents)
 	service.SetPrivateAgentResultStore(s.PrivateAgentResults)
+	service.SetPrivateAgentAssignmentStore(s.PrivateAgentAssignments)
 	service.SetProjectIncidentStore(s.ProjectIncidents)
 	return &testHarness{service: service,
 		users:            s.Users,
