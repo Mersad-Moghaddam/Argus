@@ -37,11 +37,14 @@ const el = {
   statusBanner: document.getElementById('statusBanner'),
   statusBannerLamp: document.getElementById('statusBannerLamp'),
   statusBannerText: document.getElementById('statusBannerText'),
+  skipToMain: document.getElementById('skipToMain'),
 };
 
 let latestWebsites = [];
 const AUTO_REFRESH_SECONDS = 30;
 let countdown = AUTO_REFRESH_SECONDS;
+
+el.skipToMain?.addEventListener('click', () => document.getElementById('main')?.focus());
 
 /* ---------------------------- Toasts ---------------------------- */
 

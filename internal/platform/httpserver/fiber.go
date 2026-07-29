@@ -115,6 +115,7 @@ func NewFiberAppWithMetricSinkAndTelemetryHandler(service *application.Service, 
 	api.RegisterPrivateAgentRoutes(app, privateAgentHandler)
 	api.RegisterPrivateAgentManagementRoutes(projectControlGroup, privateAgentHandler, bearerGuard, adapterhttp.CSRFProtect)
 	api.RegisterHeartbeatRoutes(projectControlGroup, heartbeatHandler, bearerGuard, adapterhttp.CSRFProtect)
+	registerFrontendHistoryRoutes(app)
 
 	app.Static("/", "./frontend", fiber.Static{
 		Compress:      true,
@@ -127,6 +128,27 @@ func NewFiberAppWithMetricSinkAndTelemetryHandler(service *application.Service, 
 		ModifyResponse: requireStaticRevalidation,
 	})
 	return app
+}
+
+// registerFrontendHistoryRoutes serves the dashboard shell for each
+// client-side route. Static assets and API endpoints are registered separately
+// above, so a direct visit or browser refresh at /login or /projects/... never
+// becomes a server-side 404.
+func registerFrontendHistoryRoutes(app *fiber.App) {
+	frontend := func(c *fiber.Ctx) error {
+		if err := requireStaticRevalidation(c); err != nil {
+			return err
+		}
+		return c.SendFile("./frontend/index.html")
+	}
+	app.Get("/login", frontend)
+	app.Get("/register", frontend)
+	app.Get("/recover", frontend)
+	app.Get("/account", frontend)
+	app.Get("/projects", frontend)
+	app.Get("/projects/:projectID", frontend)
+	app.Get("/projects/:projectID/import", frontend)
+	app.Get("/projects/:projectID/routes/:routeID", frontend)
 }
 
 func serverTelemetry(c *fiber.Ctx) error {

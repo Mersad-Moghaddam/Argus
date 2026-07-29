@@ -313,7 +313,7 @@ agentAssignments: [],
       // let that stale response sign out the new session.
       if (sessionVersion === state.sessionVersion) {
         clearSession();
-        navigate(authHash('login', window.location.hash));
+        navigate(authPath('login', currentRoutePath()));
       }
       throw new SessionExpired();
     }
@@ -418,9 +418,13 @@ agentAssignments: [],
 
   /* ----------------------------------------------------------------- router */
 
-  function parseHash() {
-    const hash = window.location.hash.replace(/^#/, '');
-    const [path, query = ''] = hash.split('?', 2);
+  function currentRoutePath() {
+    return `${window.location.pathname}${window.location.search}`;
+  }
+
+  function parseRoute() {
+    const path = window.location.pathname;
+    const query = window.location.search.replace(/^\?/, '');
     const parts = path.split('/').filter(Boolean);
     if (parts.length === 1 && parts[0] === 'account') return { name: 'account' };
     if (parts.length === 1 && parts[0] === 'recover') return { name: 'recovery' };
@@ -445,8 +449,11 @@ agentAssignments: [],
   }
 
   function validatedReturnTo(value) {
-    if (typeof value !== 'string' || !value.startsWith('#/projects')) return null;
-    const parsed = value.slice(1).split('?', 1)[0].split('/').filter(Boolean);
+    if (typeof value !== 'string') return null;
+    // Keep old shared hash URLs working once, but always emit clean paths.
+    if (value.startsWith('#/')) value = value.slice(1);
+    if (!value.startsWith('/projects')) return null;
+    const parsed = value.split('?', 1)[0].split('/').filter(Boolean);
     if (parsed[0] !== 'projects') return null;
     if (parsed.length > 4 || (parsed[1] && (!/^\d+$/.test(parsed[1]) || Number(parsed[1]) <= 0))) return null;
     if (parsed[2] && parsed[2] !== 'routes' && parsed[2] !== 'import') return null;
@@ -454,17 +461,18 @@ agentAssignments: [],
     return value;
   }
 
-  function authHash(mode, returnTo = null) {
+  function authPath(mode, returnTo = null) {
     const safeReturnTo = validatedReturnTo(returnTo);
-    return `#/${mode}${safeReturnTo ? `?returnTo=${encodeURIComponent(safeReturnTo)}` : ''}`;
+    return `/${mode}${safeReturnTo ? `?returnTo=${encodeURIComponent(safeReturnTo)}` : ''}`;
   }
 
-  function navigate(hash) {
-    if (window.location.hash === hash) {
+  function navigate(path) {
+    if (currentRoutePath() === path) {
       handleRoute();
       return;
     }
-    window.location.hash = hash;
+    window.history.pushState(null, '', path);
+    handleRoute();
   }
 
   function showView(name) {
@@ -478,44 +486,44 @@ agentAssignments: [],
   }
 
   function renderCrumbs() {
-    const crumbs = [{ label: 'Projects', hash: '#/projects' }];
+    const crumbs = [{ label: 'Projects', path: '/projects' }];
     const { name } = state.route;
     if (name === 'project' || name === 'route' || name === 'import') {
       const project = state.project.id === state.route.projectId ? state.project.project : null;
       const label = project ? project.name : `Project #${state.route.projectId}`;
-      crumbs.push({ label, hash: `#/projects/${state.route.projectId}` });
+      crumbs.push({ label, path: `/projects/${state.route.projectId}` });
     }
     if (name === 'route') {
       const route = state.routeDetail.route;
-      crumbs.push({ label: route ? `${route.method} ${route.path}` : 'Route', hash: null });
+      crumbs.push({ label: route ? `${route.method} ${route.path}` : 'Route', path: null });
     }
-    if (name === 'import') crumbs.push({ label: 'Import specification', hash: null });
+    if (name === 'import') crumbs.push({ label: 'Import specification', path: null });
 
     pel.crumbs.innerHTML = crumbs
       .map((crumb, i) => {
         const isLast = i === crumbs.length - 1;
-        const body = isLast || !crumb.hash
+        const body = isLast || !crumb.path
           ? `<span class="proj-crumb is-current">${escapeHtml(crumb.label)}</span>`
-          : `<a class="proj-crumb" href="${escapeHtml(crumb.hash)}">${escapeHtml(crumb.label)}</a>`;
+          : `<a class="proj-crumb" href="${escapeHtml(crumb.path)}">${escapeHtml(crumb.label)}</a>`;
         return i === 0 ? body : `<span class="proj-crumb-sep" aria-hidden="true">/</span>${body}`;
       })
       .join('');
   }
 
   function handleRoute() {
-    const parsed = parseHash();
-    if (!parsed) return; // Not our hash; leave the other tabs alone.
+    const parsed = parseRoute();
+    if (!parsed) return; // Not one of the project-app routes; leave the legacy dashboard alone.
 
     if (parsed.name === 'auth') {
       renderAuthGate(parsed.mode, parsed.returnTo);
-      if (getUser()) navigate(parsed.returnTo || '#/projects');
+      if (getUser()) navigate(parsed.returnTo || '/projects');
       else if (!state.sessionResolved) restoreSession();
       return;
     }
 
     if (parsed.name === 'recovery') {
       if (getUser()) {
-        navigate('#/account');
+        navigate('/account');
         return;
       }
       renderRecovery();
@@ -526,7 +534,7 @@ agentAssignments: [],
     if (parsed.name === 'account') {
       if (!getUser()) {
         if (!state.sessionResolved) restoreSession();
-        navigate(authHash('login'));
+        navigate(authPath('login'));
         return;
       }
       renderAccount();
@@ -545,7 +553,7 @@ agentAssignments: [],
 
     if (!getUser()) {
       if (!state.sessionResolved) restoreSession();
-      navigate(authHash('login', window.location.hash));
+      navigate(authPath('login', currentRoutePath()));
       return;
     }
     pel.shell.classList.remove('hidden');
@@ -724,9 +732,9 @@ agentAssignments: [],
   }
 
   pel.authSwitch.addEventListener('click', () => {
-    navigate(authHash(state.authMode === 'login' ? 'register' : 'login', state.authReturnTo));
+    navigate(authPath(state.authMode === 'login' ? 'register' : 'login', state.authReturnTo));
   });
-  pel.forgotPassword.addEventListener('click', () => navigate('#/recover'));
+  pel.forgotPassword.addEventListener('click', () => navigate('/recover'));
 
   pel.authForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -780,7 +788,7 @@ agentAssignments: [],
       pendingSessionVersion = null;
       pel.authPassword.value = '';
       showToast(registering ? 'Account created. Welcome to API Projects.' : 'Signed in.', 'success');
-      navigate(state.authReturnTo || '#/projects');
+      navigate(state.authReturnTo || '/projects');
     } catch (err) {
       if (pendingSessionVersion === state.sessionVersion) clearSession();
       showFormError(pel.authError, `Network error: ${err.message}`);
@@ -825,7 +833,7 @@ agentAssignments: [],
       pel.recoveryToken.value = '';
       pel.recoveryNewPassword.value = '';
       showToast('Password updated. Sign in with your new password.', 'success');
-      navigate('#/login');
+      navigate('/login');
     } catch (err) {
       showFormError(pel.recoveryCompleteError, err.message);
     } finally {
@@ -880,7 +888,7 @@ agentAssignments: [],
     }
     clearSession();
     showToast('Signed out of API Projects.', 'info');
-    navigate(authHash('login'));
+    navigate(authPath('login'));
   }
 
   pel.signOut.addEventListener('click', signOut);
@@ -988,7 +996,7 @@ agentAssignments: [],
       <article class="card proj-card${archived ? ' is-archived' : ''}">
         <header class="proj-card-head">
           <div>
-            <a class="proj-card-title" href="#/projects/${p.id}">${escapeHtml(p.name)}</a>
+            <a class="proj-card-title" href="/projects/${p.id}">${escapeHtml(p.name)}</a>
             <span class="proj-card-slug mono">${escapeHtml(p.slug)}</span>
           </div>
           <span class="badge proj-status-${escapeHtml(p.status)}">${escapeHtml(p.status)}</span>
@@ -1005,7 +1013,7 @@ agentAssignments: [],
         <footer class="proj-card-foot">
           <span class="list-item-meta">${p.lastCheckAt ? `last check ${escapeHtml(relativeTime(p.lastCheckAt))}` : 'never checked'}</span>
           <div class="row-actions">
-            <a class="btn-link" href="#/projects/${p.id}">Open</a>
+            <a class="btn-link" href="/projects/${p.id}">Open</a>
             ${canEdit ? `<button class="secondary sm" type="button" data-action="edit-project" data-id="${p.id}">Edit</button>` : ''}
             ${canOwn ? `<button class="secondary sm" type="button" data-action="${archived ? 'unarchive' : 'archive'}-project" data-id="${p.id}">${archived ? 'Unarchive' : 'Archive'}</button>` : ''}
             ${canOwn ? `<button class="danger sm" type="button" data-action="delete-project" data-id="${p.id}">Delete</button>` : ''}
@@ -1367,7 +1375,7 @@ apiProjects(`/agent/assignments/${id}`),
         ${canEdit ? `<td class="col-check"><input type="checkbox" data-action="toggle-route-selection" data-id="${r.id}" aria-label="Select ${escapeHtml(r.method)} ${escapeHtml(r.path)}" ${state.project.selected.has(r.id) ? 'checked' : ''} /></td>` : ''}
         <td>${methodChip(r.method)}</td>
         <td class="path-cell">
-          <a href="#/projects/${pid}/routes/${r.id}" title="${escapeHtml(r.path)}">${escapeHtml(r.path)}</a>
+          <a href="/projects/${pid}/routes/${r.id}" title="${escapeHtml(r.path)}">${escapeHtml(r.path)}</a>
           ${r.deprecated ? '<span class="proj-chip is-deprecated">deprecated</span>' : ''}
           ${(r.tags || []).slice(0, 3).map((t) => `<span class="proj-chip is-tag">${escapeHtml(t)}</span>`).join('')}
         </td>
@@ -1378,7 +1386,7 @@ apiProjects(`/agent/assignments/${id}`),
         <td class="mono">${r.lastCheckedAt ? escapeHtml(relativeTime(r.lastCheckedAt)) : 'never'}</td>
         <td>
           <div class="row-actions">
-            <a class="btn-link" href="#/projects/${pid}/routes/${r.id}">Details</a>
+            <a class="btn-link" href="/projects/${pid}/routes/${r.id}">Details</a>
             ${canEdit ? `<button class="secondary sm" type="button" data-action="edit-route" data-id="${r.id}">Edit</button>` : ''}
             ${canEdit ? `<button class="secondary sm" type="button" data-action="${r.enabled ? 'disable' : 'enable'}-route" data-id="${r.id}">${r.enabled ? 'Disable' : 'Enable'}</button>` : ''}
             ${canEdit ? `<button class="danger sm" type="button" data-action="delete-route" data-id="${r.id}">Delete</button>` : ''}
@@ -1398,7 +1406,7 @@ apiProjects(`/agent/assignments/${id}`),
         return `
           <li class="list-item">
             <div class="list-item-main">
-              <a class="list-item-title" href="#/projects/${projectId}/routes/${i.routeId}">Incident #${i.id} &middot; route #${i.routeId}</a>
+              <a class="list-item-title" href="/projects/${projectId}/routes/${i.routeId}">Incident #${i.id} &middot; route #${i.routeId}</a>
               <span class="list-item-meta">
                 started ${escapeHtml(relativeTime(i.startedAt))}
                 &middot; ${resolved ? `resolved ${escapeHtml(relativeTime(i.resolvedAt))}` : 'ongoing'}
@@ -1858,7 +1866,7 @@ apiProjects(`/agent/assignments/${id}`),
       <section class="card">
         <div class="card-header">
           <h2>Import an OpenAPI or Swagger specification</h2>
-          <div class="card-toolbar"><a class="btn-link" href="#/projects/${state.importer.projectId}">Back to project</a></div>
+          <div class="card-toolbar"><a class="btn-link" href="/projects/${state.importer.projectId}">Back to project</a></div>
         </div>
         <ol class="wizard-steps">
           ${[
@@ -2119,7 +2127,7 @@ apiProjects(`/agent/assignments/${id}`),
         }
         <div class="wizard-actions">
           <button class="secondary" type="button" data-action="import-restart">Import another specification</button>
-          <a class="btn-link" href="#/projects/${state.importer.projectId}">Back to project dashboard</a>
+          <a class="btn-link" href="/projects/${state.importer.projectId}">Back to project dashboard</a>
         </div>
       </div>`;
   }
@@ -2354,7 +2362,7 @@ apiProjects(`/agent/assignments/${id}`),
     p.textContent = `${detail} Argus does not treat this project as verified until it receives telemetry, a heartbeat, or an explicitly configured check.`;
     const link = document.createElement('a');
     link.className = 'btn-link';
-    link.href = source === 'openapi' ? `#/projects/${project.id}/import` : `#/projects/${project.id}`;
+    link.href = source === 'openapi' ? `/projects/${project.id}/import` : `/projects/${project.id}`;
     link.textContent = source === 'openapi' ? 'Import your OpenAPI catalog' : 'Open project dashboard to connect and verify';
     const sourceAction = {
       telemetry: ['Connect OpenTelemetry', openTelemetryCredentialModal],
@@ -2438,7 +2446,7 @@ apiProjects(`/agent/assignments/${id}`),
 
   function openOnboardingSource(project, openDialog) {
     closeModal(pel.projectModal);
-    navigate(`#/projects/${project.id}`);
+    navigate(`/projects/${project.id}`);
     const deadline = Date.now() + 5000;
     const waitForProject = () => {
       if (state.project.id === project.id && state.project.project) {
@@ -3145,7 +3153,7 @@ apiProjects(`/agent/assignments/${id}`),
             async () => {
 			  await apiProjects(`/project/catalog/${id}`, { method: 'DELETE' });
               showToast('Project deleted.', 'success');
-              navigate('#/projects');
+              navigate('/projects');
               loadProjectsList();
             }
           );
@@ -3162,7 +3170,7 @@ apiProjects(`/agent/assignments/${id}`),
           openBulkModal();
           break;
         case 'open-import':
-          navigate(`#/projects/${state.project.id}/import`);
+          navigate(`/projects/${state.project.id}/import`);
           break;
         case 'create-environment': {
           openEnvironmentModal();
@@ -3251,7 +3259,7 @@ apiProjects(`/agent/assignments/${id}`),
             async () => {
 			  await apiProjects(`/route/catalog/${state.project.id}/${id}`, { method: 'DELETE' });
               showToast('Route deleted.', 'success');
-              if (state.route.name === 'route') navigate(`#/projects/${state.project.id}`);
+              if (state.route.name === 'route') navigate(`/projects/${state.project.id}`);
               else loadProjectDetail({ silent: true });
             }
           );
@@ -3343,10 +3351,10 @@ apiProjects(`/agent/assignments/${id}`),
           loadRouteDetail();
           break;
         case 'back-to-projects':
-          navigate('#/projects');
+          navigate('/projects');
           break;
         case 'back-to-project':
-          navigate(`#/projects/${state.routeDetail.projectId}`);
+          navigate(`/projects/${state.routeDetail.projectId}`);
           break;
         default:
           break;
@@ -3396,7 +3404,7 @@ apiProjects(`/agent/assignments/${id}`),
 
   /* ------------------------------------------------------------------- init */
 
-  window.addEventListener('hashchange', handleRoute);
+  window.addEventListener('popstate', handleRoute);
 
   // Redraw charts when the container width or the theme changes, since both
   // affect canvas rendering.
@@ -3407,15 +3415,21 @@ apiProjects(`/agent/assignments/${id}`),
 
   if (pel.tab) {
     pel.tab.addEventListener('click', () => {
-      const parsed = parseHash();
-      if (!parsed || parsed.name === 'auth') navigate('#/projects');
+      const parsed = parseRoute();
+      if (!parsed || parsed.name === 'auth') navigate('/projects');
       else handleRoute();
     });
   }
 
+  // Migrate old shared hash URLs once so every subsequent navigation uses a
+  // normal browser path. Named in-page anchors (such as #main) are untouched.
+  if (window.location.hash.startsWith('#/')) {
+    window.history.replaceState(null, '', window.location.hash.slice(1));
+  }
+
   // Restore the sub-view on a hard refresh; otherwise stay on the legacy
   // dashboard and only initialise when the user opens the tab.
-  if (parseHash()) {
+  if (parseRoute()) {
     handleRoute();
   } else {
     syncAccountChrome();

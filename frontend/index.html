@@ -18,7 +18,7 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <a class="skip-link" href="#main">Skip to main content</a>
+    <button class="skip-link" id="skipToMain" type="button">Skip to main content</button>
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"><img src="/assets/favicon.svg" alt="" /></span>
@@ -30,12 +30,12 @@
       <div class="top-actions">
         <div class="account-actions" aria-label="Account">
           <div id="accountGuestActions" class="account-action-group">
-            <a class="account-action account-login" id="globalLogin" href="#/login">Log in</a>
-            <a class="account-action account-register" id="globalRegister" href="#/register">Register</a>
+            <a class="account-action account-login" id="globalLogin" href="/login">Log in</a>
+            <a class="account-action account-register" id="globalRegister" href="/register">Register</a>
           </div>
           <div id="accountSignedInActions" class="account-action-group hidden">
             <span class="account-user" id="globalUserLabel"></span>
-            <a class="account-action account-login" id="globalAccount" href="#/account">Account</a>
+            <a class="account-action account-login" id="globalAccount" href="/account">Account</a>
             <button class="ghost sm" id="globalSignOut" type="button">Sign out</button>
           </div>
         </div>
@@ -62,7 +62,7 @@
 
     <div class="toast-stack" id="toastStack" aria-live="polite"></div>
 
-    <main class="container" id="main">
+    <main class="container" id="main" tabindex="-1">
       <section class="status-banner" id="statusBanner" aria-live="polite">
         <span class="lamp" id="statusBannerLamp" style="width:9px;height:9px;background:var(--text-faint)"></span>
         <span id="statusBannerText">Scanning your infrastructure&hellip;</span>
@@ -132,7 +132,7 @@
               <p class="proj-form-error hidden" id="projRecoveryCompleteError" role="alert"></p>
               <button type="submit" id="projRecoveryCompleteSubmit">Set new password</button>
             </form>
-            <p class="hint"><a class="btn-link" href="#/login">Back to sign in</a></p>
+            <p class="hint"><a class="btn-link" href="/login">Back to sign in</a></p>
           </section>
         </div>
       </section>
@@ -144,7 +144,7 @@
               <h2 id="accountTitle">Account security</h2>
               <p class="card-subtitle" id="accountEmail"></p>
             </div>
-            <a class="btn-link" href="#/projects">Back to projects</a>
+            <a class="btn-link" href="/projects">Back to projects</a>
           </div>
 
           <div class="account-section">

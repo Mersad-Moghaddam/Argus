@@ -126,6 +126,9 @@ hr {
   font-weight: 600;
   font-size: 13.5px;
   text-decoration: none;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
   transition: top var(--dur) var(--ease-out);
 }
 
