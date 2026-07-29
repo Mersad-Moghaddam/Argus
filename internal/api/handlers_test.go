@@ -1448,6 +1448,24 @@ func TestImportFiveHundredRoutesOverHTTP(t *testing.T) {
 	}
 }
 
+func TestImportCommitRejectsOversizedSelectionPayload(t *testing.T) {
+	a := newTestAPI(t)
+	_, token := a.register(t, "import-commit-limit@example.com")
+	project := a.createProject(t, token, "Import commit limit")
+	path := fmt.Sprintf("/import/commit/%d/1", project.ID)
+	request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"selections":"`+strings.Repeat("x", 1024*1024)+`"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+token)
+	response, err := a.app.Test(request, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != fiber.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized import commit: got %d, want 413", response.StatusCode)
+	}
+}
+
 func largeSpec(resources int) string {
 	var b strings.Builder
 	b.WriteString(`{"openapi":"3.0.0","info":{"title":"Large API","version":"1.0"},`)
