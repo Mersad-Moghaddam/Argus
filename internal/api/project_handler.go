@@ -344,6 +344,8 @@ func (h *ProjectHandler) RevokeTelemetryCredential(c *fiber.Ctx) error {
 type projectRequest struct {
 	Name                     string `json:"name"`
 	Description              string `json:"description"`
+	EnvironmentName          string `json:"environmentName"`
+	EnvironmentBaseURL       string `json:"environmentBaseUrl"`
 	DefaultIntervalSeconds   int    `json:"defaultIntervalSeconds"`
 	DefaultTimeoutMS         int    `json:"defaultTimeoutMs"`
 	DefaultRetries           int    `json:"defaultRetries"`
@@ -371,7 +373,7 @@ func (h *ProjectHandler) CreateProject(c *fiber.Ctx) error {
 	}
 	userID := currentUserID(c)
 	project, err := h.service.CreateProject(c.UserContext(), userID, application.CreateProjectInput{
-		Name: req.Name, Description: req.Description, DefaultIntervalSeconds: req.DefaultIntervalSeconds,
+		Name: req.Name, Description: req.Description, EnvironmentName: req.EnvironmentName, EnvironmentBaseURL: req.EnvironmentBaseURL, DefaultIntervalSeconds: req.DefaultIntervalSeconds,
 		DefaultTimeoutMS: req.DefaultTimeoutMS, DefaultRetries: req.DefaultRetries,
 		FailureThreshold: req.FailureThreshold, RecoverySuccessThreshold: req.RecoverySuccessThreshold,
 	})

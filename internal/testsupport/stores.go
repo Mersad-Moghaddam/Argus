@@ -779,7 +779,7 @@ func memberKey(projectID, userID int64) string {
 	return strconv.FormatInt(projectID, 10) + ":" + strconv.FormatInt(userID, 10)
 }
 
-func (f *ProjectStore) CreateProject(_ context.Context, project models.Project, ownerUserID int64) (int64, error) {
+func (f *ProjectStore) CreateProject(_ context.Context, project models.Project, environment models.ProjectEnvironment, ownerUserID int64) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.nextID++
@@ -788,7 +788,8 @@ func (f *ProjectStore) CreateProject(_ context.Context, project models.Project, 
 	project.CreatedAt = time.Now().UTC()
 	f.byID[project.ID] = project
 	f.members[memberKey(project.ID, ownerUserID)] = models.ProjectMember{ProjectID: project.ID, UserID: ownerUserID, Role: models.ProjectRoleOwner}
-	f.environments[project.ID] = []models.ProjectEnvironment{{ID: 1, ProjectID: project.ID, Name: "production", IsDefault: true}}
+	environment.ID, environment.ProjectID, environment.IsDefault = 1, project.ID, true
+	f.environments[project.ID] = []models.ProjectEnvironment{environment}
 	return project.ID, nil
 }
 

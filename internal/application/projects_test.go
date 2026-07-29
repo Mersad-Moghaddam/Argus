@@ -33,6 +33,20 @@ func TestCreateProjectAppliesDefaultsAndClamps(t *testing.T) {
 		}
 	})
 
+	t.Run("initial environment is canonicalized atomically", func(t *testing.T) {
+		project, err := h.service.CreateProject(ctx, 1, CreateProjectInput{Name: "Checkout", EnvironmentName: "staging", EnvironmentBaseURL: "HTTPS://API.Example.com:443/v1/"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		environments, err := h.service.ListProjectEnvironments(ctx, project.ID)
+		if err != nil || len(environments) != 1 {
+			t.Fatalf("environments: %#v %v", environments, err)
+		}
+		if environments[0].Name != "staging" || environments[0].CanonicalBaseURL != "https://api.example.com/v1" || !environments[0].IsDefault {
+			t.Fatalf("initial environment: %+v", environments[0])
+		}
+	})
+
 	t.Run("out-of-range values are clamped, not rejected", func(t *testing.T) {
 		project, err := h.service.CreateProject(ctx, 1, CreateProjectInput{
 			Name: "Extreme", DefaultIntervalSeconds: 99999999, DefaultTimeoutMS: 1,

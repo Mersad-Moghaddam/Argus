@@ -33,7 +33,7 @@ const projectColumns = `id, owner_user_id, name, slug, description, status,
 	uptime_24h_pct, avg_latency_24h_ms, checks_24h, failures_24h, open_incidents,
 	last_check_at, metrics_updated_at, created_at, updated_at`
 
-func (r *Store) CreateProject(ctx context.Context, project models.Project, ownerUserID int64) (int64, error) {
+func (r *Store) CreateProject(ctx context.Context, project models.Project, environment models.ProjectEnvironment, ownerUserID int64) (int64, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -54,12 +54,11 @@ func (r *Store) CreateProject(ctx context.Context, project models.Project, owner
 	if _, err = tx.ExecContext(ctx, `INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, 'owner')`, id, ownerUserID); err != nil {
 		return 0, err
 	}
-	// Every project starts with an explicit production environment. The empty
-	// canonical base is intentional: source selection/onboarding supplies it
-	// later, while telemetry can already attribute signals to production.
+	// The initial environment is inserted in the same transaction as the
+	// project and owner membership, so onboarding cannot leave partial state.
 	if _, err = tx.ExecContext(ctx, `INSERT INTO project_environments
 		(project_id, name, canonical_base_url, canonical_origin, is_default)
-		VALUES (?, 'production', '', '', 1)`, id); err != nil {
+		VALUES (?, ?, ?, ?, 1)`, id, environment.Name, environment.CanonicalBaseURL, environment.CanonicalOrigin); err != nil {
 		return 0, err
 	}
 	if err = tx.Commit(); err != nil {

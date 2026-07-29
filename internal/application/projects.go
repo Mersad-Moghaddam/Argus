@@ -88,6 +88,8 @@ var roleRank = map[string]int{models.ProjectRoleViewer: 1, models.ProjectRoleEdi
 type CreateProjectInput struct {
 	Name                     string
 	Description              string
+	EnvironmentName          string
+	EnvironmentBaseURL       string
 	DefaultIntervalSeconds   int
 	DefaultTimeoutMS         int
 	DefaultRetries           int
@@ -111,7 +113,15 @@ func (s *Service) CreateProject(ctx context.Context, ownerUserID int64, input Cr
 		FailureThreshold:         orDefault(input.FailureThreshold, domain.DefaultFailureThreshold, 1, 20),
 		RecoverySuccessThreshold: orDefault(input.RecoverySuccessThreshold, domain.DefaultRecoverySuccesses, 1, 20),
 	}
-	id, err := s.projects.CreateProject(ctx, project, ownerUserID)
+	environmentName := strings.TrimSpace(input.EnvironmentName)
+	if environmentName == "" {
+		environmentName = "production"
+	}
+	environment, err := normalizedEnvironment(0, CreateEnvironmentInput{Name: environmentName, BaseURL: input.EnvironmentBaseURL})
+	if err != nil {
+		return models.Project{}, err
+	}
+	id, err := s.projects.CreateProject(ctx, project, environment, ownerUserID)
 	if err != nil {
 		return models.Project{}, err
 	}

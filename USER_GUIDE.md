@@ -227,7 +227,8 @@ does not exist — so project IDs cannot be probed.
 
 ### 9.2 Create a project
 
-Click **New project**. The authenticated source-aware flow first asks for the project identity, then
+Click **New project**. The authenticated source-aware flow first asks for the project identity and
+an initial environment (with an optional canonical base URL), then
 asks how it should be observed: **OpenTelemetry** (recommended), an **OpenAPI catalog**, a disabled
 **Synthetic check**, a **Heartbeat**, clearly labeled non-production **Sample data**, or **Do this later**. It preserves a non-sensitive local draft
 until the project is created and does not create target traffic during setup. OpenAPI continues to

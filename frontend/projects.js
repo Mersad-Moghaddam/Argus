@@ -2184,6 +2184,8 @@
       localStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify({
         name: document.getElementById('projFormName').value.trim(),
         description: document.getElementById('projFormDescription').value.trim(),
+        environmentName: document.getElementById('projFormEnvironmentName').value.trim(),
+        environmentBaseUrl: document.getElementById('projFormEnvironmentBaseUrl').value.trim(),
         source: selected ? selected.value : 'telemetry',
       }));
     } catch (_) {
@@ -2287,6 +2289,8 @@
     const draft = project ? {} : readOnboardingDraft();
     document.getElementById('projFormName').value = project ? project.name : draft.name || '';
     document.getElementById('projFormDescription').value = project ? project.description || '' : draft.description || '';
+    document.getElementById('projFormEnvironmentName').value = project ? 'production' : draft.environmentName || 'production';
+    document.getElementById('projFormEnvironmentBaseUrl').value = project ? '' : draft.environmentBaseUrl || '';
     document.getElementById('projFormInterval').value = project ? project.defaultIntervalSeconds : 300;
     document.getElementById('projFormTimeout').value = project ? project.defaultTimeoutMs : 5000;
     document.getElementById('projFormRetries').value = project ? project.defaultRetries : 1;
@@ -2605,6 +2609,8 @@
     const payload = {
       name: document.getElementById('projFormName').value.trim(),
       description: document.getElementById('projFormDescription').value.trim(),
+      environmentName: document.getElementById('projFormEnvironmentName').value.trim(),
+      environmentBaseUrl: document.getElementById('projFormEnvironmentBaseUrl').value.trim(),
       defaultIntervalSeconds: Number(document.getElementById('projFormInterval').value) || 0,
       defaultTimeoutMs: Number(document.getElementById('projFormTimeout').value) || 0,
       defaultRetries: Number(document.getElementById('projFormRetries').value) || 0,

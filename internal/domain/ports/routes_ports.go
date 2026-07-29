@@ -43,7 +43,7 @@ type RecoveryDelivery interface {
 
 // ProjectStore persists projects and their membership/authorization data.
 type ProjectStore interface {
-	CreateProject(ctx context.Context, project models.Project, ownerUserID int64) (int64, error)
+	CreateProject(ctx context.Context, project models.Project, environment models.ProjectEnvironment, ownerUserID int64) (int64, error)
 	UpdateProject(ctx context.Context, project models.Project) error
 	SetProjectStatus(ctx context.Context, id int64, status string) error
 	DeleteProject(ctx context.Context, id int64) error

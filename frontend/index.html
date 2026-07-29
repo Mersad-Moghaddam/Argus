@@ -428,6 +428,16 @@
             <label for="projFormDescription">Description</label>
             <input id="projFormDescription" placeholder="Public checkout endpoints" maxlength="2000" />
           </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="projFormEnvironmentName">Initial environment</label>
+              <input id="projFormEnvironmentName" autocomplete="off" value="production" placeholder="production" maxlength="120" />
+            </div>
+            <div class="field">
+              <label for="projFormEnvironmentBaseUrl">Base URL <span class="hint">(optional)</span></label>
+              <input id="projFormEnvironmentBaseUrl" type="url" autocomplete="url" placeholder="https://api.example.com" maxlength="2083" />
+            </div>
+          </div>
           <p class="hint">Start with the service or product you want to understand. Monitoring traffic is not created in this step.</p>
           </div>
           <fieldset class="project-onboarding-step hidden" data-project-step="2">
@@ -445,7 +455,7 @@
           <section class="project-onboarding-step hidden" data-project-step="3" aria-labelledby="projOnboardingReviewTitle">
             <h4 id="projOnboardingReviewTitle">Review the setup</h4>
             <div id="projOnboardingReview" class="onboarding-review"></div>
-            <p class="hint">Argus will create a default production environment. It will not make an outbound request or enable a synthetic check.</p>
+            <p class="hint">Argus will create the initial environment you chose. It will not make an outbound request or enable a synthetic check.</p>
           </section>
           <section class="project-onboarding-step hidden" data-project-step="4" aria-labelledby="projOnboardingNextTitle">
             <h4 id="projOnboardingNextTitle">Project created</h4>
