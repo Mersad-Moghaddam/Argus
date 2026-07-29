@@ -160,7 +160,17 @@ func (a *Application) Start() error {
 func (a *Application) Shutdown(ctx context.Context) error {
 	shutdownErr := a.httpApp.ShutdownWithContext(ctx)
 	if a.otlpGRPC != nil {
-		a.otlpGRPC.Stop()
+		done := make(chan struct{})
+		go func() {
+			a.otlpGRPC.GracefulStop()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-ctx.Done():
+			a.otlpGRPC.Stop()
+			<-done
+		}
 	}
 	a.workerRt.Shutdown()
 	_ = a.asynqClient.Close()
