@@ -193,7 +193,8 @@
       telemetryMappings: [],
       slos: [],
 	  heartbeats: [],
-      agents: [],
+agents: [],
+agentAssignments: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -547,7 +548,8 @@
       telemetryMappings: [],
       slos: [],
       heartbeats: [],
-	  agents: [],
+agents: [],
+agentAssignments: [],
       routes: [],
       routesTotal: 0,
       filters: { search: '', method: '', status: '', tag: '', enabled: '', deprecated: '' },
@@ -1001,7 +1003,7 @@
     }
     try {
       const p = state.project;
-	  const [project, series, incidents, projectIncidents, routes, environments, telemetryIngress, telemetryMappings, slos, heartbeats, agents] = await Promise.all([
+	  const [project, series, incidents, projectIncidents, routes, environments, telemetryIngress, telemetryMappings, slos, heartbeats, agents, agentAssignments] = await Promise.all([
 		apiProjects(`/project/catalog/${id}`),
 		apiProjects(`/route/metrics/${id}${qs({ range: p.range })}`),
 		apiProjects(`/route/incidents/${id}${qs({ limit: 15 })}`),
@@ -1012,7 +1014,8 @@
 		apiProjects(`/telemetry/mappings/${id}`),
 		apiProjects(`/slo/catalog/${id}`),
 		apiProjects(`/heartbeat/catalog/${id}`),
-		apiProjects(`/agent/catalog/${id}`),
+apiProjects(`/agent/catalog/${id}`),
+apiProjects(`/agent/assignments/${id}`),
       ]);
       state.project.project = project;
       state.project.series = series;
@@ -1025,7 +1028,8 @@
 	  state.project.telemetryMappings = telemetryMappings.items || [];
 	  state.project.slos = slos.items || [];
 	  state.project.heartbeats = heartbeats.items || [];
-	  state.project.agents = agents.items || [];
+      state.project.agents = agents.items || [];
+      state.project.agentAssignments = agentAssignments.items || [];
       renderCrumbs();
       renderProjectDetail();
     } catch (err) {
@@ -1141,6 +1145,9 @@
         <div class="card-header"><h2>Private agents</h2>${canEdit ? '<button class="secondary sm" type="button" data-action="create-agent">Enroll agent</button>' : ''}</div>
         <p class="hint">Agents report outbound liveness only. Argus never connects into your private network. The enrollment token is shown once and can be revoked at any time.</p>
         ${privateAgentsHtml(state.project.agents, canEdit)}
+        <h3 class="section-subheading">Scoped assignments</h3>
+        <p class="hint">Only signed GET/HEAD assignments for the agent’s environment are executed locally. Targets are never dialed by the Argus control plane.</p>
+        ${privateAgentAssignmentsHtml(state.project.agentAssignments, canEdit)}
       </section>
 
       <section class="card">
@@ -1374,6 +1381,11 @@
       const interval = agent.expectedIntervalSeconds >= 60 ? `${num(Math.round(agent.expectedIntervalSeconds / 60))} min` : `${num(agent.expectedIntervalSeconds)} sec`;
       return `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(agent.name)}</span><span class="list-item-meta">environment #${num(agent.environmentId)} &middot; every ${interval} &middot; ${agent.lastSeenAt ? `last seen ${escapeHtml(relativeTime(agent.lastSeenAt))}` : 'no signal received'}${agent.version ? ` &middot; version ${escapeHtml(agent.version)}` : ''}</span></div><div class="row-actions"><span class="badge ${tone}">${escapeHtml(agent.status || 'offline')}</span>${canEdit && !agent.revokedAt ? `<button class="danger sm" type="button" data-action="revoke-agent" data-id="${agent.id}">Revoke</button>` : ''}</div></div>`;
     }).join('')}</div>`;
+  }
+
+  function privateAgentAssignmentsHtml(assignments, canEdit) {
+    if (!assignments.length) return emptyPanel(ICON.route, 'No private-agent assignments', 'Create an assignment through the authenticated API to permit a narrowly scoped local GET or HEAD check.');
+    return `<div class="list">${assignments.map((assignment) => `<div class="list-item"><div class="list-item-main"><span class="list-item-title">${escapeHtml(assignment.name)}</span><span class="list-item-meta">${escapeHtml(assignment.method)} &middot; environment #${num(assignment.environmentId)} &middot; every ${num(assignment.intervalSeconds)} sec &middot; ${num(assignment.timeoutMs)} ms timeout</span></div><div class="row-actions"><span class="badge ${assignment.revokedAt || !assignment.enabled ? 'status-resolved' : 'status-up'}">${assignment.revokedAt || !assignment.enabled ? 'revoked' : 'enabled'}</span>${canEdit && !assignment.revokedAt ? `<button class="danger sm" type="button" data-action="revoke-agent-assignment" data-id="${assignment.id}">Revoke</button>` : ''}</div></div>`).join('')}</div>`;
   }
 
   function projectIncidentsHtml(incidents, canEdit) {
@@ -3050,6 +3062,12 @@
           askConfirm({ title: 'Revoke this private-agent token?', body: 'The agent will no longer be able to report liveness. Create a replacement agent and update its local secret before revoking this one.', confirmLabel: 'Revoke agent' }, async () => {
             await apiProjects(`/agent/revoke/${state.project.id}/${id}`, { method: 'POST' });
             showToast('Private-agent token revoked.', 'success'); loadProjectDetail({ silent: true });
+          });
+          break;
+        case 'revoke-agent-assignment':
+          askConfirm({ title: 'Revoke this private-agent assignment?', body: 'Agents will stop receiving this signed local-check assignment after their next configuration refresh.', confirmLabel: 'Revoke assignment' }, async () => {
+            await apiProjects(`/agent/assignments/revoke/${state.project.id}/${id}`, { method: 'POST' });
+            showToast('Private-agent assignment revoked.', 'success'); loadProjectDetail({ silent: true });
           });
           break;
         case 'acknowledge-incident':
