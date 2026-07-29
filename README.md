@@ -194,9 +194,28 @@ Invalid integer or duration values fall back to defaults; an invalid `REDIS_DB` 
 
 After setting `ROUTE_SECRET_ENCRYPTION_KEY`, migrate legacy plaintext route
 headers with `go run ./cmd/migrate-route-secrets -dry-run` and then without
-`-dry-run`. Rotate an existing key with `-rotate -old-key <old> -key <new>`.
-Run rotations in a maintenance window and switch the application key only
-after the command completes successfully.
+`-dry-run`. Migration is restartable because each converted row has its
+plaintext column cleared.
+
+For a key rotation, first apply migration `0020`, stop route writers in a
+maintenance window, and run a dry run followed by the real command using one
+stable rotation ID:
+
+```bash
+ROUTE_SECRET_ENCRYPTION_KEY=<new-key> go run ./cmd/migrate-route-secrets \
+  -rotate -rotation-id route-header-2026-07 -old-key <old-key> -dry-run
+ROUTE_SECRET_ENCRYPTION_KEY=<new-key> go run ./cmd/migrate-route-secrets \
+  -rotate -rotation-id route-header-2026-07 -old-key <old-key>
+```
+
+Each committed batch advances a durable checkpoint in
+`route_header_secret_rotations` in the same transaction as its ciphertext
+updates. If the command is interrupted, rerun the exact same command and
+rotation ID; it resumes safely. The checkpoint stores SHA-256 fingerprints of
+the source and destination keys (never the keys), and rejects an accidental
+reuse of an ID with different key material. Switch the application key only
+after output reports `complete=true`, then retain the old key only for the
+rollback period defined by your secret-management policy.
 
 Responses are JSON unless an endpoint returns `204 No Content`. Every Argus control-plane route uses `/family/purpose[/optional]`; the removed `/api/*` prefix is not accepted. The website API uses optional global API-key auth; the project API uses its own bearer-token sessions.
 

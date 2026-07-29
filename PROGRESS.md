@@ -26,7 +26,7 @@
 | SEC-001, SEC-003, SEC-004, SEC-009 | Secure sessions; fail-closed auth; abuse limits; coalesced session activity | auth, HTTP middleware, MySQL | lifecycle, CSRF, rate-limit, negative-auth tests | In progress — browser session, CSRF, session inventory/revoke-others, rate limit, fail-closed legacy guard, and coalesced last-used writes landed; endpoint-specific limits still expand beyond auth | Pending |
 | SEC-002, SEC-010, SEC-011 | CSP-safe DOM rendering and exclusive accessible UI state | frontend | browser and keyboard tests | In progress — global auth route, isolated guest/authenticated project states, validated return destinations, and semantic route-table sort controls landed; full keyboard evidence remains | Pending |
 | SEC-005, SEC-007 | Catalog/synthetic separation and canonical validation | routes, imports, worker | zero-import-traffic and normalization tests | In progress — imports are catalog-only; safe canary method gate, canonical pipeline, and preview endpoint landed; migration remains | Pending |
-| SEC-006 | Encrypted/rotatable synthetic secret references | secrets, migrations | redaction and rotation tests | In progress — new route-header writes use versioned AES-GCM ciphertext; legacy plaintext backfill and key rotation remain | Pending |
+| SEC-006 | Encrypted/rotatable synthetic secret references | secrets, migrations | redaction and rotation tests | In progress — versioned AEAD writes, restartable legacy backfill, and durable key-fingerprinted rotation checkpoints landed; production migration/rotation remains operator-run | Pending |
 | SEC-008 | Endpoint limits and server timeouts | HTTP platform | configuration and slow-client tests | In progress — explicit server timeouts, security headers, and auth control-payload limit landed; import-specific limits and slow-client integration evidence remain | Pending |
 | Threat model: tenant isolation | Scope every request, job, token, mapping, incident, and export | API, stores, workers | cross-tenant negative tests | Planned | — |
 | Threat model: SSRF | Preserve dial- and redirect-time address validation | worker, synthetic policy | redirect, DNS, IPv4/IPv6 test suite | Planned | — |
@@ -53,7 +53,7 @@
 | 3s | Source-aware project incident API and dashboard | Complete | Current checkpoint |
 | 3t | Project heartbeat liveness incidents | Complete | Current checkpoint |
 | 3u | Signed private-agent configuration envelope | Complete | Current checkpoint |
-| 2j | Route-header encryption backfill and rotation command | Complete | Current checkpoint |
+| 2j | Route-header encryption backfill and durable rotation command | Complete | Current checkpoint |
 | 1 | Identity, authorization, secure global shell | In progress | — |
 | 2a | Catalog-only OpenAPI imports and safe synthetic guardrails | Complete | `8ab613a` |
 | 2b | Canonical endpoint pipeline and preview API | Complete | `580e1bb` |
