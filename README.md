@@ -327,6 +327,11 @@ curl --request POST http://localhost:8080/agent/heartbeat \
   --data '{"version":"1.0.0"}'
 ```
 
+Project heartbeat monitors are evaluated every minute. A late or missing run
+opens one source-aware operational incident; the incident resolves when a new,
+non-duplicate heartbeat is received. This liveness state is separate from the
+job's optional `success` or `failure` outcome.
+
 The service returns the agent's server-bound project and environment identity;
 the agent must not select those values itself. Revocation immediately rejects
 the credential, and project non-members receive a non-enumerating response.

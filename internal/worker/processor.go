@@ -39,11 +39,12 @@ type Processor struct {
 	logger   *observability.LogStore
 
 	// Project-based API route monitoring dependencies.
-	routes        ports.RouteStore
-	evaluator     *RouteEvaluator
-	routeCfg      RouteMonitorConfig
-	sloEvaluator  *SLOEvaluator
-	agentLiveness *AgentLivenessEvaluator
+	routes            ports.RouteStore
+	evaluator         *RouteEvaluator
+	routeCfg          RouteMonitorConfig
+	sloEvaluator      *SLOEvaluator
+	agentLiveness     *AgentLivenessEvaluator
+	heartbeatLiveness *HeartbeatLivenessEvaluator
 }
 
 func NewProcessor(monitors ports.MonitorStore, alerts ports.AlertChannelStore, outbox ports.OutboxStore, service *application.Service, client *asynq.Client, notifier ports.Notifier, logger *observability.LogStore,
@@ -58,6 +59,7 @@ func (p *Processor) Register(mux *asynq.ServeMux) {
 	p.RegisterRouteTasks(mux)
 	p.RegisterSLOTasks(mux)
 	p.RegisterAgentLivenessTasks(mux)
+	p.RegisterHeartbeatLivenessTasks(mux)
 }
 
 func (p *Processor) HandleEnqueueDueChecks(ctx context.Context, _ *asynq.Task) error {

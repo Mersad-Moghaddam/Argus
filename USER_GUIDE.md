@@ -85,6 +85,11 @@ POST /monitor/heartbeat/:id
 
 - If heartbeats stop beyond grace time, monitor turns down.
 
+For API Project heartbeats, Argus evaluates liveness every minute. A late or
+missing run creates one operational incident; the next unique receipt resolves
+it. The job's reported success/failure outcome remains
+separate from the liveness state.
+
 ### TLS expiry monitor
 - Checks cert expiration.
 - Fails when cert expiration is under configured threshold.

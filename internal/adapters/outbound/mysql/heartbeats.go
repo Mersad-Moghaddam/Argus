@@ -58,6 +58,26 @@ func (r *Store) ListHeartbeatMonitors(ctx context.Context, projectID int64) ([]m
 	return items, rows.Err()
 }
 
+func (r *Store) ListHeartbeatMonitorsForEvaluation(ctx context.Context, limit int, afterID int64) ([]models.HeartbeatMonitor, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT `+heartbeatMonitorColumns+` FROM heartbeat_monitors WHERE id>? ORDER BY id ASC LIMIT ?`, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []models.HeartbeatMonitor{}
+	for rows.Next() {
+		var monitor models.HeartbeatMonitor
+		if err = scanHeartbeatMonitor(rows, &monitor); err != nil {
+			return nil, err
+		}
+		items = append(items, monitor)
+	}
+	return items, rows.Err()
+}
+
 func (r *Store) GetHeartbeatMonitorByID(ctx context.Context, id int64) (*models.HeartbeatMonitor, error) {
 	var monitor models.HeartbeatMonitor
 	err := scanHeartbeatMonitor(r.db.QueryRowContext(ctx, `SELECT `+heartbeatMonitorColumns+` FROM heartbeat_monitors WHERE id=? LIMIT 1`, id), &monitor)

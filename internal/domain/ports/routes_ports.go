@@ -85,6 +85,7 @@ type TelemetryMappingStore interface {
 type HeartbeatStore interface {
 	CreateHeartbeatMonitor(ctx context.Context, monitor models.HeartbeatMonitor) (int64, error)
 	ListHeartbeatMonitors(ctx context.Context, projectID int64) ([]models.HeartbeatMonitor, error)
+	ListHeartbeatMonitorsForEvaluation(ctx context.Context, limit int, afterID int64) ([]models.HeartbeatMonitor, error)
 	GetHeartbeatMonitorByID(ctx context.Context, id int64) (*models.HeartbeatMonitor, error)
 	GetHeartbeatMonitorByHash(ctx context.Context, tokenHash []byte) (*models.HeartbeatMonitor, error)
 	RevokeHeartbeatMonitor(ctx context.Context, id int64, revokedAt time.Time) error

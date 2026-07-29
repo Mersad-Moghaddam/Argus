@@ -190,6 +190,21 @@ func (f *HeartbeatStore) ListHeartbeatMonitors(_ context.Context, projectID int6
 	sort.Slice(items, func(i, j int) bool { return items[i].ID > items[j].ID })
 	return items, nil
 }
+func (f *HeartbeatStore) ListHeartbeatMonitorsForEvaluation(_ context.Context, limit int, afterID int64) ([]models.HeartbeatMonitor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	items := []models.HeartbeatMonitor{}
+	for _, monitor := range f.byID {
+		if monitor.ID > afterID {
+			items = append(items, copyHeartbeatMonitor(monitor))
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	return pageSlice(items, limit, 0), nil
+}
 func (f *HeartbeatStore) GetHeartbeatMonitorByID(_ context.Context, id int64) (*models.HeartbeatMonitor, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
