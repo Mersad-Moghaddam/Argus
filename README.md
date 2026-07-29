@@ -294,6 +294,9 @@ sanitized metric translation, and bounded diagnostics. The gRPC listener caps
 incoming messages at 4 MiB and responses at 1 MiB; it is intentionally disabled
 by default and must be protected with TLS termination and network policy.
 
+For Collector YAML examples, secret-injection guidance, verification, and
+transport troubleshooting, see [the OpenTelemetry Collector connection guide](docs/otlp-collector-guide.md).
+
 Recognized HTTP server-duration histograms are written to VictoriaMetrics as
 the `argus_http_server_request_duration_seconds` histogram family. The bridge
 only allows the server-bound project/environment IDs, service identity,
