@@ -173,6 +173,7 @@ Argus reads environment variables and automatically loads a local `.env` file wh
 | `RECOVERY_DELIVERY_URL` | empty | Optional operator-owned HTTPS webhook for password-recovery delivery. Argus sends the registered email, one-time reset token, and expiry; an empty value safely disables delivery. |
 | `RECOVERY_DELIVERY_TIMEOUT` | `5s` | Maximum duration for the trusted recovery-delivery webhook. |
 | `ROUTE_SECRET_ENCRYPTION_KEY` | empty | Base64-encoded 32-byte AES-256 key required to persist non-empty synthetic request headers. New writes use versioned AEAD ciphertext; keep this key in an operator-managed secret store. |
+| `AUTH_COOKIE_SECURE` | `true` | Marks browser session cookies `Secure`. Set `false` only for local HTTP development. |
 
 Example production-oriented `.env`:
 
