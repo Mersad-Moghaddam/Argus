@@ -6,8 +6,7 @@ Thank you for helping make Argus more dependable. Contributions are welcome as i
 
 1. Search existing issues and pull requests.
 2. For a large feature or architectural change, open an issue first and describe the operator problem, proposed behavior, failure modes, and migration impact.
-3. Review `PROJECT_MONITORING_PLAN.md` for work already sequenced on the multi-project subsystem.
-4. Follow the `CODE_OF_CONDUCT.md` and report security issues through `SECURITY.md`, not a public issue.
+3. Follow the `CODE_OF_CONDUCT.md` and report security issues through `SECURITY.md`, not a public issue.
 
 ## Local development
 
@@ -57,7 +56,7 @@ revive -config revive.toml ./...
 - Use an imperative, descriptive title.
 - Explain what changed, why, how it was tested, and any operational or migration implications.
 - Include screenshots for dashboard changes and request/response examples for API changes.
-- Update the README, user guide, and roadmap when behavior or maturity changes.
+- Update the README, user guide, and relevant operational documentation when behavior or maturity changes.
 - Do not commit secrets, local `.env` files, database dumps, or generated dependency caches.
 
 Maintainers may ask for a smaller scope, additional tests, or a design issue before merging. By contributing, you agree that your work will be licensed under the MIT License.

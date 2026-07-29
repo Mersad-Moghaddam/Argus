@@ -14,7 +14,7 @@
 
 `PANOPTES MODE: ON` · Some eyes may rest. The watch never does.
 
-[Quick start](#quick-start) · [Features](#what-argus-watches) · [API](#http-api) · [Architecture](#architecture) · [Roadmap](#project-status-and-roadmap) · [Contributing](CONTRIBUTING.md)
+[Quick start](#quick-start) · [Features](#what-argus-watches) · [API](#http-api) · [Architecture](#architecture) · [Status](#project-status) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -25,22 +25,7 @@ Argus watches websites, health endpoints, expected content, heartbeat signals, a
 The name honors [Argus Panoptes](https://www.theoi.com/Gigante/GiganteArgosPanoptes.html)—the many-eyed, “all-seeing” guardian of Greek myth. Some of his eyes could sleep while others kept watch; after his death, Hera preserved them in the peacock’s tail. Argus turns that ancient image of continuous vigilance into a modern monitoring system.
 
 > [!IMPORTANT]
-> The website-monitoring workflow is the original production core. The newer **Projects + OpenAPI route monitoring** subsystem now also includes a background evaluator, aggregate metrics, project UI, and import wizard. A 2026 architecture review found that probing every imported route—especially state-changing methods—is not a safe or scalable default. See [Monitoring v2 design and delivery plan](#monitoring-v2-design-and-delivery-plan).
-
-## Monitoring v2 design and delivery plan
-
-The current route-monitoring implementation remains documented in
-[PROJECT_MONITORING_PLAN.md](PROJECT_MONITORING_PLAN.md). The proposed next
-generation uses passive OpenTelemetry data for broad endpoint coverage and
-keeps active synthetic requests limited to explicit, safe canaries.
-
-- [English transformation index](docs/audit-2026-07-28-en/README.md)
-- [Product, UI/UX, system design, normalization, strategy, and Scrum blueprint](docs/audit-2026-07-28-en/ARGUS_TRANSFORMATION_BLUEPRINT.md)
-- [Security best-practices review](docs/audit-2026-07-28-en/SECURITY_REVIEW.md)
-- [Repository threat model](Argus-threat-model.md)
-- [Motion audit and implementation plans](animation-plans/README.md)
-- [Skills and plugins decision](docs/audit-2026-07-28-en/TOOLING_DECISION.md)
-- [Research and standards register](docs/audit-2026-07-28-en/SOURCES.md)
+> The website-monitoring workflow is the original production core. The newer **Projects + OpenAPI route monitoring** subsystem also includes a background evaluator, aggregate metrics, project UI, and import wizard. Synthetic checks are limited to explicit, safe canaries rather than every imported route.
 
 ## Why Argus?
 
@@ -533,7 +518,7 @@ docker compose logs -f mysql redis
 - [ ] Pin and regularly update container images and Go dependencies.
 - [ ] Test restore, migration, incident, maintenance, and alert-delivery workflows.
 
-## Project status and roadmap
+## Project status
 
 | Capability | Status |
 | --- | --- |
@@ -549,11 +534,9 @@ docker compose logs -f mysql redis
 | Email delivery adapter | Planned |
 | Expanded integration/E2E coverage and observability | Planned |
 
-The implementation history lives in [PROJECT_MONITORING_PLAN.md](PROJECT_MONITORING_PLAN.md). The English product and architecture package starts at [docs/audit-2026-07-28-en/README.md](docs/audit-2026-07-28-en/README.md). Broader modernization notes remain in [REWRITE_ROADMAP.md](REWRITE_ROADMAP.md).
-
 ## Contributing
 
-Issues, focused pull requests, tests, documentation, and design discussion are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), follow the [Code of Conduct](CODE_OF_CONDUCT.md), and check the roadmap before beginning a large change.
+Issues, focused pull requests, tests, documentation, and design discussion are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 When proposing a feature, explain the operational problem it solves, its failure modes, and how it preserves the domain/ports boundary.
 
